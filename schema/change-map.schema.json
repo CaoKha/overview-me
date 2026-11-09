@@ -1,0 +1,330 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Change map v1",
+  "description": "A spec-linked map of one change, stored at `<git-common-dir>/change-map/<head-sha>.json`.\nTests never become nodes: a criterion names the tests that prove it, and `touchedByTest` is a computed hint.",
+  "type": "object",
+  "properties": {
+    "base": {
+      "description": "Full sha of the base commit; the change is `base...head`.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "criteria": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Criterion"
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Edge"
+      }
+    },
+    "head": {
+      "description": "Full sha of the head commit.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Node"
+      },
+      "minItems": 1
+    },
+    "spec": {
+      "description": "Path of the spec the criteria come from.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tour": {
+      "description": "Every node id once, in reading order.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "version": {
+      "description": "Always 1.",
+      "type": "integer",
+      "format": "uint32",
+      "maximum": 1,
+      "minimum": 1
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "base",
+    "head",
+    "criteria",
+    "nodes",
+    "edges",
+    "tour"
+  ],
+  "$defs": {
+    "Criterion": {
+      "description": "One thing the change claims to do.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^REF-[0-9]+$"
+        },
+        "specRef": {
+          "description": "`<spec file>#<heading-slug>`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^.+#[a-z0-9-]+$"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "tests": {
+          "description": "The tests that prove this criterion. Empty means untested.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TestRef"
+          }
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "text",
+        "status",
+        "tests"
+      ]
+    },
+    "Deletion": {
+      "description": "A file removed by the change.",
+      "type": "object",
+      "properties": {
+        "file": {
+          "description": "Path relative to the repo root, as it was at the base.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "file"
+      ]
+    },
+    "Edge": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/EdgeKind"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "kind"
+      ]
+    },
+    "EdgeKind": {
+      "type": "string",
+      "enum": [
+        "calls",
+        "implements",
+        "uses"
+      ]
+    },
+    "Lane": {
+      "description": "Architecture lane, in display order.",
+      "type": "string",
+      "enum": [
+        "ui",
+        "api",
+        "services",
+        "db",
+        "engine",
+        "jobs",
+        "other"
+      ]
+    },
+    "Node": {
+      "description": "A group of changed code that reads as one stop: one symbol, or the same edit at several sites.",
+      "type": "object",
+      "properties": {
+        "caption": {
+          "description": "One line: what changed and why.",
+          "type": "string",
+          "minLength": 1
+        },
+        "criteria": {
+          "description": "Criterion ids this node implements.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deletions": {
+          "description": "Deleted non-test files this node explains; each deleted file is in exactly one node.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Deletion"
+          }
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^N[0-9]+$"
+        },
+        "lane": {
+          "$ref": "#/$defs/Lane"
+        },
+        "renames": {
+          "description": "Pure moves (no content change) this node explains; each listed move is in exactly one node.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Rename"
+          }
+        },
+        "risk": {
+          "$ref": "#/$defs/Risk"
+        },
+        "sites": {
+          "description": "The main site first. Empty only for a node that just deletes or moves files.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Site"
+          }
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "touchedByTest": {
+          "description": "Computed hint: a changed test file references the node's exported symbol. Not proof.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "symbol",
+        "lane",
+        "risk",
+        "caption",
+        "criteria",
+        "touchedByTest",
+        "sites"
+      ]
+    },
+    "Rename": {
+      "description": "A file moved without content changes (or moved into a test path).",
+      "type": "object",
+      "properties": {
+        "from": {
+          "description": "Path at the base.",
+          "type": "string"
+        },
+        "to": {
+          "description": "Path at head.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "Risk": {
+      "type": "string",
+      "enum": [
+        "read",
+        "skim"
+      ]
+    },
+    "Site": {
+      "description": "A range of changed lines on the head side; start and end are changed lines.",
+      "type": "object",
+      "properties": {
+        "end": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        },
+        "file": {
+          "description": "Path relative to the repo root.",
+          "type": "string"
+        },
+        "start": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "start",
+        "end"
+      ]
+    },
+    "Status": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "implemented"
+          ]
+        },
+        {
+          "description": "Some of the logic lives outside this diff.",
+          "type": "string",
+          "const": "partial"
+        },
+        {
+          "description": "Claimed, but no code in the diff does it.",
+          "type": "string",
+          "const": "missing"
+        }
+      ]
+    },
+    "TestRef": {
+      "description": "A test declaration at head: the line of `test(`/`it(`/`describe(` or `#[test]`, and its name.",
+      "type": "object",
+      "properties": {
+        "file": {
+          "description": "Path relative to the repo root.",
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        },
+        "name": {
+          "description": "The test's name: the string passed to `test(`, or the function name.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "line",
+        "name"
+      ]
+    }
+  }
+}

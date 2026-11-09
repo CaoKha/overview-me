@@ -1,0 +1,16 @@
+{
+  "testGlobs": ["**/*.test.*", "**/*.spec.*", "**/__test__/**", "**/__tests__/**", "**/test/**", "**/tests/**", "**/e2e/**", "**/fixtures/**", "**/__snapshots__/**"],
+  "lanes": [
+    { "lane": "db", "globs": ["packages/db/**", "**/migrations/**"] },
+    { "lane": "ui", "globs": ["apps/web/**", "apps/admin/**", "apps/landing/**", "apps/mobile/**", "packages/ui/**", "packages/emails/**"] },
+    { "lane": "api", "globs": ["apps/api*/**", "packages/contracts/**", "packages/server/**"] },
+    { "lane": "engine", "globs": ["apps/al-gaib/**"] },
+    { "lane": "jobs", "globs": ["apps/coty/**"] },
+    { "lane": "services", "globs": ["packages/*/src/**"] }
+  ],
+  "risk": {
+    "skimGlobs": ["**/*.md", "docs/**", "apps/docs/**"],
+    "readGlobs": ["**/migrations/**", "**/auth/**"],
+    "readKeywords": ["fee", "ledger", "balance", "commission", "margin", "pnl", "payout", "withdraw", "deposit", "for update", "for no key update", ".for(", "migration", "auth", "password"]
+  }
+}
