@@ -225,6 +225,13 @@ function P.open(state, opts)
     auto_close = false,
     jump = { close = false },
     layout = { preset = 'sidebar', preview = false },
+    -- Snacks.win:equalize() treats every left split as stacked and halves its height; with the
+    -- explorer beside this panel that shrinks the whole row and grows cmdheight. Opt out of it.
+    -- ponytail: relies on snacks internals (vim.w.snacks_win.position), drop once snacks fixes equalize.
+    on_show = function(picker)
+      local win = picker.layout.root.win
+      vim.w[win].snacks_win = vim.tbl_extend('force', vim.w[win].snacks_win or {}, { position = 'change-map' })
+    end,
     sort = { fields = { 'sort' } },
     matcher = { sort_empty = false, fuzzy = false },
     filter = {
