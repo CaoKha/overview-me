@@ -5,8 +5,9 @@ Review agent-written code in Neovim without reading the diff line by line. A cha
 ## Install
 
 ```sh
-cd ~/dev/change-map && cargo build --release
-ln -s ~/dev/change-map/skill ~/.claude/skills/change-map
+cd /path/to/change-map   # wherever you cloned it
+cargo build --release
+mkdir -p ~/.claude/skills && ln -s "$PWD/skill" ~/.claude/skills/change-map
 ```
 
 LazyVim (`~/.config/nvim/lua/plugins/change-map.lua`):
@@ -14,7 +15,7 @@ LazyVim (`~/.config/nvim/lua/plugins/change-map.lua`):
 ```lua
 return {
   {
-    dir = "~/dev/change-map",
+    dir = "/path/to/change-map", -- your clone
     cmd = { "ChangeMap", "ChangeMapPanel", "ChangeMapDiff" },
     keys = {
       { "<leader>rr", function() if require("change-map").load("") then require("change-map").panel() end end, desc = "Open change map (HEAD)" },
