@@ -25,7 +25,7 @@ return {
       { "<leader>rp", function() if require("change-map").ensure() then require("change-map").toggle_panel() end end, desc = "Toggle change map panel" },
       { "<leader>rd", function() if require("change-map").ensure() then require("change-map").diff() end end, desc = "Diff file against change base" },
       { "<leader>ro", function() require("change-map").overview() end, desc = "Open feature overview" },
-      { "<leader>rc", function() require("change-map").codebase() end, desc = "Open codebase overview" },
+      { "<leader>rc", function() require("change-map").codebase() end, desc = "Open codebase overview in browser" },
       { "<leader>rs", function() if require("change-map").ensure() then require("change-map").panel({ focus = "input" }) end end, desc = "Search stops and criteria" },
       { "<leader>rn", function() require("change-map").stop(1) end, desc = "Next review stop" },
       { "<leader>rN", function() require("change-map").stop(-1) end, desc = "Previous review stop" },
@@ -51,7 +51,7 @@ return {
 | `]x` / `[x` | Next / previous place within the current stop |
 | `<leader>rd` | Diff the current file against the PR base |
 | `<leader>ro` | Open the feature overview |
-| `<leader>rc` | Open the codebase overview |
+| `<leader>rc` | Open the codebase overview in the browser (`:ChangeMapCodebase!` opens it in a split) |
 
 **Panel:** Spec (criteria ✓ tested, ⚠ untested or partial, ✗ missing) → Lanes (ui, api, services, db, engine, jobs) → Unexplained code. `<CR>` jumps to code or opens a folder, `h` closes it, `P` toggles preview. Deleted files show as `✗ deleted`, moved files as `→ moved from`.
 

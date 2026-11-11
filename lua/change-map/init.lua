@@ -390,14 +390,33 @@ local function open_doc(p, repo, skill)
   vim.bo.readonly = true
 end
 
--- Open the codebase overview: one per repo, needs no map.
-function M.codebase()
+-- Open the codebase overview: one per repo, needs no map. In the browser by default, rendered
+-- to <store>/codebase.html with diagrams and links to the forge; { split = true } opens the
+-- markdown in a split instead, where gF jumps to the code.
+function M.codebase(opts)
   local r = git({ 'rev-parse', '--path-format=absolute', '--git-common-dir', '--show-toplevel' })
   if not r then
     vim.notify('change-map: not in a git repo', vim.log.levels.ERROR)
     return
   end
-  open_doc(r[1] .. '/change-map/codebase.md', r[2], 'codebase-overview')
+  local md = r[1] .. '/change-map/codebase.md'
+  if (opts or {}).split or vim.fn.filereadable(md) == 0 then
+    return open_doc(md, r[2], 'codebase-overview')
+  end
+  local html = require('change-map.html')
+  local remote = (git({ '-C', r[2], 'remote', 'get-url', 'origin' }) or {})[1]
+  local title = vim.fn.fnamemodify(r[2], ':t') .. ' · codebase overview'
+  local out = r[1] .. '/change-map/codebase.html'
+  local text = table.concat(vim.fn.readfile(md), '\n')
+  if vim.fn.writefile(vim.split(html.render(title, text, html.forge_url(remote)), '\n'), out) ~= 0 then
+    vim.notify('change-map: cannot write ' .. out, vim.log.levels.ERROR)
+    return
+  end
+  local _, err = vim.ui.open(out)
+  if err then
+    vim.notify('change-map: ' .. err .. '; opening the markdown instead', vim.log.levels.WARN)
+    open_doc(md, r[2], 'codebase-overview')
+  end
 end
 
 -- Open the feature overview that the feature-overview skill writes next to the map.
