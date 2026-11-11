@@ -1,6 +1,6 @@
 ---
 name: codebase-overview
-description: Write a map of the whole codebase at the default branch (main): what the system is, its modules and lanes, entry points, core concepts, main flows, conventions and where to find things. /change-map and /feature-overview use it so a reviewer can place a PR in the system. Use when the user asks for a "codebase overview", an "architecture overview", to "map the repo", or "explain this codebase".
+description: Write a map of the whole codebase at the default branch (main), covering what the system is, its modules and lanes, entry points, core concepts, main flows, conventions and where to find things. /change-map and /feature-overview use it so a reviewer can place a PR in the system. Use when the user asks for a "codebase overview", an "architecture overview", to "map the repo", or "explain this codebase".
 ---
 
 # Codebase overview
