@@ -5,9 +5,11 @@ description: Build a change map for a PR or diff, a spec-linked review guide tha
 
 # Change map
 
-A change map is one JSON file that follows `/home/agent/dev/change-map/schema/change-map.schema.json`. Git gives the facts. You add the labels: criteria, the tests that prove them, captions, groups and the tour. The validator checks your labels against git.
+A change map is one JSON file that follows `${CLAUDE_SKILL_DIR}/../schema/change-map.schema.json`. Git gives the facts. You add the labels: criteria, the tests that prove them, captions, groups and the tour. The validator checks your labels against git.
 
-Binary: `/home/agent/dev/change-map/target/release/change-map` (called `change-map` below). If it is missing, run `cargo build --release` in `/home/agent/dev/change-map` once. Run it from the repo root.
+`${CLAUDE_SKILL_DIR}/..` is the change-map checkout (this skill is symlinked from its `skill/` folder).
+
+Binary: `${CLAUDE_SKILL_DIR}/../target/release/change-map` (called `change-map` below). If it is missing, run `cargo build --release` in `${CLAUDE_SKILL_DIR}/..` once. Run it from the root of the repo under review.
 
 ## Steps
 
