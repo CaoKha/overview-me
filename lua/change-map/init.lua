@@ -185,7 +185,7 @@ function M.load(path)
     end
   end
   state = decoded
-  state.repo, state.by_id, state.by_file = top[1], {}, {}
+  state.path, state.repo, state.by_id, state.by_file = path, top[1], {}, {}
   for _, c in ipairs(state.criteria) do
     for _, t in ipairs(c.tests) do
       t.path = norm(state.repo .. '/' .. t.file)
@@ -377,6 +377,36 @@ function M.stop(dir)
   if M.ensure() then
     pcall(vim.cmd, dir > 0 and 'cnext' or 'cprevious')
   end
+end
+
+-- Open a markdown file from the store read-only; its repo-relative paths resolve with gF.
+local function open_doc(p, repo, skill)
+  if vim.fn.filereadable(p) == 0 then
+    vim.notify('change-map: nothing at ' .. p .. ' (run the ' .. skill .. ' skill first)', vim.log.levels.ERROR)
+    return
+  end
+  vim.cmd('vsplit ' .. vim.fn.fnameescape(p))
+  vim.bo.path = repo .. ',' .. vim.o.path
+  vim.bo.readonly = true
+end
+
+-- Open the codebase overview: one per repo, needs no map.
+function M.codebase()
+  local r = git({ 'rev-parse', '--path-format=absolute', '--git-common-dir', '--show-toplevel' })
+  if not r then
+    vim.notify('change-map: not in a git repo', vim.log.levels.ERROR)
+    return
+  end
+  open_doc(r[1] .. '/change-map/codebase.md', r[2], 'codebase-overview')
+end
+
+-- Open the feature overview that the feature-overview skill writes next to the map.
+function M.overview()
+  if not M.ensure() then
+    return
+  end
+  -- Paths in the overview are repo-relative: gF resolves them against the repo, not the store.
+  open_doc((state.path:gsub('%.json$', '.overview.md')), state.repo, 'feature-overview')
 end
 
 function M.diff()
