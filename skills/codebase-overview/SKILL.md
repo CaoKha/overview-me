@@ -35,7 +35,7 @@ The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(ch
    - **Dependencies between modules**: who imports whom (`git grep` on import paths).
    - **Conventions**: where tests live and how to run them, config and env, error handling, naming, generated code that should not be edited.
 5. **Write** `<store>/codebase.md` in the format below.
-6. **Hand off.** Give the path and the one-paragraph summary. Tell the user that in nvim `:ChangeMapCodebase` (or `<leader>rc`) opens it, and that `/change-map` and `/feature-overview` now use it.
+6. **Hand off.** Give the path and the one-paragraph summary. Tell the user that in nvim `<leader>rc` (`:ChangeMapCodebase`) opens it in the browser with diagrams and links to the code, `:ChangeMapCodebase!` opens it in a split, and that `/change-map` and `/feature-overview` now use it.
 
 ## Format
 
