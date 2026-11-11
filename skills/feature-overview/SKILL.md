@@ -1,6 +1,6 @@
 ---
 name: feature-overview
-description: Write a one-page overview of the feature a PR builds, from the change map that /change-map made: entry points, runtime flow, data, where it plugs into existing code, and what to read first. Use when the user asks for a "feature overview", an "overview of this PR", the "structure of this feature", or to "explain this change" after a change map exists.
+description: Write a one-page overview of the feature a PR builds, from the change map that /change-map made, covering entry points, runtime flow, data, where it plugs into existing code, and what to read first. Use when the user asks for a "feature overview", an "overview of this PR", the "structure of this feature", or to "explain this change" after a change map exists.
 ---
 
 # Feature overview
