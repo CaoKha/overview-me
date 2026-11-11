@@ -5,11 +5,11 @@ description: Build a change map for a PR or diff, a spec-linked review guide tha
 
 # Change map
 
-A change map is one JSON file that follows `${CLAUDE_SKILL_DIR}/../schema/change-map.schema.json`. Git gives the facts. You add the labels: criteria, the tests that prove them, captions, groups and the tour. The validator checks your labels against git.
+A change map is one JSON file that follows `${CLAUDE_SKILL_DIR}/../../schema/change-map.schema.json`. Git gives the facts. You add the labels: criteria, the tests that prove them, captions, groups and the tour. The validator checks your labels against git.
 
-`${CLAUDE_SKILL_DIR}/..` is the change-map checkout (this skill is symlinked from its `skill/` folder).
+`${CLAUDE_SKILL_DIR}/../..` is the change-map checkout (this skill is symlinked from its `skills/change-map/` folder).
 
-Binary: `${CLAUDE_SKILL_DIR}/../target/release/change-map` (called `change-map` below). If it is missing, run `cargo build --release` in `${CLAUDE_SKILL_DIR}/..` once. Run it from the root of the repo under review.
+Binary: `${CLAUDE_SKILL_DIR}/../../target/release/change-map` (called `change-map` below). If it is missing, run `cargo build --release` in `${CLAUDE_SKILL_DIR}/../..` once. Run it from the root of the repo under review.
 
 ## Steps
 
@@ -18,7 +18,7 @@ Binary: `${CLAUDE_SKILL_DIR}/../target/release/change-map` (called `change-map` 
    - For a stacked PR, the base is the PR below it.
    - If the base is unclear, ask.
 2. **Extract.** Run `change-map extract --base <sha> [--spec <spec file>]`. It prints the facts path, the map path (the same path that `change-map path` prints), and the draft nodes.
-3. **Read.** Read the spec, the PR description (`gh pr view --json body`), and the facts file. In the facts file:
+3. **Read.** If `$(dirname "$(change-map path)")/codebase.md` exists, read it first: it is the codebase overview (from `/codebase-overview`). Use its module names and terms in captions and criteria. If it is missing, go on, and suggest `/codebase-overview` at hand-off. Then read the spec, the PR description (`gh pr view --json body`), and the facts file. In the facts file:
    - `units[].diff` holds the changes. Each unit is one changed hunk inside one symbol.
    - `testDeclarations` lists the tests in the changed test files.
    - Draft nodes with no sites and a `deletions` or `renames` entry stand for deleted or moved files.
