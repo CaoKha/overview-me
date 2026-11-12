@@ -154,7 +154,9 @@ mod tests {
             "comment-only beats keywords"
         );
         assert_eq!(
-            rules.risk("a.ts", false, "const passwordHash = hash(input)").0,
+            rules
+                .risk("a.ts", false, "const passwordHash = hash(input)")
+                .0,
             Risk::Read
         );
         assert_eq!(rules.risk("pnpm-lock.yaml", false, "").0, Risk::Skim);
