@@ -1,6 +1,6 @@
 ---
 name: pr-overview
-description: Review a PR or diff on one page: map it and explain the feature it builds. First a spec-linked change map (criteria and the tests that prove them, one captioned stop per changed place, a reading order), checked against git; then the overview, covering entry points, the flow before and after the change, data, where it plugs into existing code, and what to read first. Use when the user asks for a "PR overview", a "PR review", to "review this PR", a "feature overview", a "change map", to "map this PR" or "map this diff", an "overview of this PR", a "review guide for the code you wrote", the "structure of this feature", or to "explain this change".
+description: Review a PR or diff on one page, mapping the change and explaining the feature it builds. First a spec-linked change map (criteria and the tests that prove them, one captioned stop per changed place, a reading order), checked against git; then the overview, covering entry points, the flow before and after the change, data, where it plugs into existing code, and what to read first. Use when the user asks for a "PR overview", a "PR review", to "review this PR", a "feature overview", a "change map", to "map this PR" or "map this diff", an "overview of this PR", a "review guide for the code you wrote", the "structure of this feature", or to "explain this change".
 ---
 
 # PR overview
