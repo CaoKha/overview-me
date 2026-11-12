@@ -77,6 +77,7 @@ enum Lang {
     Tsx,
     Rust,
     Python,
+    Go,
 }
 
 impl Lang {
@@ -87,6 +88,7 @@ impl Lang {
             "tsx" | "jsx" => Some(Self::Tsx),
             "rs" => Some(Self::Rust),
             "py" | "pyi" => Some(Self::Python),
+            "go" => Some(Self::Go),
             _ => None,
         }
     }
@@ -97,6 +99,19 @@ impl Lang {
             Self::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
             Self::Rust => tree_sitter_rust::LANGUAGE.into(),
             Self::Python => tree_sitter_python::LANGUAGE.into(),
+            Self::Go => tree_sitter_go::LANGUAGE.into(),
+        }
+    }
+
+    /// Whether `path` is a file whose tests the language's runner collects: pytest reads
+    /// `test_*.py` and `*_test.py`, `go test` reads `*_test.go`. Other languages mark tests in code.
+    fn collects_tests(self, path: &str) -> bool {
+        let file = path.rsplit('/').next().unwrap_or(path);
+        let stem = file.rsplit_once('.').map_or(file, |(s, _)| s);
+        match self {
+            Self::Python => stem.starts_with("test_") || stem.ends_with("_test"),
+            Self::Go => stem.ends_with("_test"),
+            _ => true,
         }
     }
 
@@ -108,6 +123,14 @@ impl Lang {
 /// Whether `path` is in a language this tool can parse.
 pub fn is_code(path: &str) -> bool {
     Lang::of(path).is_some()
+}
+
+/// Two Go files in one directory share a package: they use each other's names without imports.
+pub fn same_go_package(a: &str, b: &str) -> bool {
+    fn dir(path: &str) -> &str {
+        path.rsplit_once('/').map_or("", |(d, _)| d)
+    }
+    Lang::of(a) == Some(Lang::Go) && Lang::of(b) == Some(Lang::Go) && dir(a) == dir(b)
 }
 
 /// Parses `source`; `None` for languages without a grammar here (they map to whole-file nodes).
@@ -129,7 +152,10 @@ pub fn parse(path: &str, source: &str) -> Result<Option<Parsed>> {
     let mut parsed = Parsed::default();
     collect_symbols(lang, tree.root_node(), src, "", &mut parsed);
     collect_identifiers(tree.root_node(), src, false, &mut parsed);
-    if lang != Lang::Python || is_pytest_file(path) {
+    if lang == Lang::Go {
+        collect_go_package_refs(tree.root_node(), src, &mut parsed.imports);
+    }
+    if lang.collects_tests(path) {
         collect_tests(lang, tree.root_node(), src, &mut parsed.tests);
     }
     collect_comments(lang, tree.root_node(), &mut parsed.comments);
@@ -183,6 +209,17 @@ fn declaration<'t>(
             (text(target, src), "const", None)
         }
         (Lang::Python, _) => return None,
+        (Lang::Go, "function_declaration") => (name("name")?, "function", None),
+        (Lang::Go, "method_declaration") => (name("name")?, "method", None),
+        (Lang::Go, "type_declaration") => {
+            let spec = first_go_spec(node, &["type_spec", "type_alias"])?;
+            (text(spec.child_by_field_name("name")?, src), "type", None)
+        }
+        (Lang::Go, "const_declaration" | "var_declaration") => {
+            let spec = first_go_spec(node, &["const_spec", "var_spec"])?;
+            (text(spec.child_by_field_name("name")?, src), "const", None)
+        }
+        (Lang::Go, _) => return None,
         (_, "function_declaration" | "generator_function_declaration") => {
             (name("name")?, "function", None)
         }
@@ -219,11 +256,81 @@ fn in_python_class(def: Node<'_>) -> bool {
         .is_some_and(|c| c.kind() == "class_definition")
 }
 
-/// pytest's default `python_files`: `test_*.py` and `*_test.py`.
-fn is_pytest_file(path: &str) -> bool {
-    let file = path.rsplit('/').next().unwrap_or(path);
-    let stem = file.rsplit_once('.').map_or(file, |(s, _)| s);
-    stem.starts_with("test_") || stem.ends_with("_test")
+/// The first `kinds` child of a Go declaration, looking inside `( … )` spec lists.
+fn first_go_spec<'t>(node: Node<'t>, kinds: &[&str]) -> Option<Node<'t>> {
+    let mut cursor = node.walk();
+    let children: Vec<_> = node.named_children(&mut cursor).collect();
+    children.into_iter().find_map(|c| {
+        if kinds.contains(&c.kind()) {
+            Some(c)
+        } else if c.kind().ends_with("_spec_list") {
+            first_go_spec(c, kinds)
+        } else {
+            None
+        }
+    })
+}
+
+/// The receiver type of a Go method: `T` for `func (t *T[K]) m()`.
+fn go_receiver(method: Node<'_>, src: &[u8]) -> Option<String> {
+    let receiver = method.child_by_field_name("receiver")?.named_child(0)?;
+    let mut ty = receiver.child_by_field_name("type")?;
+    loop {
+        ty = match ty.kind() {
+            "pointer_type" => ty.named_child(0)?,
+            "generic_type" => ty.child_by_field_name("type")?,
+            "type_identifier" => return Some(text(ty, src)),
+            _ => return None,
+        };
+    }
+}
+
+/// Go calls another package's names as `pkg.Name`, and imports the package, not the name.
+/// Adds each `Name` used through an imported package to `imports`.
+fn collect_go_package_refs(root: Node<'_>, src: &[u8], imports: &mut HashSet<String>) {
+    fn walk<'t>(node: Node<'t>, visit: &mut impl FnMut(Node<'t>)) {
+        visit(node);
+        let mut cursor = node.walk();
+        let children: Vec<_> = node.named_children(&mut cursor).collect();
+        for child in children {
+            walk(child, visit);
+        }
+    }
+    let mut packages = HashSet::new();
+    walk(root, &mut |n| {
+        if n.kind() != "import_spec" {
+            return;
+        }
+        if let Some(alias) = n.child_by_field_name("name") {
+            packages.insert(text(alias, src));
+        } else if let Some(path) = n.child_by_field_name("path") {
+            let path = text(path, src);
+            let mut segments = path.trim_matches(['"', '`']).rsplit('/');
+            let last = segments.next().unwrap_or_default();
+            // `example.com/mod/v2` is package `mod`.
+            let is_version = last.len() > 1
+                && last.starts_with('v')
+                && last[1..].bytes().all(|b| b.is_ascii_digit());
+            let name = if is_version {
+                segments.next().unwrap_or(last)
+            } else {
+                last
+            };
+            packages.insert(name.to_owned());
+        }
+    });
+    walk(root, &mut |n| {
+        let (package, name) = match n.kind() {
+            "selector_expression" => ("operand", "field"),
+            "qualified_type" => ("package", "name"),
+            _ => return,
+        };
+        if let (Some(p), Some(m)) = (n.child_by_field_name(package), n.child_by_field_name(name))
+            && packages.contains(&text(p, src))
+        {
+            imports.insert(text(m, src));
+        }
+    });
 }
 
 fn collect_symbols(lang: Lang, container: Node<'_>, src: &[u8], prefix: &str, out: &mut Parsed) {
@@ -261,13 +368,20 @@ fn collect_symbols(lang: Lang, container: Node<'_>, src: &[u8], prefix: &str, ou
                 .push((line(first.start_position().row), end));
             continue;
         }
-        // Python has no visibility keyword: a leading underscore marks a name private.
-        let exported = if lang == Lang::Python {
-            !ident.starts_with('_')
-        } else {
-            exported
+        // Python and Go have no visibility keyword: Python marks private names with a leading
+        // underscore, Go exports names that start with a capital letter.
+        let exported = match lang {
+            Lang::Python => !ident.starts_with('_'),
+            Lang::Go => ident.starts_with(char::is_uppercase),
+            _ => exported,
         };
-        let name = format!("{prefix}{ident}");
+        let name = match (lang, kind) {
+            (Lang::Go, "method") => match go_receiver(decl, src) {
+                Some(receiver) => format!("{receiver}.{ident}"),
+                None => ident.clone(),
+            },
+            _ => format!("{prefix}{ident}"),
+        };
         if let Some(body) = body {
             collect_symbols(lang, body, src, &format!("{name}{}", lang.separator()), out);
         }
@@ -301,8 +415,23 @@ fn member_root(member: Node<'_>) -> Option<Node<'_>> {
 }
 
 /// `test('name', …)`, `it.only('name', …)`, `describe('name', …)`, a fn with a `#[…test]`
-/// attribute, or a Python `def test…`.
+/// attribute, a Python `def test…`, or a Go `func TestX` / `BenchmarkX` / `FuzzX` / `ExampleX`.
 fn test_decl(lang: Lang, node: Node<'_>, src: &[u8]) -> Option<TestDecl> {
+    if lang == Lang::Go {
+        if node.kind() != "function_declaration" {
+            return None;
+        }
+        let name = text(node.child_by_field_name("name")?, src);
+        // `go test` wants `Test` then the end of the name or a non-lowercase letter: not `Testify`.
+        let is_test = ["Test", "Benchmark", "Fuzz", "Example"].iter().any(|p| {
+            name.strip_prefix(p)
+                .is_some_and(|rest| !rest.starts_with(char::is_lowercase))
+        });
+        return is_test.then(|| TestDecl {
+            name,
+            line: line(node.start_position().row),
+        });
+    }
     if lang == Lang::Python {
         if node.kind() != "function_definition" {
             return None;
@@ -395,7 +524,7 @@ fn collect_identifiers(node: Node<'_>, src: &[u8], in_import: bool, out: &mut Pa
     let in_import = in_import
         || matches!(
             node.kind(),
-            "import_statement" | "import_from_statement" | "use_declaration"
+            "import_statement" | "import_from_statement" | "import_declaration" | "use_declaration"
         );
     if node.kind().ends_with("identifier") && node.named_child_count() == 0 {
         let name = text(node, src);
@@ -570,6 +699,50 @@ mod tests {
                 .collect();
             assert_eq!(got, vec![("test_adds", 3), ("test_loads", 8)], "{file}");
         }
+    }
+
+    #[test]
+    fn go_declarations_methods_and_package_refs() {
+        let src = "package store\n\nimport (\n\t\"fmt\"\n\tdb \"example.com/sql/v2\"\n)\n\nconst Limit = 3\n\nvar (\n\tcache = map[string]int{}\n)\n\ntype Repo[K any] struct {\n\tconn db.Conn\n}\n\nfunc (r *Repo[K]) Load() error {\n\treturn fmt.Errorf(\"x\")\n}\n\nfunc helper() {}\n";
+        let parsed = parse("store/repo.go", src).expect("parses").expect("go");
+        assert_eq!(
+            names(&parsed),
+            vec![
+                ("Limit", 8, 8, true),
+                ("cache", 10, 12, false),
+                ("Repo", 14, 16, true),
+                ("Repo.Load", 18, 20, true),
+                ("helper", 22, 22, false),
+            ]
+        );
+        for name in ["Errorf", "Conn"] {
+            assert!(
+                parsed.imports.contains(name),
+                "{name} is used through a package"
+            );
+        }
+        assert!(!parsed.imports.contains("conn"), "a field is not an import");
+        assert!(parsed.tests.is_empty(), "not a _test.go file");
+        assert!(same_go_package("store/repo.go", "store/cache.go"));
+        assert!(!same_go_package("store/repo.go", "api/repo.go"));
+        assert!(!same_go_package("store/repo.py", "store/cache.py"));
+    }
+
+    #[test]
+    fn go_tests_come_from_test_files() {
+        let src = "package store\n\nfunc TestLoad(t *testing.T) {}\n\nfunc Testify() {}\n\nfunc BenchmarkLoad(b *testing.B) {}\n\nfunc Test_edge(t *testing.T) {}\n";
+        let parsed = parse("store/repo_test.go", src)
+            .expect("parses")
+            .expect("go");
+        let got: Vec<_> = parsed
+            .tests
+            .iter()
+            .map(|t| (t.name.as_str(), t.line))
+            .collect();
+        assert_eq!(
+            got,
+            vec![("TestLoad", 3), ("BenchmarkLoad", 7), ("Test_edge", 9)]
+        );
     }
 
     #[test]

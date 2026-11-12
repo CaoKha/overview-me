@@ -10,6 +10,7 @@ use crate::facts::{self, Changes, Skipped, Unit};
 use crate::git::Git;
 use crate::map::{ChangeMap, Deletion, Edge, EdgeKind, Node, Risk, Site, TestRef};
 use crate::rules::Rules;
+use crate::symbols;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,7 +81,8 @@ fn draft_nodes(units: &[Unit]) -> Vec<(Node, Vec<&Unit>)> {
         .collect()
 }
 
-/// `calls` edges: a changed symbol names a changed exported symbol that its file imports (or defines).
+/// `calls` edges: a changed symbol names a changed exported symbol that its file imports (or
+/// defines, or shares through its Go package).
 fn call_edges(changes: &Changes, drafts: &[(Node, Vec<&Unit>)]) -> Vec<Edge> {
     let mut edges: Vec<Edge> = Vec::new();
     let enclosing = |file: &str, line: u32| {
@@ -100,8 +102,9 @@ fn call_edges(changes: &Changes, drafts: &[(Node, Vec<&Unit>)]) -> Vec<Edge> {
             let Some(parsed) = &file.parsed else {
                 continue;
             };
-            let same_file = file.path == us[0].file;
-            if !same_file && !parsed.imports.contains(name) {
+            let in_scope =
+                file.path == us[0].file || symbols::same_go_package(&file.path, &us[0].file);
+            if !in_scope && !parsed.imports.contains(name) {
                 continue;
             }
             for (ident, line) in &parsed.identifiers {
