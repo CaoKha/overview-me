@@ -12,12 +12,13 @@ Claude then loads the skills from your clone instead of the installed plugin, an
 
 ## Publish a new version
 
-Users only get a new CLI with a new GitHub release.
+Users only get new skills and a new CLI with a new version and GitHub release. [Release Please](https://github.com/googleapis/release-please) does both from the commit messages, so use conventional commits (`fix:` for a patch, `feat:` for a minor while below 1.0, `feat!:` for a breaking change).
 
-1. Set the same `version` in `Cargo.toml` and `.claude-plugin/plugin.json`, e.g. `0.2.0` (CI fails if they differ).
-2. Push to `main`.
-3. Tag it: `git tag v0.2.0 && git push origin v0.2.0`. The Release workflow builds the CLI for macOS and Linux and attaches it to the release.
-4. Users run `/plugin marketplace update overview-me`; their next session downloads the new CLI.
+1. Merge to `main`. Release Please opens or updates a `chore(main): release X.Y.Z` PR that bumps `Cargo.toml`, `Cargo.lock` and `.claude-plugin/plugin.json` and writes `CHANGELOG.md`.
+2. Merge that PR when you want to release. Release Please tags `vX.Y.Z` and creates the GitHub release, then the Release workflow builds the CLI for macOS and Linux and attaches it.
+3. Users run `/plugin marketplace update overview-me` (or turn on auto-update for the marketplace); their next session downloads the new CLI.
+
+The Release workflow also runs when you push a `v*` tag by hand; the tag must match both versions.
 
 ## CLI
 
