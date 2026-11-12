@@ -1,0 +1,26 @@
+# Changelog
+
+## [0.2.0](https://github.com/CaoKha/overview-me/compare/v0.1.0...v0.2.0) (2026-11-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* the binary is `overview-me` and maps live in .git/overview-me/ instead of .git/change-map/.
+
+### Features
+
+* change-map skill, rust cli and neovim plugin ([9cd7ba1](https://github.com/CaoKha/overview-me/commit/9cd7ba1f6b676e1037d43d68304bce82e913294d))
+* feature-overview and codebase-overview skills ([979993b](https://github.com/CaoKha/overview-me/commit/979993b80710a02dcab5a151690cb72c1845b65a))
+* **nvim:** open codebase overview in the browser ([223f734](https://github.com/CaoKha/overview-me/commit/223f734f2fab9ebddb917dd5f9da3f20328bfde1))
+* overview-me plugin with HTML review pages ([8e20af3](https://github.com/CaoKha/overview-me/commit/8e20af37b70341f99e1f55eb783674f12f852a18))
+* plugin installs its CLI; release binaries for macOS and Linux ([3a9d91a](https://github.com/CaoKha/overview-me/commit/3a9d91af61ad6380c04793c3d0eb56ad54827dcd))
+
+
+### Bug Fixes
+
+* align text under side-by-side Before/After flow diagrams ([d14910a](https://github.com/CaoKha/overview-me/commit/d14910a93a160871b14409ff7e7d0f39d0e91306))
+* **nvim:** keep panel out of snacks sidebar equalize ([4177d5b](https://github.com/CaoKha/overview-me/commit/4177d5baab260ce57cbb3a0bd29401a44b585bed))
+* **nvim:** keep panel out of snacks sidebar equalize ([d87dd2b](https://github.com/CaoKha/overview-me/commit/d87dd2bd9d2c0b216fd2b918f24876452f88cc02))
+* resolve skill paths from CLAUDE_SKILL_DIR instead of a fixed checkout ([338f752](https://github.com/CaoKha/overview-me/commit/338f752069fc3c675330329882910a01a745ef02))
+* resolve skill paths from CLAUDE_SKILL_DIR instead of a fixed checkout ([cf466b0](https://github.com/CaoKha/overview-me/commit/cf466b03fe52319eb9c6f20ac74902c36326c422))
+* **skills:** valid YAML frontmatter in skill descriptions ([3ae21e5](https://github.com/CaoKha/overview-me/commit/3ae21e52c5782f43a63351cdd8615c240fcbd4dd))
