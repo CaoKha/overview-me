@@ -1,25 +1,39 @@
 name: Release
 
-# Push a tag `v<version>` (the version in Cargo.toml and .claude-plugin/plugin.json) to build the
-# CLI for macOS and Linux and publish it as a GitHub release. The plugin's SessionStart hook
-# downloads the asset that matches the plugin version. Run it by hand to build without releasing.
+# Builds the CLI for macOS and Linux and attaches it to the GitHub release `v<version>` (the version
+# in Cargo.toml and .claude-plugin/plugin.json). The plugin's SessionStart hook downloads the asset
+# that matches the plugin version. Release Please calls it with the tag it created; pushing a `v*`
+# tag by hand also works. Run it by hand to build without releasing.
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build, e.g. v0.2.0
+        required: true
+        type: string
   workflow_dispatch:
 
 permissions:
   contents: write
 
+env:
+  # The tag being released: the input when called, the pushed tag otherwise (a branch name when
+  # run by hand, which skips the version check and the release).
+  TAG: ${{ inputs.tag || github.ref_name }}
+
 jobs:
   version:
     name: Tag matches versions
-    if: startsWith(github.ref, 'refs/tags/')
+    if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - run: |
-          tag="${GITHUB_REF_NAME#v}"
+          tag="${TAG#v}"
           cargo_v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
           plugin_v="$(jq -r .version .claude-plugin/plugin.json)"
           if [ "$tag" != "$cargo_v" ] || [ "$tag" != "$plugin_v" ]; then
@@ -40,6 +54,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -77,8 +93,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -l dist
-          if gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/* --clobber -R "$GITHUB_REPOSITORY"
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber -R "$GITHUB_REPOSITORY"
           else
-            gh release create "$GITHUB_REF_NAME" dist/* --generate-notes -R "$GITHUB_REPOSITORY"
+            gh release create "$TAG" dist/* --generate-notes -R "$GITHUB_REPOSITORY"
           fi
