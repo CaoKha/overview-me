@@ -49,7 +49,7 @@ What the system does, for whom, and its shape (monorepo of X apps, a CLI, a serv
 ## Run it
 | Task | Command |
 | --- | --- |
-| install / dev / test / lint / build | `...` |
+| <task: install, dev, test, lint, build> | `<command>` |
 
 ## Modules
 | Module | Path | Lane | What it does | Depends on |
@@ -59,7 +59,7 @@ What the system does, for whom, and its shape (monorepo of X apps, a CLI, a serv
 <mermaid flowchart, see rules>
 
 ## Entry points
-- <kind: route, command, job, UI root> `<name>` → `path:line` (<module>)
+- <kind: route, command, job, UI root> `<name>` → `<path:line>` (<module>)
 
 ## Core concepts
 | Term | What it means | Defined at |
@@ -67,17 +67,17 @@ What the system does, for whom, and its shape (monorepo of X apps, a CLI, a serv
 
 ## Main flows
 ### <Flow name>
-1. <hop> `path:line` (<module>)
+1. <hop> `<path:line>` (<module>)
 
 ## Conventions
-- Tests: ...
-- Config: ...
+- Tests: <where tests live, how they are named and run>
+- Config: <where config lives and how it is loaded>
 - Do not edit: <generated paths>
 
 ## Where to find
 | If you need… | Look in |
 | --- | --- |
-| a new API route | `path/` |
+| <a common task, e.g. adding an API route> | `<path/>` |
 
 ## Gaps
 - <what you could not confirm, docs that disagree with code, lanes that do not fit>

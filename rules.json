@@ -1,16 +1,16 @@
 {
-  "testGlobs": ["**/*.test.*", "**/*.spec.*", "**/__test__/**", "**/__tests__/**", "**/test/**", "**/tests/**", "**/e2e/**", "**/fixtures/**", "**/__snapshots__/**"],
+  "testGlobs": ["**/*.test.*", "**/*.spec.*", "**/*_test.*", "**/test_*.py", "**/__test__/**", "**/__tests__/**", "**/test/**", "**/tests/**", "**/e2e/**", "**/fixtures/**", "**/__snapshots__/**"],
   "lanes": [
-    { "lane": "db", "globs": ["packages/db/**", "**/migrations/**"] },
-    { "lane": "ui", "globs": ["apps/web/**", "apps/admin/**", "apps/landing/**", "apps/mobile/**", "packages/ui/**", "packages/emails/**"] },
-    { "lane": "api", "globs": ["apps/api*/**", "packages/contracts/**", "packages/server/**"] },
-    { "lane": "engine", "globs": ["apps/al-gaib/**"] },
-    { "lane": "jobs", "globs": ["apps/coty/**"] },
-    { "lane": "services", "globs": ["packages/*/src/**"] }
+    { "lane": "db", "globs": ["**/migrations/**", "**/db/**", "**/database/**", "**/prisma/**", "**/*.sql"] },
+    { "lane": "jobs", "globs": ["**/jobs/**", "**/workers/**", "**/worker/**", "**/cron/**", "**/queues/**"] },
+    { "lane": "engine", "globs": ["**/engine/**"] },
+    { "lane": "api", "globs": ["**/api/**", "**/api-*/**", "**/routes/**", "**/routers/**", "**/controllers/**", "**/handlers/**", "**/server/**", "**/backend/**", "**/graphql/**", "**/*.proto"] },
+    { "lane": "ui", "globs": ["**/web/**", "**/frontend/**", "**/ui/**", "**/components/**", "**/pages/**", "**/views/**", "**/*.tsx", "**/*.jsx", "**/*.vue", "**/*.svelte", "**/*.css", "**/*.scss", "**/*.html"] },
+    { "lane": "services", "globs": ["**/services/**", "**/service/**", "**/domain/**", "**/lib/**", "packages/*/src/**", "libs/*/src/**", "crates/*/src/**"] }
   ],
   "risk": {
-    "skimGlobs": ["**/*.md", "docs/**", "apps/docs/**"],
-    "readGlobs": ["**/migrations/**", "**/auth/**"],
-    "readKeywords": ["fee", "ledger", "balance", "commission", "margin", "pnl", "payout", "withdraw", "deposit", "for update", "for no key update", ".for(", "migration", "auth", "password"]
+    "skimGlobs": ["**/*.md", "**/*.mdx", "**/docs/**", "**/*.lock", "**/package-lock.json", "**/pnpm-lock.yaml", "**/yarn.lock"],
+    "readGlobs": ["**/migrations/**", "**/auth/**", "**/security/**", "**/permissions/**"],
+    "readKeywords": ["password", "secret", "auth", "permission", "migration", "transaction", "for update", "for no key update", "delete from", "drop table", "unsafe", "payment", "balance", "refund"]
   }
 }

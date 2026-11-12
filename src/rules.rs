@@ -121,18 +121,14 @@ mod tests {
     #[test]
     fn globs_match_like_the_rules_expect() {
         let cases = [
-            ("**/*.test.*", "packages/perp/src/new.test.ts", true),
+            ("**/*.test.*", "packages/core/src/new.test.ts", true),
             ("**/*.test.*", "new.test.ts", true),
-            (
-                "**/__test__/**",
-                "apps/al-gaib/__test__/test.trading.ts",
-                true,
-            ),
-            ("apps/api*/**", "apps/api-rest-v3/src/x.ts", true),
-            ("apps/al-gaib/**", "apps/al-gaib/.env.schema", true),
-            ("packages/*/src/**", "packages/perp/src/a/b.ts", true),
-            ("packages/*/src/**", "packages/perp/test/b.ts", false),
-            ("**/*.test.*", "packages/perp/src/new.ts", false),
+            ("**/__test__/**", "apps/engine/__test__/test.run.ts", true),
+            ("apps/api*/**", "apps/api-v2/src/x.ts", true),
+            ("apps/engine/**", "apps/engine/.env.schema", true),
+            ("packages/*/src/**", "packages/core/src/a/b.ts", true),
+            ("packages/*/src/**", "packages/core/test/b.ts", false),
+            ("**/*.test.*", "packages/core/src/new.ts", false),
         ];
         for (pattern, path, want) in cases {
             assert_eq!(glob_match(pattern, path), want, "{pattern} vs {path}");
@@ -142,17 +138,25 @@ mod tests {
     #[test]
     fn default_rules_load_and_classify() {
         let rules = Rules::load(None).expect("built-in rules parse");
-        assert!(rules.is_test("packages/perp/src/x.test.ts"));
-        assert_eq!(rules.lane("apps/al-gaib/src/x.ts"), Lane::Engine);
-        assert_eq!(rules.lane("packages/perp/src/x.ts"), Lane::Services);
+        assert!(rules.is_test("packages/core/src/x.test.ts"));
+        assert!(rules.is_test("pkg/store/store_test.go"));
+        assert_eq!(rules.lane("db/migrations/0001.sql"), Lane::Db);
+        assert_eq!(rules.lane("apps/worker/src/send.ts"), Lane::Jobs);
+        assert_eq!(rules.lane("src/engine/match.rs"), Lane::Engine);
+        assert_eq!(rules.lane("apps/api/src/users.ts"), Lane::Api);
+        assert_eq!(rules.lane("apps/web/src/main.ts"), Lane::Ui);
+        assert_eq!(rules.lane("src/components/Button.tsx"), Lane::Ui);
+        assert_eq!(rules.lane("packages/core/src/x.ts"), Lane::Services);
+        assert_eq!(rules.lane("scripts/release.sh"), Lane::Other);
         assert_eq!(
-            rules.risk("a.ts", true, "fee").0,
+            rules.risk("a.ts", true, "password").0,
             Risk::Skim,
             "comment-only beats keywords"
         );
         assert_eq!(
-            rules.risk("a.ts", false, "const openingFee = 1").0,
+            rules.risk("a.ts", false, "const passwordHash = hash(input)").0,
             Risk::Read
         );
+        assert_eq!(rules.risk("pnpm-lock.yaml", false, "").0, Risk::Skim);
     }
 }
