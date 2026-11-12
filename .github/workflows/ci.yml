@@ -18,7 +18,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -36,11 +36,19 @@ jobs:
     name: Plugin manifest
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
-      # Checks .claude-plugin/plugin.json, marketplace.json and the skills' frontmatter.
+      # The release a plugin version downloads is tagged from Cargo.toml's version.
+      - name: Versions match
+        run: |
+          cargo_v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+          plugin_v="$(jq -r .version .claude-plugin/plugin.json)"
+          [ "$cargo_v" = "$plugin_v" ] || { echo "::error::Cargo.toml $cargo_v != plugin.json $plugin_v"; exit 1; }
+      - name: Install script
+        run: bash -n scripts/ensure-cli.sh && shellcheck scripts/ensure-cli.sh
+      # Checks .claude-plugin/plugin.json, marketplace.json, hooks and the skills' frontmatter.
       - run: npx -y @anthropic-ai/claude-code plugin validate .
         env:
           DISABLE_TELEMETRY: "1"

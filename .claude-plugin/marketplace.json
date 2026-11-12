@@ -1,6 +1,9 @@
 {
   "name": "overview-me",
   "owner": { "name": "CaoKha" },
+  "metadata": {
+    "description": "Claude Code skills for one-page overviews of a PR, your uncommitted changes, or a whole codebase."
+  },
   "plugins": [
     {
       "name": "overview-me",

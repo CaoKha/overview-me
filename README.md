@@ -11,15 +11,14 @@ In Claude Code:
 /plugin install overview-me@overview-me
 ```
 
-Then install the CLI the skills run (needs Rust):
+That's all. When a session starts, the plugin installs the `overview-me` CLI its skills run into the plugin folder: it downloads the release built for your machine (macOS or Linux, arm64 or x86_64), or builds it with `cargo` if there is no release for it. It does this once per plugin version. While the repo is private, the download uses the `gh` CLI's GitHub login.
 
-```sh
-cargo install --locked --git https://github.com/CaoKha/overview-me
-```
+The skills are `/overview-me:pr-overview`, `/overview-me:change-overview` and `/overview-me:codebase-overview`; asking in plain words ("review this PR", "review my changes") works too. `/plugin marketplace update overview-me` pulls new versions, and the next session fetches the matching CLI.
 
-The skills are `/overview-me:pr-overview`, `/overview-me:change-overview` and `/overview-me:codebase-overview`; asking in plain words ("review this PR", "review my changes") works too. `/plugin marketplace update overview-me` pulls new versions; rerun `cargo install` with `--force` when the CLI changed.
+## Develop
 
-Working on overview-me itself: `claude --plugin-dir /path/to/overview-me` loads the skills from your clone, and `cargo install --locked --path .` installs the CLI from it.
+- `OVERVIEW_ME_FROM_SOURCE=1 claude --plugin-dir /path/to/overview-me` loads the plugin from your clone and builds the CLI from it at each session start.
+- To release: bump `version` in `Cargo.toml` and `.claude-plugin/plugin.json` (CI checks they match), push, then push the tag `v<version>`. The Release workflow builds the four binaries and publishes them; installed plugins pick them up after `/plugin marketplace update`.
 
 ## Use
 

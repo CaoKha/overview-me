@@ -7,7 +7,7 @@ description: Review a PR or diff on one page: map it and explain the feature it 
 
 Two parts. The change map says *what changed*: every changed line belongs to one captioned stop, each claim names the tests that prove it, and `overview-me validate` rejects any label that disagrees with git. The overview says *how the feature works*: how it is triggered, what runs, what data it touches, and which existing code it leans on. The reader should understand the feature in five minutes without opening the codebase, then use the overview to pick what to read.
 
-`${CLAUDE_SKILL_DIR}/../..` is the overview-me plugin root, which holds the Rust source. The steps run the `overview-me` CLI. If `command -v overview-me` finds nothing, install it once with `cargo install --path "${CLAUDE_SKILL_DIR}/../.."`, which puts it on PATH. Run it from the root of the repo under review.
+`${CLAUDE_SKILL_DIR}/../..` is the overview-me plugin root. The steps run its CLI, `${CLAUDE_SKILL_DIR}/../../bin/overview-me` (called `overview-me` below), which the plugin installs when a session starts. If it is missing, run `bash "${CLAUDE_SKILL_DIR}/../../scripts/ensure-cli.sh"` once: it downloads the release for this machine or builds it from source. If it is still missing, tell the user what the script printed and stop. Run the CLI from the root of the repo under review.
 
 ## Steps
 

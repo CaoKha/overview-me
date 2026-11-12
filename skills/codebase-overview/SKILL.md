@@ -7,7 +7,7 @@ description: Write a map of the whole codebase at the default branch (main), cov
 
 A change map shows one PR. Without the rest of the system around it, the reader gets lost: they do not know what a module is for, what a term means, or what normally calls the changed code. The codebase overview is that context. It is written once per repo, kept up to date as main moves, and shared by every change map in the repo.
 
-`${CLAUDE_SKILL_DIR}/../..` is the overview-me plugin root, which holds the Rust source. The steps run the `overview-me` CLI. If `command -v overview-me` finds nothing, install it once with `cargo install --path "${CLAUDE_SKILL_DIR}/../.."`, which puts it on PATH. Run it from the root of the repo under review.
+`${CLAUDE_SKILL_DIR}/../..` is the overview-me plugin root. The steps run its CLI, `${CLAUDE_SKILL_DIR}/../../bin/overview-me` (called `overview-me` below), which the plugin installs when a session starts. If it is missing, run `bash "${CLAUDE_SKILL_DIR}/../../scripts/ensure-cli.sh"` once: it downloads the release for this machine or builds it from source. If it is still missing, tell the user what the script printed and stop. Run the CLI from the root of the repo under review.
 
 The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(overview-me path)")`. Like the maps, it is never committed and is shared by all worktrees.
 
