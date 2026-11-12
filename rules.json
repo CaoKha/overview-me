@@ -1,5 +1,5 @@
 {
-  "testGlobs": ["**/*.test.*", "**/*.spec.*", "**/*_test.*", "**/test_*.py", "**/__test__/**", "**/__tests__/**", "**/test/**", "**/tests/**", "**/e2e/**", "**/fixtures/**", "**/__snapshots__/**"],
+  "testGlobs": ["**/*.test.*", "**/*.spec.*", "**/*_test.*", "**/test_*.py", "**/conftest.py", "**/__test__/**", "**/__tests__/**", "**/test/**", "**/tests/**", "**/e2e/**", "**/fixtures/**", "**/__snapshots__/**"],
   "lanes": [
     { "lane": "db", "globs": ["**/migrations/**", "**/db/**", "**/database/**", "**/prisma/**", "**/*.sql"] },
     { "lane": "jobs", "globs": ["**/jobs/**", "**/workers/**", "**/worker/**", "**/cron/**", "**/queues/**"] },
