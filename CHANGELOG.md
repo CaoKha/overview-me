@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/CaoKha/overview-me/compare/v0.2.1...v0.3.0) (2026-11-12)
+
+
+### Features
+
+* parse Go files ([718c460](https://github.com/CaoKha/overview-me/commit/718c460f050a9de135f24370e9fac85e117e7648))
+* parse Python files ([8bbcea1](https://github.com/CaoKha/overview-me/commit/8bbcea111dd99ea782b278550f445027d26bdd53))
+
 ## [0.2.1](https://github.com/CaoKha/overview-me/compare/v0.2.0...v0.2.1) (2026-11-12)
 
 
