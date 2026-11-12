@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/CaoKha/overview-me/compare/v0.2.0...v0.2.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **skills:** valid YAML frontmatter in pr-overview description ([a6002e9](https://github.com/CaoKha/overview-me/commit/a6002e9aed8705b0de47efcd1e1127ec24947fe9))
+
 ## [0.2.0](https://github.com/CaoKha/overview-me/compare/v0.1.0...v0.2.0) (2026-11-12)
 
 
