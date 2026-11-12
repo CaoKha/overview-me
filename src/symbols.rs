@@ -76,6 +76,7 @@ enum Lang {
     TypeScript,
     Tsx,
     Rust,
+    Python,
 }
 
 impl Lang {
@@ -85,6 +86,7 @@ impl Lang {
             "ts" | "mts" | "cts" | "js" | "mjs" | "cjs" => Some(Self::TypeScript),
             "tsx" | "jsx" => Some(Self::Tsx),
             "rs" => Some(Self::Rust),
+            "py" | "pyi" => Some(Self::Python),
             _ => None,
         }
     }
@@ -94,6 +96,7 @@ impl Lang {
             Self::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
             Self::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
             Self::Rust => tree_sitter_rust::LANGUAGE.into(),
+            Self::Python => tree_sitter_python::LANGUAGE.into(),
         }
     }
 
@@ -126,8 +129,10 @@ pub fn parse(path: &str, source: &str) -> Result<Option<Parsed>> {
     let mut parsed = Parsed::default();
     collect_symbols(lang, tree.root_node(), src, "", &mut parsed);
     collect_identifiers(tree.root_node(), src, false, &mut parsed);
-    collect_tests(lang, tree.root_node(), src, &mut parsed.tests);
-    collect_comments(tree.root_node(), &mut parsed.comments);
+    if lang != Lang::Python || is_pytest_file(path) {
+        collect_tests(lang, tree.root_node(), src, &mut parsed.tests);
+    }
+    collect_comments(lang, tree.root_node(), &mut parsed.comments);
     Ok(Some(parsed))
 }
 
@@ -158,6 +163,26 @@ fn declaration<'t>(
         (Lang::Rust, "mod_item") => (name("name")?, "mod", body),
         (Lang::Rust, "impl_item") => (name("type")?, "impl", body),
         (Lang::Rust, _) => return None,
+        (Lang::Python, "function_definition") => {
+            let kind = if in_python_class(node) {
+                "method"
+            } else {
+                "function"
+            };
+            (name("name")?, kind, None)
+        }
+        (Lang::Python, "class_definition") => (name("name")?, "class", body),
+        (Lang::Python, "decorated_definition") => {
+            return declaration(lang, node.child_by_field_name("definition")?, src);
+        }
+        (Lang::Python, "expression_statement") => {
+            let assignment = node.named_child(0).filter(|n| n.kind() == "assignment")?;
+            let target = assignment
+                .child_by_field_name("left")
+                .filter(|n| n.kind() == "identifier")?;
+            (text(target, src), "const", None)
+        }
+        (Lang::Python, _) => return None,
         (_, "function_declaration" | "generator_function_declaration") => {
             (name("name")?, "function", None)
         }
@@ -180,6 +205,25 @@ fn declaration<'t>(
         _ => return None,
     };
     Some(found)
+}
+
+/// A `def` directly in a class body, decorated or not.
+fn in_python_class(def: Node<'_>) -> bool {
+    let mut parent = def.parent();
+    if parent.is_some_and(|p| p.kind() == "decorated_definition") {
+        parent = parent.and_then(|p| p.parent());
+    }
+    parent
+        .filter(|b| b.kind() == "block")
+        .and_then(|b| b.parent())
+        .is_some_and(|c| c.kind() == "class_definition")
+}
+
+/// pytest's default `python_files`: `test_*.py` and `*_test.py`.
+fn is_pytest_file(path: &str) -> bool {
+    let file = path.rsplit('/').next().unwrap_or(path);
+    let stem = file.rsplit_once('.').map_or(file, |(s, _)| s);
+    stem.starts_with("test_") || stem.ends_with("_test")
 }
 
 fn collect_symbols(lang: Lang, container: Node<'_>, src: &[u8], prefix: &str, out: &mut Parsed) {
@@ -217,6 +261,12 @@ fn collect_symbols(lang: Lang, container: Node<'_>, src: &[u8], prefix: &str, ou
                 .push((line(first.start_position().row), end));
             continue;
         }
+        // Python has no visibility keyword: a leading underscore marks a name private.
+        let exported = if lang == Lang::Python {
+            !ident.starts_with('_')
+        } else {
+            exported
+        };
         let name = format!("{prefix}{ident}");
         if let Some(body) = body {
             collect_symbols(lang, body, src, &format!("{name}{}", lang.separator()), out);
@@ -250,8 +300,19 @@ fn member_root(member: Node<'_>) -> Option<Node<'_>> {
         .filter(|o| o.kind() == "identifier")
 }
 
-/// `test('name', …)`, `it.only('name', …)`, `describe('name', …)`, or a fn with a `#[…test]` attribute.
+/// `test('name', …)`, `it.only('name', …)`, `describe('name', …)`, a fn with a `#[…test]`
+/// attribute, or a Python `def test…`.
 fn test_decl(lang: Lang, node: Node<'_>, src: &[u8]) -> Option<TestDecl> {
+    if lang == Lang::Python {
+        if node.kind() != "function_definition" {
+            return None;
+        }
+        let name = text(node.child_by_field_name("name")?, src);
+        return name.starts_with("test").then(|| TestDecl {
+            name,
+            line: line(node.start_position().row),
+        });
+    }
     if lang == Lang::Rust {
         if node.kind() != "function_item" {
             return None;
@@ -303,15 +364,20 @@ fn test_decl(lang: Lang, node: Node<'_>, src: &[u8]) -> Option<TestDecl> {
     })
 }
 
-fn collect_comments(node: Node<'_>, out: &mut Vec<(usize, usize, usize, usize)>) {
-    if node.kind().ends_with("comment") {
+/// Comment nodes, plus Python docstrings: a statement that is only a string literal.
+fn collect_comments(lang: Lang, node: Node<'_>, out: &mut Vec<(usize, usize, usize, usize)>) {
+    let docstring = lang == Lang::Python
+        && node.kind() == "expression_statement"
+        && node.named_child_count() == 1
+        && node.named_child(0).is_some_and(|s| s.kind() == "string");
+    if docstring || node.kind().ends_with("comment") {
         let (a, b) = (node.start_position(), node.end_position());
         out.push((a.row, a.column, b.row, b.column));
         return;
     }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        collect_comments(child, out);
+        collect_comments(lang, child, out);
     }
 }
 
@@ -326,7 +392,11 @@ fn collect_tests(lang: Lang, node: Node<'_>, src: &[u8], out: &mut Vec<TestDecl>
 }
 
 fn collect_identifiers(node: Node<'_>, src: &[u8], in_import: bool, out: &mut Parsed) {
-    let in_import = in_import || matches!(node.kind(), "import_statement" | "use_declaration");
+    let in_import = in_import
+        || matches!(
+            node.kind(),
+            "import_statement" | "import_from_statement" | "use_declaration"
+        );
     if node.kind().ends_with("identifier") && node.named_child_count() == 0 {
         let name = text(node, src);
         if in_import {
@@ -458,6 +528,48 @@ mod tests {
         let parsed = parse("x.ts", ts).expect("parses").expect("typescript");
         assert!(!parsed.is_comment_line(1, "/* a */ deleteAllUsers() /* b */"));
         assert!(parsed.is_comment_line(2, "/* a */ /* b */"));
+    }
+
+    #[test]
+    fn python_functions_classes_methods_and_constants() {
+        let src = "from os import path\n\nLIMIT = 3\n\ndef run(x):\n    return path.join(x)\n\nclass Repo:\n    \"\"\"Stores rows.\"\"\"\n\n    @property\n    def size(self):\n        return 1\n\n    def _load(self):\n        pass\n\n@cache\ndef _helper():\n    pass\n";
+        let parsed = parse("app/repo.py", src).expect("parses").expect("python");
+        assert_eq!(
+            names(&parsed),
+            vec![
+                ("LIMIT", 3, 3, true),
+                ("run", 5, 6, true),
+                ("Repo", 8, 16, true),
+                ("Repo.size", 11, 13, true),
+                ("Repo._load", 15, 16, false),
+                ("_helper", 18, 20, false),
+            ]
+        );
+        let kinds: Vec<_> = parsed
+            .symbols
+            .iter()
+            .map(|s| (s.ident.as_str(), s.kind))
+            .collect();
+        assert!(kinds.contains(&("size", "method")));
+        assert!(kinds.contains(&("run", "function")));
+        assert!(parsed.imports.contains("path"));
+        assert!(parsed.is_comment_line(9, "    \"\"\"Stores rows.\"\"\""));
+        assert!(!parsed.is_comment_line(3, "LIMIT = 3"));
+        assert!(parsed.tests.is_empty(), "not a pytest file");
+    }
+
+    #[test]
+    fn python_tests_come_from_pytest_files() {
+        let src = "import pytest\n\ndef test_adds():\n    pass\n\nclass TestRepo:\n    @pytest.mark.slow\n    def test_loads(self):\n        pass\n\n    def helper(self):\n        pass\n";
+        for file in ["tests/test_repo.py", "repo_test.py"] {
+            let parsed = parse(file, src).expect("parses").expect("python");
+            let got: Vec<_> = parsed
+                .tests
+                .iter()
+                .map(|t| (t.name.as_str(), t.line))
+                .collect();
+            assert_eq!(got, vec![("test_adds", 3), ("test_loads", 8)], "{file}");
+        }
     }
 
     #[test]
