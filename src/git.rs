@@ -53,6 +53,26 @@ impl Git {
         Ok(out.stdout)
     }
 
+    /// Runs git with extra environment variables and returns stdout as text.
+    ///
+    /// # Errors
+    /// See [`Git::run_bytes`].
+    pub fn run_env(&self, envs: &[(&str, &str)], args: &[&str]) -> Result<String> {
+        let out = self
+            .command(args)
+            .envs(envs.iter().copied())
+            .output()
+            .context("running git")?;
+        if !out.status.success() {
+            bail!(
+                "git {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+
     /// Runs git and returns stdout as text; invalid UTF-8 becomes U+FFFD instead of failing.
     ///
     /// # Errors
@@ -100,7 +120,7 @@ impl Git {
     /// When the repo is not a git repository.
     pub fn store(&self) -> Result<PathBuf> {
         let common = self.run(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
-        Ok(Path::new(common.trim()).join("change-map"))
+        Ok(Path::new(common.trim()).join("overview-me"))
     }
 
     /// Path of the map for `head`.

@@ -1,4 +1,4 @@
-//! `change-map validate`: the map must agree with git.
+//! `overview-me validate`: the map must agree with git.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

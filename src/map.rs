@@ -4,7 +4,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// A spec-linked map of one change, stored at `<git-common-dir>/change-map/<head-sha>.json`.
+/// A spec-linked map of one change, stored at `<git-common-dir>/overview-me/<head-sha>.json`.
 /// Tests never become nodes: a criterion names the tests that prove it, and `touchedByTest` is a computed hint.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

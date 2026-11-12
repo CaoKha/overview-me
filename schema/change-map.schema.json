@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Change map v1",
-  "description": "A spec-linked map of one change, stored at `<git-common-dir>/change-map/<head-sha>.json`.\nTests never become nodes: a criterion names the tests that prove it, and `touchedByTest` is a computed hint.",
+  "description": "A spec-linked map of one change, stored at `<git-common-dir>/overview-me/<head-sha>.json`.\nTests never become nodes: a criterion names the tests that prove it, and `touchedByTest` is a computed hint.",
   "type": "object",
   "properties": {
     "base": {

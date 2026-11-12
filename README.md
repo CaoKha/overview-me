@@ -1,74 +1,54 @@
-# change-map
+# overview-me
 
-Review agent-written code in Neovim without reading the diff line by line. A change map links your spec to the code, groups the change by layer, and gives you a short reading order with a caption on every changed place.
+One-page overviews for reviewing agent-written code: a PR, your uncommitted changes, or the whole codebase. Each page links your spec to the code, groups the change by layer, draws the flow before and after, and gives you a short reading order with a caption on every changed place.
 
 ## Install
 
+In Claude Code:
+
+```
+/plugin marketplace add CaoKha/overview-me
+/plugin install overview-me@overview-me
+```
+
+Then install the CLI the skills run (needs Rust):
+
 ```sh
-cd /path/to/change-map   # wherever you cloned it
-cargo build --release
-mkdir -p ~/.claude/skills
-ln -sfn "$PWD/skills/change-map" ~/.claude/skills/change-map
-ln -sfn "$PWD/skills/feature-overview" ~/.claude/skills/feature-overview
-ln -sfn "$PWD/skills/codebase-overview" ~/.claude/skills/codebase-overview
+cargo install --locked --git https://github.com/CaoKha/overview-me
 ```
 
-LazyVim (`~/.config/nvim/lua/plugins/change-map.lua`):
+The skills are `/overview-me:pr-overview`, `/overview-me:change-overview` and `/overview-me:codebase-overview`; asking in plain words ("review this PR", "review my changes") works too. `/plugin marketplace update overview-me` pulls new versions; rerun `cargo install` with `--force` when the CLI changed.
 
-```lua
-return {
-  {
-    dir = "/path/to/change-map", -- your clone
-    cmd = { "ChangeMap", "ChangeMapPanel", "ChangeMapDiff", "ChangeMapOverview", "ChangeMapCodebase" },
-    keys = {
-      { "<leader>rr", function() if require("change-map").load("") then require("change-map").panel() end end, desc = "Open change map (HEAD)" },
-      { "<leader>rp", function() if require("change-map").ensure() then require("change-map").toggle_panel() end end, desc = "Toggle change map panel" },
-      { "<leader>rd", function() if require("change-map").ensure() then require("change-map").diff() end end, desc = "Diff file against change base" },
-      { "<leader>ro", function() require("change-map").overview() end, desc = "Open feature overview" },
-      { "<leader>rc", function() require("change-map").codebase() end, desc = "Open codebase overview in browser" },
-      { "<leader>rs", function() if require("change-map").ensure() then require("change-map").panel({ focus = "input" }) end end, desc = "Search stops and criteria" },
-      { "<leader>rn", function() require("change-map").stop(1) end, desc = "Next review stop" },
-      { "<leader>rN", function() require("change-map").stop(-1) end, desc = "Previous review stop" },
-    },
-  },
-  { "folke/which-key.nvim", optional = true, opts = { spec = { { "<leader>r", group = "review" } } } },
-}
-```
+Working on overview-me itself: `claude --plugin-dir /path/to/overview-me` loads the skills from your clone, and `cargo install --locked --path .` installs the CLI from it.
 
 ## Use
 
 0. Once per repo, run **`/codebase-overview`**. It maps the whole codebase at the default branch (modules, lanes, entry points, core concepts, main flows, where to find things), so a PR has a place to sit. Run it again when main has moved; it only updates what changed.
-1. In Claude Code, with the PR head checked out, run **`/change-map`**, ideally in the session that wrote the code. Add the spec and the PR if it can't guess them: `/change-map PR 3389, spec docs/spec.md`. Plain words work too: "make a change map for this PR". The skill builds the map and validates it.
-2. Optional: run **`/feature-overview`** for a one-page picture of the feature: entry points, runtime flow, data, the existing code it plugs into, and what to read first. It needs the map from step 1.
-3. In nvim, in the same repo, press **`<leader>rr`**. Press **`<leader>ro`** for the overview; `gF` on a `path:line` in it jumps to the code.
+1. With the PR head checked out, run **`/pr-overview`**, ideally in the session that wrote the code. Name the PR if it can't guess it: `/pr-overview PR 3389`. Plain words work too: "map this PR", "explain this change". It first builds the change map (criteria and the tests that prove them, one captioned stop per changed place, a reading order) and validates it against git, then writes the overview: entry points, before and after flows, data, the existing code it plugs into, and what to read first. Run it again on the same head and it reuses the map.
+2. Before you commit, run **`/change-overview`** for the same page about your uncommitted work: the staged, unstaged and untracked files that `git status` shows, against HEAD. It maps a snapshot of the working tree and never commits, stages or edits anything.
 
-| Key | What |
-| --- | --- |
-| `<leader>rr` | Load the map for HEAD and open the panel |
-| `<leader>rp` | Toggle the panel |
-| `<leader>rs` | Search stops and criteria |
-| `<leader>rn` / `<leader>rN` | Next / previous stop (same as `]q` / `[q`) |
-| `]x` / `[x` | Next / previous place within the current stop |
-| `<leader>rd` | Diff the current file against the PR base |
-| `<leader>ro` | Open the feature overview |
-| `<leader>rc` | Open the codebase overview in the browser (`:ChangeMapCodebase!` opens it in a split) |
+Every skill ends by showing its result as a page: a Claude artifact in Claude Code, or the same page opened in the browser elsewhere. On the page:
 
-**Panel:** Spec (criteria ✓ tested, ⚠ untested or partial, ✗ missing) → Lanes (ui, api, services, db, engine, jobs) → Unexplained code. `<CR>` jumps to code or opens a folder, `h` closes it, `P` toggles preview. Deleted files show as `✗ deleted`, moved files as `→ moved from`.
+- **Flow diagrams**: hover a box to trace its links; click it to pin it and list its files (`path:line`) with copy buttons, ready to paste into your editor's file search. Esc or a click on the background unpins it.
+- **PR overview**: the before and after flows sit side by side on a wide screen. Solid boxes are changed code, green new, red removed, dashed unchanged.
+- Every `path:line` links to the forge at the right commit (base for the Before flow).
 
 ## CLI
 
 ```sh
-change-map extract --base <sha> [--spec spec.md]   # facts + draft map
-change-map validate <map.json>                     # exit 1 on any problem
-change-map render <map.json>                       # markdown + mermaid
-change-map path                                    # where the map for HEAD lives
+overview-me extract --base <sha> [--spec spec.md]   # facts + draft map
+overview-me validate <map.json>                     # exit 1 on any problem
+overview-me render <map.json>                       # plain review guide <head>.md (not used by the skills)
+overview-me page <file.md> [--out page.html] [--unpushed]  # overview as an HTML page
+overview-me snapshot                                # commit of HEAD + uncommitted files, branch untouched
+overview-me path                                    # where the map for HEAD lives
 ```
 
 ## How it works
 
 - **The map is facts, the labels are help.** The binary computes the structure from git and tree-sitter. Claude writes criteria, captions, groups and the tour. `validate` rejects any label that disagrees with git: every changed line, deleted file and move must belong to exactly one stop, and every test cited as proof must be a real test at that line.
 - Tests never become stops. A criterion counts as tested only when it names the tests that prove it.
-- Maps live in `$(git rev-parse --git-common-dir)/change-map/<head-sha>.json`: never committed, shared by all worktrees. The feature overview is `<head-sha>.overview.md` beside it, and the codebase overview is `codebase.md`, one per repo.
+- Maps live in `$(git rev-parse --git-common-dir)/overview-me/<head-sha>.json`: never committed, shared by all worktrees. Beside it: the PR overview `<head-sha>.review.md` and the codebase overview `codebase.md` (one per repo). `overview-me page` writes each one's page as `.html` next to it, from the template `assets/overview.html` compiled into the binary.
 - Lanes, test paths and risk keywords are in `rules.json` (override with `--rules`).
 
 ## Limits

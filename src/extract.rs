@@ -1,4 +1,4 @@
-//! `change-map extract`: facts plus a draft map for the skill to fill.
+//! `overview-me extract`: facts plus a draft map for the skill to fill.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

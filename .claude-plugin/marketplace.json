@@ -1,0 +1,11 @@
+{
+  "name": "overview-me",
+  "owner": { "name": "CaoKha" },
+  "plugins": [
+    {
+      "name": "overview-me",
+      "source": "./",
+      "description": "One-page overviews for reviewing agent-written code: a PR, your uncommitted changes, or the whole codebase."
+    }
+  ]
+}

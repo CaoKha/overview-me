@@ -1,12 +1,14 @@
-//! change-map: spec-linked maps of a change, for reviewing agent-written code.
+//! overview-me: spec-linked maps of a change, for reviewing agent-written code.
 //! Git gives the facts (`extract`), Claude writes the labels, `validate` checks them against git.
 
 mod extract;
 mod facts;
 mod git;
 mod map;
+mod page;
 mod render;
 mod rules;
+mod snapshot;
 mod symbols;
 #[cfg(test)]
 mod testutil;
@@ -51,9 +53,23 @@ enum Command {
     },
     /// Check a map against the schema and git; exits 1 on problems.
     Validate { map: PathBuf },
-    /// Write <map>.md (criteria, tour, mermaid) next to a map.
+    /// Write <map>.md (criteria, tour, flow diagram) next to a map.
     Render { map: PathBuf },
-    /// Print where the map for HEAD lives: <git-common-dir>/change-map/<head-sha>.json.
+    /// Write a store markdown file (review guide or overview) as an HTML page; exits 1 on an
+    /// invalid flow block.
+    Page {
+        md: PathBuf,
+        /// Page to write instead of <md> with an .html extension.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// The head is not on the remote: link only Before references (at the base commit).
+        #[arg(long)]
+        unpushed: bool,
+    },
+    /// Print a commit holding HEAD plus all uncommitted and untracked files (HEAD when clean),
+    /// made without touching the branch, the index or the files.
+    Snapshot,
+    /// Print where the map for HEAD lives: <git-common-dir>/overview-me/<head-sha>.json.
     Path {
         #[arg(long, default_value = "HEAD")]
         head: String,
@@ -80,6 +96,10 @@ fn main() -> Result<ExitCode> {
             }
         }
         Command::Render { map } => println!("{}", render::run(&map)?.display()),
+        Command::Page { md, out, unpushed } => {
+            println!("{}", page::run(&git, &md, out, unpushed)?.display());
+        }
+        Command::Snapshot => println!("{}", snapshot::run(&git)?),
         Command::Path { head } => println!("{}", git.map_path(&head)?.display()),
     }
     Ok(ExitCode::SUCCESS)

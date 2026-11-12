@@ -9,7 +9,7 @@ pub struct TempRepo {
 
 impl TempRepo {
     pub fn new(tag: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("change-map-{tag}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("overview-me-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create temp repo dir");
         let repo = Self { dir };

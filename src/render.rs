@@ -1,11 +1,13 @@
-//! `change-map render`: a Markdown review guide with a mermaid map, next to the JSON.
+//! `overview-me render`: a Markdown review guide with a flow diagram of the map, next to the
+//! JSON. `overview-me page` turns it into the HTML page.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use serde_json::{Value, json};
 
-use crate::map::{ChangeMap, Criterion, Lane, Node, Status};
+use crate::map::{ChangeMap, Criterion, Lane, Status};
 
 /// Writes `<map>.md` and returns its path.
 ///
@@ -29,28 +31,67 @@ fn mark(c: &Criterion) -> &'static str {
     }
 }
 
-/// Mermaid label text: no double quotes, and `#` would start an entity.
-fn label(s: &str) -> String {
-    s.replace('"', "'").replace('#', "#35;")
-}
-
-fn mermaid_id(criterion: &str) -> String {
-    criterion.replace('-', "_")
-}
-
 fn short(sha: &str) -> &str {
     sha.get(..10).unwrap_or(sha)
 }
 
-fn basename(file: &str) -> &str {
-    file.rsplit('/').next().unwrap_or(file)
+/// `file:start` or `file:start-end`.
+fn site_ref(file: &str, start: u32, end: u32) -> String {
+    if end > start {
+        format!("{file}:{start}-{end}")
+    } else {
+        format!("{file}:{start}")
+    }
+}
+
+/// The map as a ```` ```flow ```` block: one lane per row in lane order, one box per stop; the
+/// page shows a box's caption and files when it is clicked.
+fn flow(map: &ChangeMap) -> String {
+    let mut nodes = serde_json::Map::new();
+    for n in &map.nodes {
+        let paths: Vec<String> = n
+            .sites
+            .iter()
+            .map(|s| site_ref(&s.file, s.start, s.end))
+            .chain(n.renames.iter().map(|r| r.to.clone()))
+            .chain(n.deletions.iter().map(|d| d.file.clone()))
+            .collect();
+        let mut node = json!({ "label": n.symbol, "n": n.id, "note": n.caption, "paths": paths });
+        if n.sites.is_empty() && n.renames.is_empty() && !n.deletions.is_empty() {
+            node["kind"] = json!("removed");
+        }
+        nodes.insert(n.id.clone(), node);
+    }
+    let tiers: Vec<Value> = Lane::ALL
+        .iter()
+        .filter_map(|&lane| {
+            let ids: Vec<&str> = map
+                .nodes
+                .iter()
+                .filter(|n| n.lane == lane)
+                .map(|n| n.id.as_str())
+                .collect();
+            (!ids.is_empty()).then(|| json!([{ "name": lane.title(), "ids": ids }]))
+        })
+        .collect();
+    let edges: Vec<Value> = map
+        .edges
+        .iter()
+        .map(|e| {
+            let kind = serde_json::to_value(e.kind).unwrap_or(Value::Null);
+            json!([e.from, e.to, kind])
+        })
+        .collect();
+    let spec = json!({ "nodes": nodes, "tiers": tiers, "edges": edges });
+    // Serializing a Value cannot fail.
+    serde_json::to_string_pretty(&spec).unwrap_or_default()
 }
 
 pub fn markdown(map: &ChangeMap) -> String {
     let by_id = |id: &str| map.nodes.iter().find(|n| n.id == id);
     let mut md = String::new();
     // Writing to a String cannot fail, so the results below are ignored.
-    let _ = writeln!(md, "# Change map · {}\n", short(&map.head));
+    let _ = writeln!(md, "# Change map {} · review guide\n", short(&map.head));
     let spec = map
         .spec
         .as_ref()
@@ -87,7 +128,7 @@ pub fn markdown(map: &ChangeMap) -> String {
         let spec = c
             .spec_ref
             .as_ref()
-            .map(|r| format!(" · [spec]({r})"))
+            .map(|r| format!(" · spec `{r}`"))
             .unwrap_or_default();
         let _ = writeln!(
             md,
@@ -100,6 +141,8 @@ pub fn markdown(map: &ChangeMap) -> String {
             let _ = writeln!(md, "  - test `{}:{}` {}", t.file, t.line, t.name);
         }
     }
+
+    let _ = writeln!(md, "\n## Map\n\n```flow\n{}\n```", flow(map));
 
     md.push_str("\n## Tour\n\n");
     for (i, n) in map.tour.iter().filter_map(|id| by_id(id)).enumerate() {
@@ -116,7 +159,7 @@ pub fn markdown(map: &ChangeMap) -> String {
         let sites: Vec<String> = n
             .sites
             .iter()
-            .map(|s| format!("`{}:{}`", s.file, s.start))
+            .map(|s| format!("`{}`", site_ref(&s.file, s.start, s.end)))
             .chain(n.deletions.iter().map(|d| format!("deleted `{}`", d.file)))
             .chain(
                 n.renames
@@ -126,8 +169,9 @@ pub fn markdown(map: &ChangeMap) -> String {
             .collect();
         let _ = writeln!(
             md,
-            "{}. **{}** ({} · {} · {refs} · {tested}): {}  \n   {}",
+            "{}. {} **{}** ({} · {} · {refs} · {tested}): {}  \n   {}",
             i + 1,
+            n.id,
             n.symbol,
             n.lane.as_str(),
             n.risk.as_str(),
@@ -135,67 +179,40 @@ pub fn markdown(map: &ChangeMap) -> String {
             sites.join(", ")
         );
     }
-
-    md.push_str("\n## Map\n\n```mermaid\nflowchart LR\n  subgraph SPEC[\"Spec\"]\n");
-    for c in &map.criteria {
-        let _ = writeln!(
-            md,
-            "    {}[\"{} {} {}\"]",
-            mermaid_id(&c.id),
-            mark(c),
-            c.id,
-            label(&c.text)
-        );
-    }
-    md.push_str("  end\n");
-    for lane in Lane::ALL {
-        let nodes: Vec<&Node> = map.nodes.iter().filter(|n| n.lane == lane).collect();
-        if nodes.is_empty() {
-            continue;
-        }
-        let _ = writeln!(md, "  subgraph {}[\"{}\"]", lane.as_str(), lane.title());
-        for n in nodes {
-            let more = if n.sites.len() > 1 {
-                format!(" +{}", n.sites.len() - 1)
-            } else {
-                String::new()
-            };
-            let file = n
-                .sites
-                .first()
-                .map(|s| basename(&s.file).to_owned())
-                .or_else(|| {
-                    n.renames
-                        .first()
-                        .map(|r| format!("moved to {}", basename(&r.to)))
-                })
-                .or_else(|| {
-                    n.deletions
-                        .first()
-                        .map(|d| format!("deleted {}", basename(&d.file)))
-                })
-                .unwrap_or_default();
-            let _ = writeln!(
-                md,
-                "    {}[\"{}<br/>{file}{more}\"]",
-                n.id,
-                label(&n.symbol)
-            );
-        }
-        md.push_str("  end\n");
-    }
-    for n in &map.nodes {
-        for c in &n.criteria {
-            let _ = writeln!(md, "  {} -.-> {}", mermaid_id(c), n.id);
-        }
-    }
-    for e in &map.edges {
-        let kind = serde_json::to_value(e.kind)
-            .ok()
-            .and_then(|v| v.as_str().map(str::to_owned))
-            .unwrap_or_default();
-        let _ = writeln!(md, "  {} -->|{kind}| {}", e.from, e.to);
-    }
-    md.push_str("```\n");
     md
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn review_guide_has_a_valid_flow_with_files() {
+        let a = "a".repeat(40);
+        let b = "b".repeat(40);
+        let map: ChangeMap = serde_json::from_value(json!({
+            "version": 1, "base": a, "head": b,
+            "criteria": [{ "id": "REF-1", "text": "Refund", "status": "implemented", "tests": [] }],
+            "nodes": [
+                { "id": "N1", "symbol": "refund", "lane": "api", "risk": "read", "caption": "Adds refund",
+                  "criteria": ["REF-1"], "touchedByTest": false,
+                  "sites": [{ "file": "src/api.rs", "start": 3, "end": 9 }] },
+                { "id": "N2", "symbol": "old.rs", "lane": "services", "risk": "skim", "caption": "Removed",
+                  "criteria": [], "touchedByTest": false, "sites": [],
+                  "deletions": [{ "file": "src/old.rs" }] }
+            ],
+            "edges": [{ "from": "N1", "to": "N2", "kind": "calls" }],
+            "tour": ["N1", "N2"]
+        }))
+        .expect("map");
+        let md = markdown(&map);
+        assert!(
+            crate::page::check_flows(&md).is_empty(),
+            "{:?}",
+            crate::page::check_flows(&md)
+        );
+        assert!(md.contains(r#""src/api.rs:3-9""#), "{md}");
+        assert!(md.contains(r#""kind": "removed""#), "{md}");
+        assert!(md.contains("1. N1 **refund**"), "{md}");
+    }
 }

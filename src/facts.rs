@@ -766,7 +766,7 @@ mod tests {
     /// A repo whose config tries every setting that changes diff output.
     #[test]
     fn changes_ignore_hostile_git_config() {
-        let dir = std::env::temp_dir().join(format!("change-map-hostile-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("overview-me-hostile-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("temp dir");
         let sh = |args: &[&str]| {
