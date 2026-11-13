@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/CaoKha/overview-me/compare/v0.4.0...v0.5.0) (2026-11-13)
+
+
+### Features
+
+* **skills:** folder-overview for one package or folder ([565a1c8](https://github.com/CaoKha/overview-me/commit/565a1c8b0a42fb8e612ce9a0bafbf8d4ecd70331))
+
 ## [0.4.0](https://github.com/CaoKha/overview-me/compare/v0.3.0...v0.4.0) (2026-11-13)
 
 
