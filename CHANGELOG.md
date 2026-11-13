@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/CaoKha/overview-me/compare/v0.5.0...v0.5.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **page:** keep flow edge labels inside the diagram ([39169cd](https://github.com/CaoKha/overview-me/commit/39169cd275e24d5a2047aeced908fea5fd1f36d5))
+
 ## [0.5.0](https://github.com/CaoKha/overview-me/compare/v0.4.0...v0.5.0) (2026-11-13)
 
 
