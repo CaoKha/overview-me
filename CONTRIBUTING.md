@@ -25,7 +25,6 @@ The Release workflow also runs when you push a `v*` tag by hand; the tag must ma
 ```sh
 overview-me extract --base <sha> [--spec spec.md]   # facts + draft map
 overview-me validate <map.json>                     # exit 1 on any problem
-overview-me render <map.json>                       # plain review guide <head>.md (not used by the skills)
 overview-me page <file.md> [--out page.html] [--unpushed]  # overview as an HTML page
 overview-me snapshot                                # commit of HEAD + uncommitted files, branch untouched
 overview-me path                                    # where the map for HEAD lives

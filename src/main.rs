@@ -6,7 +6,6 @@ mod facts;
 mod git;
 mod map;
 mod page;
-mod render;
 mod rules;
 mod snapshot;
 mod symbols;
@@ -53,9 +52,7 @@ enum Command {
     },
     /// Check a map against the schema and git; exits 1 on problems.
     Validate { map: PathBuf },
-    /// Write <map>.md (criteria, tour, flow diagram) next to a map.
-    Render { map: PathBuf },
-    /// Write a store markdown file (review guide or overview) as an HTML page; exits 1 on an
+    /// Write a store markdown file (PR or codebase overview) as an HTML page; exits 1 on an
     /// invalid flow block.
     Page {
         md: PathBuf,
@@ -95,7 +92,6 @@ fn main() -> Result<ExitCode> {
                 return Ok(ExitCode::FAILURE);
             }
         }
-        Command::Render { map } => println!("{}", render::run(&map)?.display()),
         Command::Page { md, out, unpushed } => {
             println!("{}", page::run(&git, &md, out, unpushed)?.display());
         }

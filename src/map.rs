@@ -47,12 +47,6 @@ pub struct Criterion {
     pub tests: Vec<TestRef>,
 }
 
-impl Criterion {
-    pub fn tested(&self) -> bool {
-        !self.tests.is_empty()
-    }
-}
-
 /// A test declaration at head: the line of `test(`/`it(`/`describe(` or `#[test]`, and its name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -165,16 +159,6 @@ pub enum Lane {
 }
 
 impl Lane {
-    pub const ALL: [Self; 7] = [
-        Self::Ui,
-        Self::Api,
-        Self::Services,
-        Self::Db,
-        Self::Engine,
-        Self::Jobs,
-        Self::Other,
-    ];
-
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Ui => "ui",
@@ -184,18 +168,6 @@ impl Lane {
             Self::Engine => "engine",
             Self::Jobs => "jobs",
             Self::Other => "other",
-        }
-    }
-
-    pub fn title(self) -> &'static str {
-        match self {
-            Self::Ui => "UI",
-            Self::Api => "API",
-            Self::Services => "Services",
-            Self::Db => "Database",
-            Self::Engine => "Engine",
-            Self::Jobs => "Jobs",
-            Self::Other => "Other",
         }
     }
 }
