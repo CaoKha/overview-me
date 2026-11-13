@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/CaoKha/overview-me/compare/v0.3.0...v0.4.0) (2026-11-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove the render subcommand
+
+### Bug Fixes
+
+* include qualified references in call edge imports ([c5c2620](https://github.com/CaoKha/overview-me/commit/c5c262094eb8d5ea5a8362183af63ea074542efe))
+* include qualified references in call edge imports ([878c1eb](https://github.com/CaoKha/overview-me/commit/878c1ebcd38c3900204ddc7c357f6104d97873ed))
+* **skills:** stop codebase-overview suggesting a --rules file ([d7833ba](https://github.com/CaoKha/overview-me/commit/d7833ba123b0b5687095a99e3617680eef9efb29))
+
+
+### Code Refactoring
+
+* remove the render subcommand ([79b8666](https://github.com/CaoKha/overview-me/commit/79b8666a95ead0df4f51fed01e7515fe9a2bfd4d))
+
 ## [0.3.0](https://github.com/CaoKha/overview-me/compare/v0.2.1...v0.3.0) (2026-11-12)
 
 
