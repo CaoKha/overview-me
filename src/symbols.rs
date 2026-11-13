@@ -23,7 +23,7 @@ pub struct Parsed {
     pub symbols: Vec<Symbol>,
     /// Line ranges of inline test modules (`mod tests`); hunks there are tests.
     pub test_ranges: Vec<(usize, usize)>,
-    /// Names brought in by `import` / `use`.
+    /// Names brought in by `import` / `use`, including names accessed through them.
     pub imports: HashSet<String>,
     /// Every identifier with its line.
     pub identifiers: Vec<(String, usize)>,
@@ -154,6 +154,8 @@ pub fn parse(path: &str, source: &str) -> Result<Option<Parsed>> {
     collect_identifiers(tree.root_node(), src, false, &mut parsed);
     if lang == Lang::Go {
         collect_go_package_refs(tree.root_node(), src, &mut parsed.imports);
+    } else {
+        collect_qualified_refs(lang, tree.root_node(), src, &mut parsed.imports);
     }
     if lang.collects_tests(path) {
         collect_tests(lang, tree.root_node(), src, &mut parsed.tests);
@@ -285,17 +287,49 @@ fn go_receiver(method: Node<'_>, src: &[u8]) -> Option<String> {
     }
 }
 
+fn walk<'t>(node: Node<'t>, visit: &mut impl FnMut(Node<'t>)) {
+    visit(node);
+    let mut cursor = node.walk();
+    let children: Vec<_> = node.named_children(&mut cursor).collect();
+    for child in children {
+        walk(child, visit);
+    }
+}
+
+/// Adds names accessed through imported qualifiers or explicit Rust module paths.
+fn collect_qualified_refs(lang: Lang, root: Node<'_>, src: &[u8], imports: &mut HashSet<String>) {
+    let imported = imports.clone();
+    walk(root, &mut |n| {
+        let (qualifier, name) = match (lang, n.kind()) {
+            (Lang::Rust, "scoped_identifier" | "scoped_type_identifier") => ("path", "name"),
+            (Lang::Python, "attribute") => ("object", "attribute"),
+            (Lang::TypeScript | Lang::Tsx, "member_expression") => ("object", "property"),
+            (Lang::TypeScript | Lang::Tsx, "nested_type_identifier") => ("module", "name"),
+            _ => return,
+        };
+        let (Some(q), Some(name)) = (
+            n.child_by_field_name(qualifier),
+            n.child_by_field_name(name),
+        ) else {
+            return;
+        };
+        let qualifier = text(q, src);
+        let in_scope = if lang == Lang::Rust {
+            let last = qualifier.rsplit("::").next().unwrap_or_default().trim();
+            let first = qualifier.split("::").next().unwrap_or_default().trim();
+            imported.contains(last) || matches!(first, "crate" | "self" | "super")
+        } else {
+            q.kind() == "identifier" && imported.contains(&qualifier)
+        };
+        if in_scope {
+            imports.insert(text(name, src));
+        }
+    });
+}
+
 /// Go calls another package's names as `pkg.Name`, and imports the package, not the name.
 /// Adds each `Name` used through an imported package to `imports`.
 fn collect_go_package_refs(root: Node<'_>, src: &[u8], imports: &mut HashSet<String>) {
-    fn walk<'t>(node: Node<'t>, visit: &mut impl FnMut(Node<'t>)) {
-        visit(node);
-        let mut cursor = node.walk();
-        let children: Vec<_> = node.named_children(&mut cursor).collect();
-        for child in children {
-            walk(child, visit);
-        }
-    }
     let mut packages = HashSet::new();
     walk(root, &mut |n| {
         if n.kind() != "import_spec" {
@@ -590,6 +624,89 @@ mod tests {
         );
         assert!(parsed.in_tests(11));
         assert!(parsed.imports.contains("fmt"));
+    }
+
+    #[test]
+    fn rust_qualified_refs_use_imported_or_local_module_paths() {
+        let src = r#"
+use crate::render;
+use external::b;
+impl Worker {
+    fn call(&self, obj: Worker) {
+        render::run();
+        let _: render::Config;
+        a::b::nested();
+        crate::other::direct();
+        self::other::local();
+        super::other::parent();
+        obj.method();
+        self.field;
+        unknown::missing();
+        run::leaked();
+    }
+}
+"#;
+        let parsed = parse("lib.rs", src).expect("parses").expect("rust");
+        for name in ["run", "Config", "nested", "direct", "local", "parent"] {
+            assert!(parsed.imports.contains(name), "{name} is qualified");
+        }
+        for name in ["method", "field", "missing", "leaked"] {
+            assert!(!parsed.imports.contains(name), "{name} is not imported");
+        }
+    }
+
+    #[test]
+    fn python_qualified_refs_use_imported_modules() {
+        let src = r#"
+import mod
+from pkg import other
+import package as alias
+
+def call(self, obj):
+    mod.run()
+    other.load()
+    alias.save()
+    self.method()
+    obj.field
+    run.leaked()
+"#;
+        let parsed = parse("app.py", src).expect("parses").expect("python");
+        for name in ["run", "load", "save"] {
+            assert!(parsed.imports.contains(name), "{name} is qualified");
+        }
+        for name in ["method", "field", "leaked"] {
+            assert!(!parsed.imports.contains(name), "{name} is not imported");
+        }
+    }
+
+    #[test]
+    fn typescript_qualified_refs_use_imported_namespaces() {
+        let src = r#"
+import * as ns from './x';
+
+function call(obj: Local) {
+    ns.run();
+    let value: ns.Config;
+    obj.method();
+    obj.field;
+    run.leaked();
+    let other: obj.Missing;
+}
+"#;
+        for path in ["app.ts", "app.tsx"] {
+            let parsed = parse(path, src)
+                .expect("parses")
+                .expect("typescript or tsx");
+            for name in ["run", "Config"] {
+                assert!(parsed.imports.contains(name), "{path}: {name} is qualified");
+            }
+            for name in ["method", "field", "leaked", "Missing"] {
+                assert!(
+                    !parsed.imports.contains(name),
+                    "{path}: {name} is not imported"
+                );
+            }
+        }
     }
 
     #[test]
