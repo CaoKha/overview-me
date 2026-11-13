@@ -1,4 +1,4 @@
-//! `overview-me page`: a store markdown file (PR overview, codebase overview or review guide)
+//! `overview-me page`: a store markdown file (PR or codebase overview)
 //! as a standalone HTML page, for the browser or a Claude artifact.
 //!
 //! The page itself is `assets/overview.html`, compiled in. It styles the markdown as a review
