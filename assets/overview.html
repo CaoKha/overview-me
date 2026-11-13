@@ -153,7 +153,7 @@ tr:last-child td { border-bottom: 0; }
 .box.near { border-color: var(--hl); }
 .box:focus-visible { outline: 2px solid var(--hl); outline-offset: 2px; }
 .box.pinned { box-shadow: 0 0 0 2px var(--hl); }
-.edge-label { position: absolute; z-index: 2; transform: translate(-50%, -50%); font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: var(--card); padding: 0 5px; border-radius: 4px; white-space: nowrap; pointer-events: none; transition: opacity .15s; }
+.edge-label { position: absolute; z-index: 2; transform: translate(-50%, -50%); font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: var(--card); padding: 0 5px; border-radius: 4px; width: max-content; max-width: 90%; text-align: center; pointer-events: none; transition: opacity .15s; }
 .edge-label.added { color: var(--ok); }
 .edge-label.removed { color: var(--bad); }
 .arch.focus .edge-label:not(.on) { opacity: 0.15; }
@@ -481,7 +481,9 @@ function drawFlow(arch, spec, detail) {
       paths[i].setAttribute('d', d);
       if (labels[i]) {
         const m = paths[i].getPointAtLength(paths[i].getTotalLength() / 2);
-        labels[i].style.left = `${m.x}px`;
+        // Centred on the edge, but shifted inward when that would cut it off at the diagram's side.
+        const half = labels[i].offsetWidth / 2, pad = 4;
+        labels[i].style.left = `${Math.min(Math.max(m.x, half + pad), base.width - half - pad)}px`;
         labels[i].style.top = `${s.side === 'left' || s.side === 'right' ? m.y - 13 : m.y}px`;
       }
     });
