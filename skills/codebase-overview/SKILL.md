@@ -116,4 +116,4 @@ What the system does, for whom, and its shape (monorepo of X apps, a CLI, a serv
   - The render step checks the block and lists what is wrong.
 - Name modules the same way everywhere: the Modules table is the vocabulary that PR overviews reuse.
 - Aim for under about 250 lines. A reader should get the shape in ten minutes. Depth belongs in the code; the overview says where to look.
-- Do not write the overview into the repo, and do not edit `rules.json`. If the lanes do not fit, suggest a `--rules` file under Gaps.
+- Do not write the overview into the repo, and do not edit `rules.json`. If the lanes do not fit, say which modules fall to `other` and why under Gaps. Do not suggest a `--rules` file: no skill passes one.
