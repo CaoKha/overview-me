@@ -19,8 +19,8 @@ Ask in plain words, or run the command:
 
 | Ask | Command | You get |
 | --- | --- | --- |
-| "review this PR", "explain PR 3389" | `/overview-me:pr-overview` | the overview of the PR checked out |
-| "review my changes" | `/overview-me:change-overview` | the same, for your uncommitted files |
+| "PR overview", "explain PR 3389" | `/overview-me:pr-overview` | the overview of the PR checked out |
+| "overview of my changes" | `/overview-me:change-overview` | the same, for your uncommitted files |
 | "explain this codebase" | `/overview-me:codebase-overview` | a map of the repo; PR overviews use it to place a change |
 | "explain packages/api" | `/overview-me:folder-overview <folder>` | the same map for one folder |
 
