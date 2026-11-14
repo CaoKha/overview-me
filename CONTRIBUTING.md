@@ -10,6 +10,14 @@ OVERVIEW_ME_FROM_SOURCE=1 claude --plugin-dir .
 
 Claude then loads the skills from your clone instead of the installed plugin, and builds the `overview-me` CLI from your code at session start. No push needed.
 
+## Test which skill fires
+
+After changing a skill's `description`, run the trigger tests in `evals/` (see `evals/README.md`):
+
+```sh
+claude plugin eval . --ablation none --tag trigger --model sonnet --no-publish
+```
+
 ## Publish a new version
 
 Users only get new skills and a new CLI with a new version and GitHub release. [Release Please](https://github.com/googleapis/release-please) does both from the commit messages, so use conventional commits (`fix:` for a patch, `feat:` for a minor while below 1.0, `feat!:` for a breaking change).
