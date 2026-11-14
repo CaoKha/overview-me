@@ -8,9 +8,9 @@ argument-hint: <path/to/folder>
 
 The codebase overview for one folder or package inside the repo.
 
-`${CLAUDE_SKILL_DIR}/../..` is the overview-me plugin root. The steps run its CLI, `${CLAUDE_SKILL_DIR}/../../bin/overview-me` (called `overview-me` below), which the plugin installs when a session starts. If it is missing, run `bash "${CLAUDE_SKILL_DIR}/../../scripts/ensure-cli.sh"` once: it downloads the release for this machine or builds it from source. If it is still missing, tell the user what the script printed and stop. Run the CLI from the root of the repo under review.
+`<root>` is `${CLAUDE_SKILL_DIR}/../..`, the overview-me plugin root. The steps run its CLI, `overview-me`. Read `<root>/references/cli.md` first: it says where the CLI is, what to do if it is missing, and what each command does.
 
-Read `${CLAUDE_SKILL_DIR}/../codebase-overview/SKILL.md` first, and follow it with the changes below. Its format and rules apply as written, except where changed here.
+Read `<root>/skills/codebase-overview/SKILL.md` first, and follow it with the changes below. Its format and rules apply as written, except where changed here.
 
 ## Steps
 
