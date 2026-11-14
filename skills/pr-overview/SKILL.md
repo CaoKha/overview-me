@@ -1,6 +1,6 @@
 ---
 name: pr-overview
-description: Review a PR or diff on one page, mapping the change and explaining the feature it builds. First a spec-linked change map (criteria and the tests that prove them, one captioned stop per changed place, a reading order), checked against git; then the overview, covering entry points, the flow before and after the change, data, where it plugs into existing code, and what to read first. Use when the user asks for a "PR overview", a "PR review", to "review this PR", a "feature overview", a "change map", to "map this PR" or "map this diff", an "overview of this PR", a "review guide for the code you wrote", the "structure of this feature", or to "explain this change".
+description: Write a one-page overview of a PR or branch diff, with a change map checked against git and an explanation of how the feature works, from its entry points and the flow before and after to what to read first. Use when the user asks for a "PR overview", a "feature overview", a "change map", to "map this PR" or "map this diff", an "overview of this PR", the "structure of this feature", or to "explain this change". This is an overview, not a code review, so do not use it when the user asks to "review" a PR or diff, look for bugs, or approve a change, unless they also ask for an overview or map. For uncommitted work, use change-overview.
 ---
 
 # PR overview
@@ -14,7 +14,9 @@ Two parts. The change map says *what changed*: every changed line belongs to one
 1. **Find the base.**
    - For a PR, find its base branch with `gh pr view --json baseRefName`, then run `git merge-base origin/<base> HEAD`.
    - For a stacked PR, the base is the PR below it.
-   - If the base is unclear, ask.
+   - With no PR (a plain branch, so `gh pr view` fails), find the default branch as in codebase-overview step 1: `git symbolic-ref --short refs/remotes/origin/HEAD`, else `origin/main`, `main`, then `master`. Run `git merge-base <default> HEAD`.
+   - If `git rev-list --count <base>..HEAD` prints 0 and `git status --porcelain` prints something, the work is not committed: tell the user, and follow `${CLAUDE_SKILL_DIR}/../change-overview/SKILL.md` instead.
+   - If the base is still unclear, ask.
 2. **Read the codebase overview.** `<store>` is `$(dirname "$(overview-me path)")`. If `<store>/codebase.md` exists, read it: modules, lanes, core concepts and main flows. Use its module names and terms in the map and the overview, and place the feature in it. If it is missing, go on, and suggest `/codebase-overview` at hand-off.
 3. **Build the change map.** The map is `$(overview-me path)`, one JSON file per head commit that follows `${CLAUDE_SKILL_DIR}/../../schema/change-map.schema.json`. Git gives the facts; you add the labels (criteria, the tests that prove them, captions, groups and the tour); the validator checks your labels against git.
    - **Reuse.** If the map exists, its `base` is the base from step 1, and `overview-me validate "$(overview-me path)"` prints `ok`, keep it and go to step 4, unless the user asked to rebuild it.
@@ -35,6 +37,7 @@ Two parts. The change map says *what changed*: every changed line belongs to one
      - **groups**: merge nodes that make the same edit in several places into one node with several `sites`.
        - Fold import-only and type-only nodes into the sites of the function they serve.
        - Delete the merged nodes, and remap `edges`.
+     - **risk**: `read` (holds logic a reviewer must read) or `skim` (mechanical). `extract` sets it on each draft node from the rules. A merged node is `read` if any node merged into it was `read`. You may raise `skim` to `read` when the code holds a decision; never lower `read` to `skim`.
      - **sites**: list the main site (the function body) first. It gets the caption, and the overview cites it as the node's main place. Every added line must sit inside exactly one node's sites.
      - **renames**: every listed move (`{ from, to }`: a pure rename, or production code moved into a test path) goes in exactly one node's `renames`. Say in the caption why it moved. Treat a move into a test path as suspect.
      - **deletions**: every deleted non-test file goes in exactly one node's `deletions`. Move it into the node whose change explains it, or keep its own node with a caption that says why it was removed.
@@ -50,7 +53,7 @@ Two parts. The change map says *what changed*: every changed line belongs to one
    - `edges` and `tour`: how the changed places call each other, and the author's reading order.
    - `spec`: if set, read the spec sections that the criteria's `specRef` point to.
 5. **Read the code, but only around the map.** Do not read the whole repo.
-   - Read the main site (first site) of every `read` node, and the enclosing function of every site you cite.
+   - Read the main site (first site) of every node with `risk: read`, and the enclosing function of every site you cite.
    - **Entry points**: among the nodes, find the ones nothing in the map calls, mostly in `ui`, `api` and `jobs`. Find how each one is reached: the route, command, event, job schedule or UI action that triggers it. Search for its symbol to find the registration.
    - **Existing code**: for each changed symbol, find its callers and callees outside the diff, one hop only (`git grep -n <symbol>`). These are the unchanged pieces the feature depends on, and the existing callers whose behaviour may change.
    - **Data**: find the types, tables, migrations, config keys and messages that the feature adds or changes, and who writes and reads each one.
