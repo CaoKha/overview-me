@@ -36,6 +36,7 @@ overview-me path                                    # where the map for HEAD liv
 - Tests never become stops. A criterion counts as tested only when it names the tests that prove it.
 - Maps live in `$(git rev-parse --git-common-dir)/overview-me/<head-sha>.json`: never committed, shared by all worktrees. Beside it: the PR overview `<head-sha>.review.md` and the codebase overview `codebase.md` (one per repo). `overview-me page` writes each one's page as `.html` next to it, from the template `assets/overview.html` compiled into the binary.
 - Lanes, test paths and risk keywords are in `rules.json` (override with `--rules`).
+- Skills live in `skills/<name>/SKILL.md`. Text that more than one skill needs is in `references/` (the CLI, showing the page, `flow` blocks, filling the change map), so change it there once.
 
 ## Limits
 
