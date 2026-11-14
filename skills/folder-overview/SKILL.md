@@ -1,6 +1,6 @@
 ---
 name: folder-overview
-description: Write a map of one folder or package at the default branch (main), covering its submodules and lanes, entry points, core concepts, main flows, conventions and dependencies across its boundary. Use when the user asks for a "folder overview", a "package overview", to "explain this folder", "explain this package", or "map this module".
+description: Write a map of one folder or package at the default branch, covering its submodules and lanes, entry points, core concepts, main flows, conventions and dependencies across its boundary. Use when the user asks for a "folder overview", a "package overview", to "explain this folder", "explain this package", or "map this module".
 argument-hint: <path/to/folder>
 ---
 
