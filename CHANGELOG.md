@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.5.2](https://github.com/CaoKha/overview-me/compare/v0.5.1...v0.5.2) (2026-11-14)
+
+
+### Bug Fixes
+
+* **skills:** keep overview skills from triggering on "review" ([ac78fc2](https://github.com/CaoKha/overview-me/commit/ac78fc2690211feeda81aebd98fcc55cefd31859))
+* **skills:** PRs that are not checked out, folder overviews, branch-wide change overview ([322c3c9](https://github.com/CaoKha/overview-me/commit/322c3c9894eecda0bb78c72038889bffdae53861))
+
+
+### Refactoring
+
+* **skills:** move shared text into references/ ([1304bac](https://github.com/CaoKha/overview-me/commit/1304bac6d6cb13e90aba855acdf732432976f4fc))
+
+
+### Documentation
+
+* **skills:** add a terms section to pr-overview, drop hard-coded main ([2d7d07f](https://github.com/CaoKha/overview-me/commit/2d7d07fc581e8f8108de68421cf4c42af843fbe7))
+
+
+### Tests
+
+* **skills:** trigger tests for the overview skills ([076e7d2](https://github.com/CaoKha/overview-me/commit/076e7d2b4184353f9f38d7e5ebbf2e315108bd91))
+
 ## [0.5.1](https://github.com/CaoKha/overview-me/compare/v0.5.0...v0.5.1) (2026-11-13)
 
 
