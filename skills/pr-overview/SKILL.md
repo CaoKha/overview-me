@@ -9,6 +9,19 @@ Two parts. The change map says *what changed*: every changed line belongs to one
 
 `${CLAUDE_SKILL_DIR}/../..` is the overview-me plugin root. The steps run its CLI, `${CLAUDE_SKILL_DIR}/../../bin/overview-me` (called `overview-me` below), which the plugin installs when a session starts. If it is missing, run `bash "${CLAUDE_SKILL_DIR}/../../scripts/ensure-cli.sh"` once: it downloads the release for this machine or builds it from source. If it is still missing, tell the user what the script printed and stop. Run the CLI from the root of the repo under review.
 
+## Terms
+
+- **base**, **head**: the two commits the change sits between. `base...head` is the diff.
+- **`<store>`**: `$(dirname "$(overview-me path)")`, the folder that holds maps and overviews. It is never committed and is shared by all worktrees.
+- **change map** (or map): the JSON file at `$(overview-me path)` that lists the criteria and nodes of one change.
+- **criterion**: one thing the change claims to do, with its status and the tests that prove it.
+- **node**: one changed place in the map, with an id like `N3`: one symbol, or the same edit at several sites. The page and the reader call a node a **stop**; the two words name the same thing.
+- **site**: a range of changed lines in a node, on the head side. The first site is the node's main site.
+- **tour**: every node id once, in the order a reader should go through them.
+- **lane**: the layer a path belongs to (ui, api, services, db, engine, jobs, other), from `rules.json`.
+- **risk**: `read` for a node a reviewer must read, `skim` for a mechanical one.
+- **box**: one entry in a flow diagram's `nodes`. It is not a map node, but a box for changed code carries its map node id in `n`.
+
 ## Steps
 
 1. **Find the base.**
@@ -17,7 +30,7 @@ Two parts. The change map says *what changed*: every changed line belongs to one
    - With no PR (a plain branch, so `gh pr view` fails), find the default branch as in codebase-overview step 1: `git symbolic-ref --short refs/remotes/origin/HEAD`, else `origin/main`, `main`, then `master`. Run `git merge-base <default> HEAD`.
    - If `git rev-list --count <base>..HEAD` prints 0 and `git status --porcelain` prints something, the work is not committed: tell the user, and follow `${CLAUDE_SKILL_DIR}/../change-overview/SKILL.md` instead.
    - If the base is still unclear, ask.
-2. **Read the codebase overview.** `<store>` is `$(dirname "$(overview-me path)")`. If `<store>/codebase.md` exists, read it: modules, lanes, core concepts and main flows. Use its module names and terms in the map and the overview, and place the feature in it. If it is missing, go on, and suggest `/codebase-overview` at hand-off.
+2. **Read the codebase overview.** If `<store>/codebase.md` exists, read it: modules, lanes, core concepts and main flows. Use its module names and terms in the map and the overview, and place the feature in it. If it is missing, go on, and suggest `/codebase-overview` at hand-off.
 3. **Build the change map.** The map is `$(overview-me path)`, one JSON file per head commit that follows `${CLAUDE_SKILL_DIR}/../../schema/change-map.schema.json`. Git gives the facts; you add the labels (criteria, the tests that prove them, captions, groups and the tour); the validator checks your labels against git.
    - **Reuse.** If the map exists, its `base` is the base from step 1, and `overview-me validate "$(overview-me path)"` prints `ok`, keep it and go to step 4, unless the user asked to rebuild it.
    - **Extract.** Run `overview-me extract --base <sha> [--spec <spec file>]`. It prints the facts path, the map path and the draft nodes.
