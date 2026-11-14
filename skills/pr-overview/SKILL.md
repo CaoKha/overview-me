@@ -24,13 +24,17 @@ Two parts. The change map says *what changed*: every changed line belongs to one
 
 ## Steps
 
-1. **Find the base.**
-   - For a PR, find its base branch with `gh pr view --json baseRefName`, then run `git merge-base origin/<base> HEAD`.
+1. **Find the base and head.** `<head>` is HEAD, unless the user names a PR that is not checked out.
+   - For the checked-out PR, find its base branch with `gh pr view --json baseRefName`, then run `git merge-base origin/<base> HEAD`.
+   - For a PR that is not checked out (the user gives a number or link that is not the current branch's PR), do not check it out: that would touch the user's files. Run `gh pr view <n> --json baseRefName,headRefOid`, then `git fetch origin <baseRefName> pull/<n>/head`. `<head>` is the `headRefOid`, and the base is `git merge-base origin/<baseRefName> <head>`.
    - For a stacked PR, the base is the PR below it.
    - With no PR (a plain branch, so `gh pr view` fails), find the default branch as in codebase-overview step 1: `git symbolic-ref --short refs/remotes/origin/HEAD`, else `origin/main`, `main`, then `master`. Run `git merge-base <default> HEAD`.
-   - If `git rev-list --count <base>..HEAD` prints 0 and `git status --porcelain` prints something, the work is not committed: tell the user, and follow `${CLAUDE_SKILL_DIR}/../change-overview/SKILL.md` instead.
+   - If `<head>` is HEAD, `git rev-list --count <base>..HEAD` prints 0 and `git status --porcelain` prints something, the work is not committed: tell the user, and follow `${CLAUDE_SKILL_DIR}/../change-overview/SKILL.md` instead.
    - If the base is still unclear, ask.
-2. **Read the codebase overview.** If `<store>/codebase.md` exists, read it: modules, lanes, core concepts and main flows. Use its module names and terms in the map and the overview, and place the feature in it. If it is missing, go on, and suggest `/codebase-overview` at hand-off.
+   - **If `<head>` is not HEAD**, use it wherever the steps below use HEAD: `overview-me path --head <head>` instead of `overview-me path`, `overview-me extract --base <base> --head <head>`, and `git show <head>:<path>` and `git grep -n <symbol> <head>` instead of reading the working tree.
+2. **Read the codebase and folder overviews.**
+   - If `<store>/codebase.md` exists, read it: modules, lanes, core concepts and main flows. Use its module names and terms in the map and the overview, and place the feature in it. If it is missing, go on, and suggest `/codebase-overview` at hand-off.
+   - List `<store>/folders/`. Each `<slug>.md` there covers the folder you get by replacing each `--` in the slug with `/`. Read the ones whose folder holds a file from `git diff --name-only <base> <head>`, and use their submodule names and terms for changes inside that folder.
 3. **Build the change map.** The map is `$(overview-me path)`, one JSON file per head commit that follows `${CLAUDE_SKILL_DIR}/../../schema/change-map.schema.json`. Git gives the facts; you add the labels (criteria, the tests that prove them, captions, groups and the tour); the validator checks your labels against git.
    - **Reuse.** If the map exists, its `base` is the base from step 1, and `overview-me validate "$(overview-me path)"` prints `ok`, keep it and go to step 4, unless the user asked to rebuild it.
    - **Extract.** Run `overview-me extract --base <sha> [--spec <spec file>]`. It prints the facts path, the map path and the draft nodes.

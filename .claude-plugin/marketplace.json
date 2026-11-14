@@ -2,13 +2,13 @@
   "name": "overview-me",
   "owner": { "name": "CaoKha" },
   "metadata": {
-    "description": "Claude Code skills for one-page overviews of a PR, your uncommitted changes, or a whole codebase."
+    "description": "Claude Code skills for one-page overviews of a PR, your uncommitted changes, a folder, or a whole codebase."
   },
   "plugins": [
     {
       "name": "overview-me",
       "source": "./",
-      "description": "One-page overviews for reviewing agent-written code: a PR, your uncommitted changes, or the whole codebase."
+      "description": "One-page overviews of agent-written code: a PR, your uncommitted changes, a folder, or the whole codebase."
     }
   ]
 }
