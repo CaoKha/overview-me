@@ -15,13 +15,20 @@ In Claude Code:
 
 ## Update
 
-In Claude Code:
+### Manually
 
-```
-/plugin marketplace update overview-me
+In a terminal:
+
+```sh
+claude plugin marketplace update overview-me
+claude plugin update overview-me@overview-me
 ```
 
-Then start a new session: it downloads the CLI for the new version. To get new versions without asking, turn on auto-update for the overview-me marketplace in `/plugin`.
+The first command fetches the latest list of versions; the second installs the newest one. Then start a new Claude Code session: the new skills load, and the session downloads the CLI for the new version.
+
+### Automatically
+
+Run `/plugin` in Claude Code, open the overview-me marketplace, and turn on auto-update. Claude Code then installs new versions for you; the next session after an update downloads the new CLI.
 
 ## Use
 
