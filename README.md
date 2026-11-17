@@ -57,4 +57,12 @@ Ask in plain words, or run the command:
 
 The result opens as a page. Hover a box in a flow diagram to trace its links, click it to copy its file paths into your editor, and follow any `path:line` to the code.
 
+This is the architecture diagram from the codebase overview of overview-me itself. Each box is a module, and each arrow shows which module calls which:
+
+![Architecture of overview-me: skills and the installer call the CLI, which runs the git and map commands; these use the core modules and write to the store](docs/images/architecture.png)
+
+Click a box to open its side panel with the box's note and the files to copy or open. The box's links stay highlighted:
+
+![The side panel for the extract module, with its note and four file locations to copy or open](docs/images/architecture-side-panel.png)
+
 Working on overview-me itself? See [CONTRIBUTING.md](CONTRIBUTING.md).
