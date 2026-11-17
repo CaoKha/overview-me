@@ -140,6 +140,7 @@ mod tests {
         let rules = Rules::load(None).expect("built-in rules parse");
         assert!(rules.is_test("packages/core/src/x.test.ts"));
         assert!(rules.is_test("pkg/store/store_test.go"));
+        assert!(rules.is_test("apps/web/src/banner.stories.tsx"));
         assert_eq!(rules.lane("db/migrations/0001.sql"), Lane::Db);
         assert_eq!(rules.lane("apps/worker/src/send.ts"), Lane::Jobs);
         assert_eq!(rules.lane("src/engine/match.rs"), Lane::Engine);
