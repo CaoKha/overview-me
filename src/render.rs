@@ -266,30 +266,50 @@ pub fn page(map: &ChangeMap, flow: &FlowFile, changes: &Changes, kind: &Kind<'_>
     );
 
     let _ = writeln!(w, "## Where it plugs in");
+    let mut rows: Vec<_> = flow
+        .callers
+        .iter()
+        .map(|l| (l, l.nodes.clone(), "calls the change"))
+        .collect();
     for l in &flow.depends_on {
-        let _ = writeln!(
-            w,
-            "- **Depends on (unchanged):** `{}` `{}`: {}",
-            l.symbol,
-            l.at,
-            slot(&format!(
-                "what the change uses it for ({})",
-                l.nodes.join(", ")
-            ))
-        );
+        if let Some((_, nodes, link)) = rows
+            .iter_mut()
+            .find(|(row, _, _)| row.symbol == l.symbol && row.at == l.at)
+        {
+            *link = "both ways";
+            for n in &l.nodes {
+                if !nodes.contains(n) {
+                    nodes.push(n.clone());
+                }
+            }
+        } else {
+            rows.push((l, l.nodes.clone(), "used by the change"));
+        }
     }
-    for l in &flow.callers {
-        let _ = writeln!(
-            w,
-            "- **Changes behaviour of:** `{}` `{}` (calls {}): {}",
-            l.symbol,
-            l.at,
-            l.nodes.join(", "),
-            slot("what is now different for it, or \"nothing: it only calls new code\"")
-        );
-    }
-    if flow.depends_on.is_empty() && flow.callers.is_empty() {
+    if rows.is_empty() {
         let _ = writeln!(w, "None.");
+    } else {
+        let _ = writeln!(w, "| Unchanged code | Link | Nodes | What it means |");
+        let _ = writeln!(w, "| --- | --- | --- | --- |");
+        for (l, nodes, link) in rows {
+            let hint = match link {
+                "calls the change" => {
+                    "what is now different for it, or delete the row when nothing changes for it"
+                }
+                "used by the change" => {
+                    "what the change uses it for, or delete the row when the change does not use it"
+                }
+                _ => "what the change uses it for and what is now different for it",
+            };
+            let _ = writeln!(
+                w,
+                "| `{}` `{}` | {link} | {} | {} |",
+                l.symbol.replace('|', "\\|"),
+                l.at,
+                nodes.join(", "),
+                slot(hint)
+            );
+        }
     }
     let _ = writeln!(w);
 
@@ -569,7 +589,18 @@ mod tests {
                 at: "src/api/h.ts:4-6".into(),
                 nodes: Vec::new(),
             }],
-            callers: Vec::new(),
+            callers: vec![
+                flow::Link {
+                    symbol: "save".into(),
+                    at: "src/db/s.ts:1-3".into(),
+                    nodes: vec!["N3".into()],
+                },
+                flow::Link {
+                    symbol: "cron".into(),
+                    at: "src/jobs/cron.ts:2-4".into(),
+                    nodes: vec!["N1".into()],
+                },
+            ],
             depends_on: vec![flow::Link {
                 symbol: "save".into(),
                 at: "src/db/s.ts:1-3".into(),
@@ -630,7 +661,10 @@ mod tests {
 <!-- fill: a table `| Thing | Kind | Written by | Read by |` with one row per type, table, column, cache key, env var or message the change adds, changes or removes (say which), citing node ids and `path:line`; or "None." -->
 
 ## Where it plugs in
-- **Depends on (unchanged):** `save` `src/db/s.ts:1-3`: <!-- fill: what the change uses it for (N1) -->
+| Unchanged code | Link | Nodes | What it means |
+| --- | --- | --- | --- |
+| `save` `src/db/s.ts:1-3` | both ways | N3, N1 | <!-- fill: what the change uses it for and what is now different for it --> |
+| `cron` `src/jobs/cron.ts:2-4` | calls the change | N1 | <!-- fill: what is now different for it, or delete the row when nothing changes for it --> |
 
 ## Claims and proof
 | Criterion | Status | Code | Tests |
