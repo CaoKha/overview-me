@@ -575,7 +575,9 @@ function drawFlow(arch, spec, detail) {
     }
     detail.hidden = false;
   }
-  function pin(k) {
+  // The card sits at the end of body, so a keyboard pin moves focus into it and closing it from
+  // inside returns focus to the box.
+  function pin(k, fromKey) {
     unpinActive?.();
     unpinActive = unpin;
     pinned = k;
@@ -583,14 +585,17 @@ function drawFlow(arch, spec, detail) {
     focusOn(k);
     boxes[k].classList.add('pinned');
     showDetail(k);
+    if (fromKey) detail.querySelector('.close').focus({ preventScroll: true });
   }
   function unpin() {
     if (!pinned) return;
+    const back = detail.contains(document.activeElement) ? boxes[pinned] : null;
     boxes[pinned].classList.remove('pinned');
     pinned = null;
     unpinActive = null;
     clear();
     detail.hidden = true;
+    back?.focus();
   }
   for (const [k, b] of Object.entries(boxes)) {
     b.setAttribute('role', 'button');
@@ -601,7 +606,7 @@ function drawFlow(arch, spec, detail) {
     b.addEventListener('blur', () => { if (!pinned) clear(); });
     b.addEventListener('click', (ev) => { ev.stopPropagation(); if (pinned === k) unpin(); else pin(k); });
     b.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); if (pinned === k) unpin(); else pin(k); }
+      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); if (pinned === k) unpin(); else pin(k, true); }
     });
   }
   arch.addEventListener('click', unpin);
