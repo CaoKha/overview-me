@@ -1,8 +1,8 @@
-# Fill the change map
+# Label the change map
 
-The map follows `<root>/schema/change-map.schema.json`. Git gives the facts and `overview-me extract` writes a draft; you add the labels; `overview-me validate` checks them against git.
+The map follows `<root>/schema/change-map.schema.json`. `overview-me extract` writes the draft to the map path and prints each node with its diff; you add the labels in that file; `overview-me validate` checks them against git.
 
-Copy `draft` from the facts file to the map path, then edit it.
+The draft already has the structure: one node per changed symbol, import-only hunks folded into the function in their file, the same edit at several places grouped into one node, `calls` edges, risk, `touchedByTest`, and a tour with callees before callers. Change the structure only where the draft got it wrong.
 
 ## Criteria
 
@@ -10,26 +10,31 @@ Copy `draft` from the facts file to the map path, then edit it.
   - Use ids `REF-1`, `REF-2`, …
   - Add a `specRef` of `"<spec path>#<heading-slug>"` when a spec section covers the criterion.
 - **status**: `implemented`; `partial` (some of the logic lives outside this diff: name the place in the criterion text); or `missing` (the change claims it, but no code does it). Only claim what the diff shows.
-- **tests**: per criterion, the tests whose assertions prove it, as `{ file, line, name }` taken from `testDeclarations` (or from an existing test file).
+- **tests**: per criterion, the tests whose assertions prove it, as `{ file, line, name }` from the tests `extract` printed (or from an existing test file).
   - Read the test before you list it.
   - A test that only calls the code does not count.
   - If no test checks the claim, leave `tests` empty. The criterion then shows as untested, which is the point.
 
 ## Nodes
 
-- **groups**: merge nodes that make the same edit in several places into one node with several `sites`.
-  - Fold import-only and type-only nodes into the sites of the function they serve.
-  - Delete the merged nodes, and remap `edges`.
-  - Aim for 8–15 nodes on a PR of about 20 files. Group repeated edits to reach that.
-- **risk**: `read` (holds logic a reviewer must read) or `skim` (mechanical). `extract` sets it on each draft node from the rules. A merged node is `read` if any node merged into it was `read`. You may raise `skim` to `read` when the code holds a decision; never lower `read` to `skim`.
-- **sites**: list the main site (the function body) first. It gets the caption, and the overview cites it as the node's main place. Every added line must sit inside exactly one node's sites.
-- **renames**: every listed move (`{ from, to }`: a pure rename, or production code moved into a test path) goes in exactly one node's `renames`. Say in the caption why it moved. Treat a move into a test path as suspect.
-- **deletions**: every deleted non-test file goes in exactly one node's `deletions`. Move it into the node whose change explains it, or keep its own node with a caption that says why it was removed.
 - **caption**: one line per node, under 120 characters, in simple technical English with no marketing words. Say what changed and why. Do not start it with the symbol name.
 - **node.criteria**: the criteria the node implements. Leave it empty for a node that only touches comments, and never link a criterion to such a node.
+- **groups**: merge nodes that belong together but the draft kept apart, such as a type-only change and the function it serves. Move the sites into one node, delete the others, and remap `edges` and `tour`. Aim for 8–15 nodes on a PR of about 20 files.
+- **risk**: `read` (holds logic a reviewer must read) or `skim` (mechanical). A merged node is `read` if any node merged into it was `read`. You may raise `skim` to `read` when the code holds a decision; never lower `read` to `skim`.
+- **sites**: the main site (the function body) stays first. Every added line must sit inside exactly one node's sites.
+- **renames**, **deletions**: every listed move and every deleted non-test file sits in exactly one node. Fold it into the node whose change explains it, or keep its own node with a caption that says why. Treat a move into a test path as suspect.
 - Never set `touchedByTest` by hand. It is a computed hint, and the validator says what it must be.
 
-## Edges and tour
+## Tour
 
-- **edges**: keep the `calls` edges. Add `implements` or `uses` edges only when they help the reader.
-- **tour**: every node id once, in reading order. Contract or shape first, then implementation, then callers.
+- **tour**: every node id once, in reading order. The draft puts callees before callers. Reorder only when the contract or shape the reader needs first is elsewhere.
+
+## Callouts
+
+- **callouts**: code that behaves in a way a careful reader could miss, as `{ tag, node, file, line, note }`.
+  - `tag`: `breaking` (changes a contract an existing caller, user or stored data relies on), `security` (touches auth, input checks, secrets or permissions), `migration` (needs a deploy order, a backfill or a data change), `race` (depends on timing or ordering between concurrent work), `perf` (changes the cost of a hot path, a query or a loop), or `subtle` (anything else that is easy to misread).
+  - `node`, `file`, `line`: the node it is about, and a line inside one of that node's sites.
+  - `note`: one sentence that says what a reader could miss and when it matters.
+- At most 5, most important first. Fewer is better: callouts lose their value when there are many. Leave the list empty when nothing qualifies.
+- Each callout must be confirmed in the code. If you are not sure, put it under Open questions in the page instead.
+- A callout explains behaviour. It is not a bug report or a verdict on the change.

@@ -35,8 +35,14 @@ The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(ov
    - **Dependencies between modules**: who imports whom (`git grep` on import paths).
    - **Conventions**: where tests live and how to run them, config and env, error handling, naming, generated code that should not be edited.
 5. **Write** `<store>/codebase.md` in the format below.
-6. **Show the page** as `<root>/references/show-page.md` says, for `<store>/codebase.md`.
-7. **Hand off.** Give the artifact link (or the HTML path), the markdown path and the one-paragraph summary. Tell the user that clicking a module in the architecture diagram lists its files to copy into their editor, and that `/pr-overview` now uses it.
+6. **Check the gaps** before you show the page. Test each entry under Gaps against the repo at `$REF`, one by one.
+   - **Not confirmed:** look again with `git grep -n` and `git show` at `$REF`, in the code, tests, config and docs. If you find the answer, remove the entry, and put the answer in the section it belongs to, with its `path:line`.
+   - **Docs disagree with code:** read both again. Keep the entry only if they still disagree, and cite the doc `path:line` and the code `path:line`.
+   - **Lanes that do not fit:** check the module's paths against the globs in `<root>/rules.json` again. Keep the entry only if the module really falls to `other` or to the wrong lane.
+   - Fix any `path:line` that does not point at the code the entry is about.
+   - Keep an entry only when the repo at `$REF` cannot answer it, for example a value set outside the repo or behaviour that only a run would show. If no entry is left, write "None."
+7. **Show the page** as `<root>/references/show-page.md` says, for `<store>/codebase.md`.
+8. **Hand off.** Give the artifact link (or the HTML path), the markdown path and the one-paragraph summary. Tell the user that clicking a module in the architecture diagram lists its files to copy into their editor, and that `/pr-overview` now uses it.
 
 ## Format
 

@@ -2,7 +2,7 @@
 
 Understand a code change in five minutes instead of reading the diff line by line.
 
-overview-me is a Claude Code plugin. Ask Claude about a PR, your uncommitted changes or a whole codebase, and it writes a one-page overview: what the change does, how the code flows before and after it, which tests prove each claim, and which few places to read first. Every claim points to `path:line`, and the change map behind it is checked against git.
+overview-me is a Claude Code plugin. Ask Claude about a PR, your uncommitted changes or a whole codebase, and it writes a one-page overview: what the change does, how the code flows before and after it, which tests prove each claim, which few places to read first, and what is easy to miss (breaking changes, races, migrations and the like). Every claim points to `path:line`, and the change map behind it is checked against git.
 
 ## Install
 

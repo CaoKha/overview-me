@@ -30,7 +30,7 @@ Read `<root>/skills/codebase-overview/SKILL.md` first, and follow it with the ch
    - **Used by:** search the rest of the repo for imports of this folder: `git grep -n <package name or import path> $REF -- ':!<folder>/'`. Keep actual imports. Write one row per importing module, with one `path:line` each.
    - **Uses:** find imports inside the folder that point outside it. List other repo modules first, then the main external dependencies from its manifest.
 6. **Dig and write.** Do codebase-overview steps 4 and 5 for this folder's submodules. Write `<store>/folders/<slug>.md`, with the format changes below.
-7. **Page and hand off.** Run `overview-me page <store>/folders/<slug>.md`. It writes `<store>/folders/<slug>.html`. Publish and hand off as in codebase-overview steps 6 and 7, using these paths. If you published this folder's page earlier in the session, publish the same path again. Give the folder summary; omit the claim that `/pr-overview` uses it, since that skill reads `<store>/codebase.md`.
+7. **Check, page and hand off.** Check the gaps as in codebase-overview step 6, searching under the folder and in the modules it uses or is used by. Run `overview-me page <store>/folders/<slug>.md`. It writes `<store>/folders/<slug>.html`. Publish and hand off as in codebase-overview steps 7 and 8, using these paths. If you published this folder's page earlier in the session, publish the same path again. Give the folder summary; omit the claim that `/pr-overview` uses it, since that skill reads `<store>/codebase.md`.
 
 ## Format changes
 
