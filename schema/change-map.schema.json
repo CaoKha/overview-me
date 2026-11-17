@@ -9,6 +9,15 @@
       "type": "string",
       "pattern": "^[0-9a-f]{40}$"
     },
+    "callouts": {
+      "description": "What a careful reader could miss, most important first. Empty means nothing qualifies.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Callout"
+      },
+      "maxItems": 5
+    },
     "criteria": {
       "type": "array",
       "items": {
@@ -66,6 +75,76 @@
     "tour"
   ],
   "$defs": {
+    "Callout": {
+      "description": "One thing a careful reader could miss, at a place inside one node's sites.",
+      "type": "object",
+      "properties": {
+        "file": {
+          "description": "Path relative to the repo root; with `line`, inside one of the node's sites.",
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1
+        },
+        "node": {
+          "description": "The node it is about.",
+          "type": "string",
+          "pattern": "^N[0-9]+$"
+        },
+        "note": {
+          "description": "One sentence: what a reader could miss, and when it matters.",
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "$ref": "#/$defs/CalloutTag"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tag",
+        "node",
+        "file",
+        "line",
+        "note"
+      ]
+    },
+    "CalloutTag": {
+      "oneOf": [
+        {
+          "description": "Changes a contract that an existing caller, user or stored data relies on.",
+          "type": "string",
+          "const": "breaking"
+        },
+        {
+          "description": "Touches auth, input checks, secrets or permissions.",
+          "type": "string",
+          "const": "security"
+        },
+        {
+          "description": "Needs a deploy order, a backfill or a data change.",
+          "type": "string",
+          "const": "migration"
+        },
+        {
+          "description": "Depends on timing or ordering between concurrent work.",
+          "type": "string",
+          "const": "race"
+        },
+        {
+          "description": "Changes the cost of a hot path, a query or a loop.",
+          "type": "string",
+          "const": "perf"
+        },
+        {
+          "description": "Anything else that is easy to misread.",
+          "type": "string",
+          "const": "subtle"
+        }
+      ]
+    },
     "Criterion": {
       "description": "One thing the change claims to do.",
       "type": "object",

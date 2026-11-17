@@ -28,6 +28,44 @@ pub struct ChangeMap {
     pub edges: Vec<Edge>,
     /// Every node id once, in reading order.
     pub tour: Vec<String>,
+    /// What a careful reader could miss, most important first. Empty means nothing qualifies.
+    #[serde(default)]
+    #[schemars(length(max = 5))]
+    pub callouts: Vec<Callout>,
+}
+
+/// One thing a careful reader could miss, at a place inside one node's sites.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Callout {
+    pub tag: CalloutTag,
+    /// The node it is about.
+    #[schemars(pattern(r"^N[0-9]+$"))]
+    pub node: String,
+    /// Path relative to the repo root; with `line`, inside one of the node's sites.
+    pub file: String,
+    #[schemars(range(min = 1))]
+    pub line: u32,
+    /// One sentence: what a reader could miss, and when it matters.
+    #[schemars(length(min = 1))]
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum CalloutTag {
+    /// Changes a contract that an existing caller, user or stored data relies on.
+    Breaking,
+    /// Touches auth, input checks, secrets or permissions.
+    Security,
+    /// Needs a deploy order, a backfill or a data change.
+    Migration,
+    /// Depends on timing or ordering between concurrent work.
+    Race,
+    /// Changes the cost of a hot path, a query or a loop.
+    Perf,
+    /// Anything else that is easy to misread.
+    Subtle,
 }
 
 /// One thing the change claims to do.

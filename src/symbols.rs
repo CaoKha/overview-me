@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use tree_sitter::{Language, Node, Parser};
 
 /// A declaration that can enclose a hunk. Lines are 1-based and inclusive.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Symbol {
     /// Display name, qualified by its container (`Class.method`, `Type::method`).
     pub name: String,

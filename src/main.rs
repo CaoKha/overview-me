@@ -1,11 +1,14 @@
 //! overview-me: spec-linked maps of a change, for reviewing agent-written code.
 //! Git gives the facts (`extract`), Claude writes the labels, `validate` checks them against git.
 
+mod base;
 mod extract;
 mod facts;
+mod flow;
 mod git;
 mod map;
 mod page;
+mod render;
 mod rules;
 mod snapshot;
 mod symbols;
@@ -37,7 +40,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Write facts and a draft map for base...head to <store>/<head>.facts.json.
+    /// Print the base and head of the change: a PR (by number or link, or the checked-out
+    /// branch's), else the branch against the default branch.
+    Base {
+        /// PR number or link; default: the checked-out branch's PR.
+        pr: Option<String>,
+    },
+    /// Write facts for base...head to <store>/<head>.facts.json and a draft map to <store>/<head>.json.
     Extract {
         #[arg(long)]
         base: String,
@@ -49,9 +58,36 @@ enum Command {
         /// Facts file to write instead of the default.
         #[arg(long)]
         out: Option<PathBuf>,
+        /// Overwrite the map even when one for this base exists.
+        #[arg(long)]
+        fresh: bool,
     },
     /// Check a map against the schema and git; exits 1 on problems.
     Validate { map: PathBuf },
+    /// Write the Before and After flow diagrams of a map to <store>/<head>.flow.json.
+    Flow {
+        map: PathBuf,
+        /// Flow file to write instead of the default.
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Validate a map, write its flow file, and write the PR or change overview page with
+    /// slots to fill to <store>/<head>.review.md.
+    Render {
+        map: PathBuf,
+        /// Write a change overview (uncommitted work) instead of a PR overview.
+        #[arg(long)]
+        change: bool,
+        /// Scope shown in the header line, such as "uncommitted files".
+        #[arg(long)]
+        scope: Option<String>,
+        /// Page to write instead of the default.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Overwrite the page if it exists (what was filled in is lost).
+        #[arg(long)]
+        fresh: bool,
+    },
     /// Write a store markdown file (PR or codebase overview) as an HTML page; exits 1 on an
     /// invalid flow block.
     Page {
@@ -77,20 +113,44 @@ fn main() -> Result<ExitCode> {
     let cli = Cli::parse();
     let git = Git::new(&cli.repo);
     match cli.command {
+        Command::Base { pr } => base::run(&git, pr.as_deref())?,
         Command::Extract {
             base,
             head,
             spec,
             out,
+            fresh,
         } => {
             let rules = Rules::load(cli.rules.as_deref())?;
-            extract::run(&git, &rules, &base, &head, spec.as_deref(), out)?;
+            extract::run(&git, &rules, &base, &head, spec.as_deref(), out, fresh)?;
         }
         Command::Validate { map } => {
             let rules = Rules::load(cli.rules.as_deref())?;
             if !validate::run(&git, &rules, &map)? {
                 return Ok(ExitCode::FAILURE);
             }
+        }
+        Command::Flow { map, out } => {
+            let rules = Rules::load(cli.rules.as_deref())?;
+            flow::run(&git, &rules, &map, out)?;
+        }
+        Command::Render {
+            map,
+            change,
+            scope,
+            out,
+            fresh,
+        } => {
+            let rules = Rules::load(cli.rules.as_deref())?;
+            let kind = render::Kind {
+                title: if change {
+                    "change overview"
+                } else {
+                    "PR overview"
+                },
+                scope: scope.as_deref(),
+            };
+            render::run(&git, &rules, &map, &kind, out, fresh)?;
         }
         Command::Page { md, out, unpushed } => {
             println!("{}", page::run(&git, &md, out, unpushed)?.display());

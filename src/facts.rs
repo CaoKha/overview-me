@@ -52,6 +52,8 @@ pub struct Skipped {
 #[derive(Debug)]
 pub struct ChangedFile {
     pub path: String,
+    /// Path at the base: differs from `path` for a moved file.
+    pub old_path: String,
     pub parsed: Option<Parsed>,
 }
 
@@ -514,6 +516,7 @@ pub fn changes(git: &Git, rules: &Rules, base: &str, head: &str) -> Result<Chang
         }
         out.files.push(ChangedFile {
             path: f.path,
+            old_path: f.old_path,
             parsed,
         });
     }

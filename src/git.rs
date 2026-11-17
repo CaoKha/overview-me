@@ -26,6 +26,11 @@ impl Git {
         }
     }
 
+    /// The repository folder git runs in.
+    pub fn repo(&self) -> &Path {
+        &self.repo
+    }
+
     fn command(&self, args: &[&str]) -> Command {
         let mut cmd = Command::new("git");
         cmd.arg("-C").arg(&self.repo);
@@ -90,6 +95,24 @@ impl Git {
         match out.status.code() {
             Some(0) => Ok(true),
             Some(1) => Ok(false),
+            _ => bail!(
+                "git {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+        }
+    }
+
+    /// Runs a git command whose exit code 1 means "nothing found" (like `grep`): returns empty
+    /// output then.
+    ///
+    /// # Errors
+    /// When git cannot start or exits with a code other than 0 or 1.
+    pub fn run_or_empty(&self, args: &[&str]) -> Result<String> {
+        let out = self.command(args).output().context("running git")?;
+        match out.status.code() {
+            Some(0) => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
+            Some(1) => Ok(String::new()),
             _ => bail!(
                 "git {} failed: {}",
                 args.join(" "),

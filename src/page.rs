@@ -6,6 +6,8 @@
 //! side, and draws ```` ```flow ```` blocks as lane diagrams: hovering a box traces its edges,
 //! clicking it shows its file paths with copy buttons.
 
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -27,25 +29,67 @@ const EDGE_STYLES: [&str; 3] = ["dashed", "added", "removed"];
 /// or written.
 pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result<PathBuf> {
     let text = std::fs::read_to_string(md).with_context(|| format!("reading {}", md.display()))?;
-    let errs = check_flows(&text);
+    let name = md.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    let head = name
+        .split('.')
+        .next()
+        .filter(|s| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit()));
+    let flows: Option<Value> = head.and_then(|s| {
+        let file = md.with_file_name(format!("{s}.flow.json"));
+        serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()
+    });
+    let (text, mut errs) = expand_flows(&text, flows.as_ref());
+    errs.extend(check_flows(&text));
+    // `<head>.review.md`, `<head>.md`: references point at head; Before ones at the map's base.
+    let sha = head;
+    let map: Option<Value> = sha.and_then(|s| {
+        let map = md.with_file_name(format!("{s}.json"));
+        serde_json::from_str(&std::fs::read_to_string(map).ok()?).ok()
+    });
+    let base = map
+        .as_ref()
+        .and_then(|v| v.get("base")?.as_str().map(str::to_owned));
+    let ids: Option<HashSet<String>> = map.as_ref().map(|v| {
+        v["nodes"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|n| n["id"].as_str().map(str::to_owned))
+            .collect()
+    });
+    // A codebase or folder overview names its commit in the header: "sha <40 hex>".
+    let cited_at = sha.map(str::to_owned).or_else(|| {
+        text.split_whitespace()
+            .skip_while(|w| *w != "sha")
+            .nth(1)
+            .filter(|s| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+            .map(str::to_owned)
+    });
+    let cache: RefCell<HashMap<(String, String), Option<usize>>> = RefCell::default();
+    let lines_at = |at: &str, path: &str| {
+        *cache
+            .borrow_mut()
+            .entry((at.to_owned(), path.to_owned()))
+            .or_insert_with(|| {
+                git.run(&["show", "--end-of-options", &format!("{at}:{path}")])
+                    .ok()
+                    .map(|t| t.lines().count())
+            })
+    };
+    errs.extend(check_page(
+        &text,
+        ids.as_ref(),
+        cited_at.as_deref(),
+        base.as_deref(),
+        &lines_at,
+    ));
     if !errs.is_empty() {
         bail!("{}:\n  {}", md.display(), errs.join("\n  "));
     }
-    let name = md.file_name().and_then(|n| n.to_str()).unwrap_or_default();
     let title = text
         .lines()
         .find_map(|l| l.strip_prefix("# "))
         .map_or_else(|| name.to_owned(), str::to_owned);
-    // `<head>.review.md`, `<head>.md`: references point at head; Before ones at the map's base.
-    let sha = name
-        .split('.')
-        .next()
-        .filter(|s| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit()));
-    let base = sha.and_then(|s| {
-        let map = md.with_file_name(format!("{s}.json"));
-        let v: Value = serde_json::from_str(&std::fs::read_to_string(map).ok()?).ok()?;
-        v.get("base")?.as_str().map(str::to_owned)
-    });
     let forge = git
         .run(&["remote", "get-url", "origin"])
         .ok()
@@ -129,6 +173,169 @@ pub fn render(
     }
     out.push_str(rest);
     out
+}
+
+/// `path:line` or `path:start-end` in a code span: the path and the last line cited.
+fn cited(span: &str) -> Option<(&str, usize)> {
+    let (path, lines) = span.rsplit_once(':')?;
+    let ok_lines = lines
+        .split('-')
+        .all(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+    let ok_path = !path.is_empty()
+        && !path.contains(char::is_whitespace)
+        && (path.contains('/') || path.contains('.'))
+        && !path.contains("://");
+    if !(ok_lines && ok_path) {
+        return None;
+    }
+    Some((path, lines.rsplit('-').next()?.parse().ok()?))
+}
+
+/// The code spans of a line, and the line with them blanked out.
+fn spans(line: &str) -> (Vec<&str>, String) {
+    let mut found = Vec::new();
+    let mut prose = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(i) = rest.find('`') {
+        prose.push_str(&rest[..i]);
+        let after = &rest[i + 1..];
+        let Some(j) = after.find('`') else {
+            prose.push_str(&rest[i..]);
+            rest = "";
+            break;
+        };
+        found.push(&after[..j]);
+        prose.push(' ');
+        rest = &after[j + 1..];
+    }
+    prose.push_str(rest);
+    (found, prose)
+}
+
+/// What a reader would trip over on the page: slots left to fill, `path:line` references that
+/// point at no line (at `base` under "### Before", else at `head`), node ids the map does not
+/// have, and open questions that cite neither code nor a criterion. `lines_at(sha, path)` gives
+/// a file's line count, or `None` when the file is not there.
+pub fn check_page(
+    md: &str,
+    ids: Option<&HashSet<String>>,
+    head: Option<&str>,
+    base: Option<&str>,
+    lines_at: &dyn Fn(&str, &str) -> Option<usize>,
+) -> Vec<String> {
+    let mut errs = Vec::new();
+    let (mut fenced, mut in_before, mut section) = (false, false, String::new());
+    for (i, line) in md.lines().enumerate() {
+        let at = format!("line {}", i + 1);
+        if line.trim_start().starts_with("```") {
+            fenced = !fenced;
+            continue;
+        }
+        if fenced {
+            continue;
+        }
+        if let Some(h) = line.strip_prefix("## ") {
+            section = h.trim().to_lowercase();
+            in_before = false;
+        } else if let Some(h) = line.strip_prefix("### ") {
+            in_before = h.trim_start().to_lowercase().starts_with("before");
+        }
+        if let Some(j) = line.find(crate::render::SLOT) {
+            let hint = line[j + crate::render::SLOT.len()..]
+                .split("-->")
+                .next()
+                .unwrap_or_default()
+                .trim();
+            errs.push(format!("{at}: slot left to fill: {hint}"));
+            continue;
+        }
+        let (code, prose) = spans(line);
+        let sha = if in_before { base.or(head) } else { head };
+        if let Some(sha) = sha {
+            let short = &sha[..10.min(sha.len())];
+            for span in &code {
+                let Some((path, last)) = cited(span) else {
+                    continue;
+                };
+                match lines_at(sha, path) {
+                    None => errs.push(format!("{at}: `{span}`: no such file at {short}")),
+                    Some(n) if last > n || last == 0 => {
+                        errs.push(format!("{at}: `{span}`: the file has {n} lines at {short}"));
+                    }
+                    Some(_) => {}
+                }
+            }
+        }
+        if let Some(ids) = ids {
+            for word in prose.split(|c: char| !c.is_ascii_alphanumeric()) {
+                let is_id = word.len() > 1
+                    && word.starts_with('N')
+                    && word[1..].bytes().all(|b| b.is_ascii_digit());
+                if is_id && !ids.contains(word) {
+                    errs.push(format!("{at}: {word} is not a node in the map"));
+                }
+            }
+        }
+        if section == "open questions"
+            && let Some(item) = line.strip_prefix("- ")
+        {
+            let cites_criterion = item
+                .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+                .any(|w| {
+                    w.strip_prefix("REF-")
+                        .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+                });
+            if code.is_empty() && !cites_criterion && item.trim() != "None." {
+                errs.push(format!(
+                    "{at}: an open question must cite `path:line` or a criterion: {item}"
+                ));
+            }
+        }
+    }
+    errs
+}
+
+/// Replaces each ```` ```flow ```` block that holds only `@before` or `@after` with that
+/// diagram from the `overview-me flow` file, and lists the blocks it could not fill.
+pub fn expand_flows(md: &str, flows: Option<&Value>) -> (String, Vec<String>) {
+    let mut out = String::with_capacity(md.len());
+    let mut errs = Vec::new();
+    let lines: Vec<&str> = md.lines().collect();
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        let directive = lines
+            .get(i + 1)
+            .map(|l| l.trim())
+            .filter(|l| matches!(*l, "@before" | "@after"));
+        if line.trim_end() == "```flow"
+            && let Some(which) = directive
+            && lines.get(i + 2).is_some_and(|l| l.trim_end() == "```")
+        {
+            let side = &which[1..];
+            match flows.map(|f| f.get(side)) {
+                None => errs.push(format!(
+                    "line {}: {which} needs the flow file: run `overview-me flow <map>` first",
+                    i + 1
+                )),
+                Some(None | Some(Value::Null)) => errs.push(format!(
+                    "line {}: the flow file has no {side} diagram (the flow is new)",
+                    i + 1
+                )),
+                Some(Some(spec)) => {
+                    out.push_str("```flow\n");
+                    out.push_str(&spec.to_string());
+                    out.push_str("\n```\n");
+                    i += 3;
+                    continue;
+                }
+            }
+        }
+        out.push_str(line);
+        out.push('\n');
+        i += 1;
+    }
+    (out, errs)
 }
 
 /// Problems in the ```` ```flow ```` blocks of `md` (empty when all are valid).
@@ -287,6 +494,48 @@ mod tests {
         assert!(page.contains("<\\/SCRIPT> <\\!-- x {{CONFIG}}"));
         assert!(page.contains(r#""forge":"https://h/o/r""#));
         assert!(!page.contains("{{MD}}") && !page.contains("{{TITLE}}"));
+    }
+
+    #[test]
+    fn expands_flow_directives() {
+        let flows =
+            serde_json::json!({"before": null, "after": {"nodes": {}, "tiers": [], "edges": []}});
+        let (out, errs) = expand_flows("a\n```flow\n@after\n```\nb\n", Some(&flows));
+        assert!(errs.is_empty(), "{errs:?}");
+        assert_eq!(
+            out,
+            "a\n```flow\n{\"edges\":[],\"nodes\":{},\"tiers\":[]}\n```\nb\n"
+        );
+        let (_, errs) = expand_flows("```flow\n@before\n```\n", Some(&flows));
+        assert!(errs[0].contains("no before diagram"), "{errs:?}");
+        let (_, errs) = expand_flows("```flow\n@after\n```\n", None);
+        assert!(errs[0].contains("run `overview-me flow"), "{errs:?}");
+    }
+
+    #[test]
+    fn page_checks() {
+        let md = "# T\n\n## Flow\n### Before: x\n1. old `src/a.ts:9` (base)\n### After: y\n1. new `src/a.ts:9` (N1) and N7\n```flow\n{\"x\": \"N9 `src/zz.ts:1`\"}\n```\n## Open questions\n- REF-1 has no test.\n- does it scale?\n- `src/gone.ts:3` and `src/a.ts:0`\n- None.\n<!-- fill: feature name -->\n";
+        let ids: HashSet<String> = ["N1".to_owned()].into();
+        let lines_at = |sha: &str, path: &str| match (sha, path) {
+            ("base", "src/a.ts") => Some(10),
+            ("head", "src/a.ts") => Some(5),
+            _ => None,
+        };
+        let errs = check_page(md, Some(&ids), Some("head"), Some("base"), &lines_at);
+        assert_eq!(
+            errs,
+            vec![
+                "line 7: `src/a.ts:9`: the file has 5 lines at head",
+                "line 7: N7 is not a node in the map",
+                "line 13: an open question must cite `path:line` or a criterion: does it scale?",
+                "line 14: `src/gone.ts:3`: no such file at head",
+                "line 14: `src/a.ts:0`: the file has 5 lines at head",
+                "line 16: slot left to fill: feature name",
+            ]
+        );
+        assert_eq!(cited("http://x.io:80"), None);
+        assert_eq!(cited("a.rs:3-12"), Some(("a.rs", 12)));
+        assert_eq!(cited("ratio:2"), None);
     }
 
     #[test]

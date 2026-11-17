@@ -74,12 +74,15 @@ pub fn run(git: &Git, rules: &Rules, path: &Path) -> Result<bool> {
     Ok(false)
 }
 
+/// Callouts lose their signal when there are many.
+const MAX_CALLOUTS: usize = 5;
+
 fn is_numbered(id: &str, prefix: &str) -> bool {
     id.strip_prefix(prefix)
         .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
-fn is_sha(s: &str) -> bool {
+pub fn is_sha(s: &str) -> bool {
     s.len() == 40
         && s.bytes()
             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
@@ -336,6 +339,32 @@ pub fn check(
         }
     }
 
+    // Callouts: few, each at a line inside its node's sites.
+    if map.callouts.len() > MAX_CALLOUTS {
+        problems.push(format!(
+            "callouts: {} given, at most {MAX_CALLOUTS}",
+            map.callouts.len()
+        ));
+    }
+    for (i, c) in map.callouts.iter().enumerate() {
+        let at = format!("callout {} ({} {}:{})", i + 1, c.node, c.file, c.line);
+        if c.note.trim().is_empty() {
+            problems.push(format!("{at}: note is empty"));
+        }
+        match map.nodes.iter().find(|n| n.id == c.node) {
+            None => problems.push(format!("{at}: unknown node {}", c.node)),
+            Some(n)
+                if !n
+                    .sites
+                    .iter()
+                    .any(|s| s.file == c.file && s.start <= c.line && c.line <= s.end) =>
+            {
+                problems.push(format!("{at}: line is not inside any site of {}", n.id));
+            }
+            Some(_) => {}
+        }
+    }
+
     // Tested flags are facts, and comment-only code proves nothing.
     let node_tested: HashMap<&str, bool> = map
         .nodes
@@ -459,7 +488,9 @@ pub fn check(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Criterion, Deletion, Lane, Node, Rename, Risk, Site, TestRef};
+    use crate::map::{
+        Callout, CalloutTag, Criterion, Deletion, Lane, Node, Rename, Risk, Site, TestRef,
+    };
 
     const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
     const SPEC: &str = "# Spec\n\n## 01 The offer\n\ntext\n";
@@ -547,6 +578,13 @@ mod tests {
             ],
             edges: Vec::new(),
             tour: vec!["N1".into(), "N2".into()],
+            callouts: vec![Callout {
+                tag: CalloutTag::Subtle,
+                node: "N1".into(),
+                file: "a.ts".into(),
+                line: 10,
+                note: "the fee now rounds down".into(),
+            }],
         };
         (map, changes, HashSet::from(["fee".to_owned()]))
     }
@@ -647,6 +685,62 @@ mod tests {
                 "edge N1->N5: unknown node N5"
             ]
         );
+    }
+
+    #[test]
+    fn callouts_must_point_into_their_node() {
+        let (mut map, changes, tested) = fixture();
+        let base = map.callouts[0].clone();
+        let cases = [
+            (
+                Callout {
+                    node: "N9".into(),
+                    ..base.clone()
+                },
+                "callout 1 (N9 a.ts:10): unknown node N9",
+            ),
+            (
+                Callout {
+                    node: "N2".into(),
+                    ..base.clone()
+                },
+                "callout 1 (N2 a.ts:10): line is not inside any site of N2",
+            ),
+            (
+                Callout {
+                    line: 15,
+                    ..base.clone()
+                },
+                "callout 1 (N1 a.ts:15): line is not inside any site of N1",
+            ),
+            (
+                Callout {
+                    note: " ".into(),
+                    ..base.clone()
+                },
+                "callout 1 (N1 a.ts:10): note is empty",
+            ),
+        ];
+        for (c, want) in cases {
+            map.callouts = vec![c];
+            assert_eq!(problems(&map, &changes, &tested), vec![want]);
+        }
+        map.callouts = vec![base; 6];
+        assert_eq!(
+            problems(&map, &changes, &tested),
+            vec!["callouts: 6 given, at most 5"]
+        );
+        map.callouts.clear();
+        assert_eq!(problems(&map, &changes, &tested), Vec::<String>::new());
+    }
+
+    #[test]
+    fn maps_without_callouts_still_load() {
+        let json = format!(
+            r#"{{"version":1,"base":"{SHA}","head":"{SHA}","criteria":[],"nodes":[],"edges":[],"tour":[]}}"#
+        );
+        let map: ChangeMap = serde_json::from_str(&json).expect("callouts are optional");
+        assert!(map.callouts.is_empty());
     }
 
     #[test]
