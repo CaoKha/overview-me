@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0](https://github.com/CaoKha/overview-me/compare/v0.5.2...v0.6.0) (2026-11-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* the facts file no longer holds the draft map; `extract` writes it to the map path and keeps an existing map for the same base unless `--fresh`.
+
+### Features
+
+* draw flows, render the page and find the base in the CLI ([12ebb0a](https://github.com/CaoKha/overview-me/commit/12ebb0a636970a13a08bff6b4ce24e34d1909f8a))
+
+
+### Documentation
+
+* **skills:** let the CLI draw flows and write the page ([71cbc9a](https://github.com/CaoKha/overview-me/commit/71cbc9a7a150f539648a2971d93ce7aa3c4c1a53))
+
 ## [0.5.2](https://github.com/CaoKha/overview-me/compare/v0.5.1...v0.5.2) (2026-11-14)
 
 
