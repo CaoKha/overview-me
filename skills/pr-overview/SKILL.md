@@ -38,7 +38,7 @@ The CLI does the mechanical work. It finds the base, drafts the map, draws the B
    - **Entry points:** search for each symbol's registration to find what reaches it: a route, command, job, event or UI action.
    - **Steps:** read the cited lines. Before steps cite the base: read them with `git show <base>:<path>`.
    - **Data and state:** the types, tables, columns, config keys and messages that the nodes add, change or remove.
-   - **Where it plugs in:** delete a "Changes behaviour of" line when the caller only calls new code and nothing changes for it.
+   - **Where it plugs in:** fill the last cell of each row. Delete a row when nothing changes for its code and the change does not use it, for example a caller that only calls new code, or a sibling the changed lines only list. If you delete every row, write "None." in place of the table.
    
    Leave the rest of the page as rendered. Do not redraw the flows, rewrite the tables, or repeat the map in prose. To label an arrow or add a note to a box, edit `<store>/<head>.flow.json`.
 6. **Check your open questions.** The questions the page already lists come from facts. Test each question you add against the code before you keep it:
