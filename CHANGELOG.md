@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/CaoKha/overview-me/compare/v0.7.0...v0.8.0) (2026-11-17)
+
+
+### Features
+
+* **page:** show a clicked box's files in a side panel next to its diagram ([9b1c7dd](https://github.com/CaoKha/overview-me/commit/9b1c7dd0dcc5968bcb0327e6749e75c1626d4178))
+* **rules:** treat Storybook stories as test files ([f4ed685](https://github.com/CaoKha/overview-me/commit/f4ed685a3d7404a8d54f4b6e49f0704718827128))
+
+
+### Bug Fixes
+
+* **page:** move focus into the side panel on keyboard pin and back on close ([24e77b2](https://github.com/CaoKha/overview-me/commit/24e77b272b82c25e7f51ebc79b7838c199d14c43))
+
 ## [0.7.0](https://github.com/CaoKha/overview-me/compare/v0.6.1...v0.7.0) (2026-11-17)
 
 
