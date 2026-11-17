@@ -57,4 +57,12 @@ Ask in plain words, or run the command:
 
 The result opens as a page. Hover a box in a flow diagram to trace its links, click it to copy its file paths into your editor, and follow any `path:line` to the code.
 
+The page draws how the code flows before and after the change. Each box is a stop in the change map; dashed boxes are unchanged code the change calls or is called by. This is the After flow from the overview of [718c460](https://github.com/CaoKha/overview-me/commit/718c460) (parse Go files):
+
+![After flow of the "parse Go files" change: boxes for each changed function, linked by call arrows](docs/images/flow-after.png)
+
+Click a box to open its side panel: the stop's caption and the files to copy or open. The box's links stay highlighted:
+
+![The side panel for collect_go_package_refs, with its caption and three file ranges to copy or open](docs/images/flow-side-panel.png)
+
 Working on overview-me itself? See [CONTRIBUTING.md](CONTRIBUTING.md).
