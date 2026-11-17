@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1](https://github.com/CaoKha/overview-me/compare/v0.6.0...v0.6.1) (2026-11-17)
+
+
+### Documentation
+
+* how to update the plugin ([643fbbd](https://github.com/CaoKha/overview-me/commit/643fbbd69dff90be1bda55e4ed373233d1341783))
+* manual and automatic plugin updates ([2e44177](https://github.com/CaoKha/overview-me/commit/2e44177eb86e8eb48aaaaf0d07bcca139a7ec9cc))
+
 ## [0.6.0](https://github.com/CaoKha/overview-me/compare/v0.5.2...v0.6.0) (2026-11-17)
 
 
