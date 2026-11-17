@@ -11,7 +11,7 @@
   `overview-me page` (src/page.rs), which fills in the title, markdown and config placeholders. The markdown is turned into a review sheet:
   one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
-  traces its edges, clicking it pins it and lists its files with copy buttons. Works as a Claude artifact (inline styles, pinned CDN script, Google Fonts)
+  traces its edges, clicking it pins it and lists its files in a fixed side panel (a bottom sheet on phones) with copy buttons. Works as a Claude artifact (inline styles, pinned CDN script, Google Fonts)
   and as a local file in the browser.
 -->
 <style>
@@ -167,8 +167,9 @@ tr:last-child td { border-bottom: 0; }
 .legend i.added { border: 2px solid var(--ok); }
 .legend i.removed { border: 1.5px dashed var(--bad); }
 .flow-error { color: var(--bad); font-size: 14px; }
-/* The clicked box: what it is and its files, ready to copy into an editor's file search. */
-.detail { border: 1px solid var(--border); border-radius: var(--r); background: var(--card); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* The clicked box: its files in a viewport side panel, or a bottom sheet on phones. */
+.detail { position: fixed; top: 16px; right: 16px; max-height: calc(100vh - 32px); overflow-y: auto; width: min(440px, calc(100vw - 32px)); z-index: 10; box-shadow: 0 8px 32px color-mix(in srgb, var(--fg) 20%, transparent); border: 1px solid var(--border); border-radius: var(--r); background: var(--card); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.detail.before { left: 16px; right: auto; }
 .detail[hidden] { display: none; }
 .detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
 .detail-kind { font-size: 12px; font-weight: 400; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -188,6 +189,7 @@ pre.mermaid svg { max-width: none; }
 @media (max-width: 640px) {
   body { padding-block: 24px 48px; }
   h1 { font-size: 24px; }
+  .detail, .detail.before { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 60vh; border-radius: var(--r) var(--r) 0 0; }
 }
 @media (prefers-reduced-motion: reduce) { .box, .edges path.line, .edge-label { transition: none; } }
 </style>
@@ -392,6 +394,9 @@ function legend(spec) {
   return box;
 }
 
+let unpinActive = null;
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') unpinActive?.(); });
+
 function drawFlow(arch, spec, detail) {
   uid += 1;
   const id = uid;
@@ -571,7 +576,8 @@ function drawFlow(arch, spec, detail) {
     detail.hidden = false;
   }
   function pin(k) {
-    if (pinned) boxes[pinned].classList.remove('pinned');
+    unpinActive?.();
+    unpinActive = unpin;
     pinned = k;
     clear();
     focusOn(k);
@@ -582,6 +588,7 @@ function drawFlow(arch, spec, detail) {
     if (!pinned) return;
     boxes[pinned].classList.remove('pinned');
     pinned = null;
+    unpinActive = null;
     clear();
     detail.hidden = true;
   }
@@ -595,7 +602,6 @@ function drawFlow(arch, spec, detail) {
     b.addEventListener('click', (ev) => { ev.stopPropagation(); if (pinned === k) unpin(); else pin(k); });
     b.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); if (pinned === k) unpin(); else pin(k); }
-      if (ev.key === 'Escape') unpin();
     });
   }
   arch.addEventListener('click', unpin);
@@ -619,11 +625,12 @@ for (const code of out.querySelectorAll('pre > code.language-flow')) {
   const flow = el('div', 'flow');
   const scroll = el('div', 'arch-scroll');
   const arch = el('div', 'arch');
-  const detail = el('div', 'detail');
+  const detail = el('div', `detail${pre.closest('.panel.before') ? ' before' : ''}`);
   detail.hidden = true;
   detail.setAttribute('aria-live', 'polite');
   scroll.append(arch);
-  flow.append(scroll, legend(spec), detail);
+  flow.append(scroll, legend(spec));
+  document.body.append(detail);
   pre.replaceWith(flow);
   drawFlow(arch, spec, detail);
 }
