@@ -13,6 +13,16 @@ In Claude Code:
 /plugin install overview-me@overview-me
 ```
 
+## Update
+
+In Claude Code:
+
+```
+/plugin marketplace update overview-me
+```
+
+Then start a new session: it downloads the CLI for the new version. To get new versions without asking, turn on auto-update for the overview-me marketplace in `/plugin`.
+
 ## Use
 
 Ask in plain words, or run the command:
