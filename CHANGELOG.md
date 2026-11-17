@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/CaoKha/overview-me/compare/v0.6.1...v0.7.0) (2026-11-17)
+
+
+### Features
+
+* **render:** show where it plugs in as a table ([fb783f7](https://github.com/CaoKha/overview-me/commit/fb783f7faf49c2814cabf427f0ccc715ce2bb7ef))
+* **render:** split where it plugs in into affected and used tables ([8c556e7](https://github.com/CaoKha/overview-me/commit/8c556e79fa07f7486bb8a50bc72e602ea5169fc1))
+
+
+### Documentation
+
+* explain why overview-me uses a tool ([3e5250c](https://github.com/CaoKha/overview-me/commit/3e5250cbaef909c10c85584d2a0f98307e1c6d8f))
+
 ## [0.6.1](https://github.com/CaoKha/overview-me/compare/v0.6.0...v0.6.1) (2026-11-17)
 
 
