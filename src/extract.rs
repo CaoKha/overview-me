@@ -15,7 +15,8 @@ use crate::facts::{self, Changes, Skipped, Unit};
 use crate::git::Git;
 use crate::map::{ChangeMap, Deletion, Edge, EdgeKind, Node, Risk, Site, TestRef};
 use crate::rules::Rules;
-use crate::symbols;
+use crate::scope::Scope;
+use crate::symbols::{self, Symbol};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -144,8 +145,11 @@ fn import_only(unit: &Unit, changes: &Changes) -> bool {
     let names: Vec<&str> = parsed
         .identifiers
         .iter()
-        .filter(|(_, l)| unit.added.contains(&u32::try_from(*l).unwrap_or(u32::MAX)))
-        .map(|(n, _)| n.as_str())
+        .filter(|i| {
+            unit.added
+                .contains(&u32::try_from(i.line).unwrap_or(u32::MAX))
+        })
+        .map(|i| i.name.as_str())
         .collect();
     !names.is_empty() && names.iter().all(|n| parsed.imports.contains(*n))
 }
@@ -211,9 +215,9 @@ fn group_same_edits<'a>(drafts: Vec<Draft<'a>>) -> Vec<Draft<'a>> {
     out
 }
 
-/// `calls` edges: a changed symbol names a changed exported symbol that its file imports (or
-/// defines, or shares through its Go package).
-fn call_edges(changes: &Changes, drafts: &[Draft<'_>]) -> Vec<Edge> {
+/// `calls` edges: a changed symbol names another changed symbol, and the name's binding can be
+/// that symbol (see [`crate::scope`]): the same file, its Go package, or an import of it.
+fn call_edges(changes: &Changes, drafts: &[Draft<'_>], scope: &Scope<'_>) -> Vec<Edge> {
     let mut edges: Vec<Edge> = Vec::new();
     let enclosing = |file: &str, line: u32| {
         drafts.iter().find(|d| {
@@ -222,29 +226,41 @@ fn call_edges(changes: &Changes, drafts: &[Draft<'_>]) -> Vec<Edge> {
                 .any(|u| u.file == file && u.span.is_some_and(|(a, b)| a <= line && line <= b))
         })
     };
+    let parsed_at = |path: &str| {
+        changes
+            .files
+            .iter()
+            .find(|f| f.path == path)
+            .and_then(|f| f.parsed.as_ref())
+    };
     for callee in drafts {
-        let mut names: Vec<(&str, &str)> = callee
+        let mut targets: Vec<(&str, &Symbol)> = callee
             .units
             .iter()
-            .filter(|u| u.exported)
-            .filter_map(|u| u.ident.as_deref().map(|i| (i, u.file.as_str())))
+            .filter_map(|u| {
+                let ident = u.ident.as_deref()?;
+                let (a, b) = u.span?;
+                let sym = parsed_at(&u.file)?.symbols.iter().find(|s| {
+                    s.ident == ident
+                        && u32::try_from(s.start).ok() == Some(a)
+                        && u32::try_from(s.end).ok() == Some(b)
+                })?;
+                Some((u.file.as_str(), sym))
+            })
             .collect();
-        names.sort_unstable();
-        names.dedup();
-        for (name, def_file) in names {
+        targets.sort_by(|x, y| (x.0, &x.1.name, x.1.start).cmp(&(y.0, &y.1.name, y.1.start)));
+        targets.dedup();
+        for (def_file, sym) in targets {
             for file in &changes.files {
                 let Some(parsed) = &file.parsed else {
                     continue;
                 };
-                let in_scope =
-                    file.path == def_file || symbols::same_go_package(&file.path, def_file);
-                if !in_scope && !parsed.imports.contains(name) {
-                    continue;
-                }
-                for (ident, line) in &parsed.identifiers {
-                    let Some(caller) = (ident == name)
-                        .then(|| enclosing(&file.path, u32::try_from(*line).unwrap_or(u32::MAX)))
-                        .flatten()
+                for r in parsed.identifiers.iter().filter(|r| r.name == sym.ident) {
+                    if !scope.reaches(&file.path, parsed, r, def_file, sym) {
+                        continue;
+                    }
+                    let Some(caller) =
+                        enclosing(&file.path, u32::try_from(r.line).unwrap_or(u32::MAX))
                     else {
                         continue;
                     };
@@ -378,7 +394,7 @@ pub fn run(
             .iter()
             .any(|u| u.exported && u.ident.as_ref().is_some_and(|i| tested.contains(i)));
     }
-    let edges = call_edges(&changes, &drafts);
+    let edges = call_edges(&changes, &drafts, &Scope::load(git, &head)?);
 
     let spec = spec
         .map(|p| std::fs::canonicalize(p).with_context(|| format!("spec {}", p.display())))

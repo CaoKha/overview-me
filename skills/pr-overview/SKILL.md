@@ -40,7 +40,7 @@ The CLI does the mechanical work. It finds the base, drafts the map, draws the B
    - **Data and state:** the types, tables, columns, config keys and messages that the nodes add, change or remove.
    - **Where it plugs in:** fill the last cell of each row. Under "Affected by the change", delete a row when nothing changes for that code, for example a caller that only calls new code. Under "Used by the change", delete a row when the change does not use it, for example a sibling the changed lines only list. Delete a table and its heading when you delete its last row. If both go, write "None." under the section heading.
    
-   Leave the rest of the page as rendered. Do not redraw the flows, rewrite the tables, or repeat the map in prose. To label an arrow or add a note to a box, edit `<store>/<head>.flow.json`.
+   Leave the rest of the page as rendered. Do not redraw the flows, rewrite the tables, or repeat the map in prose. To label an arrow or add a note to a box, edit `<store>/<head>.flow.json`. To remove a wrong arrow between two stops, delete its edge from the map's `edges` and run `overview-me flow <map>` before you label arrows, since it rewrites the flow file.
 6. **Check your open questions.** The questions the page already lists come from facts. Test each question you add against the code before you keep it:
    - Look for the answer: read the code it cites, `git grep -n` its symbols at `<head>` and at `<base>`, and read the tests, the PR description, the spec and the codebase overview.
    - If you find the answer, drop the question. If the answer helps the reader, put it in the section it belongs to.
