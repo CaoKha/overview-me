@@ -54,7 +54,7 @@ Ask in plain words, or run the command:
 | "overview of my changes" | `/overview-me:change-overview` | the same, for your uncommitted files |
 | "explain this codebase" | `/overview-me:codebase-overview` | a map of the repo; PR overviews use it to place a change |
 
-The result opens as a page. Hover a box in a flow diagram to trace its links, click it to copy its file paths into your editor, and preview any `path:line` in the page or follow it to the code.
+The result opens as a page. Hover a box in a flow diagram to trace its links, click it to copy its file paths into your editor, and preview any `path:line` in the page or follow it to the code. A preview highlights the boxes that hold that code, with a link to each.
 
 This is the architecture diagram from the codebase overview of overview-me itself. Each box is a module, and each arrow shows which module calls which:
 

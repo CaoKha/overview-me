@@ -36,7 +36,7 @@ The CLI does the mechanical work. It finds the base, drafts the map, draws the B
 4. **Render.** Run `overview-me render <map>`. It validates the map, draws the flows into `<store>/<head>.flow.json`, and writes `<store>/<head>.review.md`. It prints the entry points, the unchanged code that calls or is called by the change, and what it could not draw.
 5. **Fill the slots** in `<store>/<head>.review.md`. Read code only where a slot needs it:
    - **Entry points:** search for each symbol's registration to find what reaches it: a route, command, job, event or UI action.
-   - **Steps:** read the cited lines. Before steps cite the base: read them with `git show <base>:<path>`.
+   - **Steps:** read the cited lines. Before steps cite the base: read them with `git show <base>:<path>`. Flow is the first section, so its lines and steps must make sense without "In one paragraph".
    - **Data and state:** the types, tables, columns, config keys and messages that the nodes add, change or remove.
    - **Where it plugs in:** fill the last cell of each row. Under "Affected by the change", delete a row when nothing changes for that code, for example a caller that only calls new code. Under "Used by the change", delete a row when the change does not use it, for example a sibling the changed lines only list. Delete a table and its heading when you delete its last row. If both go, write "None." under the section heading.
    
