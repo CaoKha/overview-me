@@ -172,7 +172,6 @@ tr:last-child td { border-bottom: 0; }
 .flow-error { color: var(--bad); font-size: 14px; }
 /* The clicked box: its files in a viewport side panel, or a bottom sheet on phones. */
 .detail { position: fixed; top: var(--panel-top, 16px); left: var(--panel-left, auto); right: 16px; max-height: calc(100vh - 32px); overflow-y: auto; width: min(var(--panel-width, 440px), calc(100vw - 32px)); z-index: 10; box-shadow: 0 8px 32px color-mix(in srgb, var(--fg) 20%, transparent); border: 1px solid var(--border); border-radius: var(--r); background: var(--card); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.detail.before { left: var(--panel-left, 16px); right: auto; }
 .detail[hidden] { display: none; }
 .panel-resize { position: absolute; z-index: 1; touch-action: none; user-select: none; }
 .panel-resize::after { content: ''; position: absolute; border-radius: var(--r); background: var(--accent); opacity: 0; }
@@ -245,7 +244,7 @@ pre.mermaid svg { max-width: none; }
   body { padding-block: 24px 48px; }
   h1 { font-size: 24px; }
   .panel-resize { display: none; }
-  .detail, .detail.before, .detail:has(pre.code) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
+  .detail, .detail:has(pre.code) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
 }
 @media (prefers-reduced-motion: reduce) { .box, .edges path.line, .edge-label { transition: none; } }
 </style>
@@ -1019,7 +1018,7 @@ for (const code of out.querySelectorAll('pre > code.language-flow')) {
   const scroll = el('div', 'arch-scroll');
   const arch = el('div', 'arch');
   const before = !!pre.closest('.panel.before');
-  const detail = el('div', `detail${before ? ' before' : ''}`);
+  const detail = el('div', 'detail');
   detail.hidden = true;
   detail.setAttribute('aria-live', 'polite');
   scroll.append(arch);
