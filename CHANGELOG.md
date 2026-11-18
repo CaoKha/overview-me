@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/CaoKha/overview-me/compare/v0.11.0...v0.11.1) (2026-11-18)
+
+
+### Documentation
+
+* rewrite the README and add a tutorial with screenshots ([#46](https://github.com/CaoKha/overview-me/issues/46)) ([1919c45](https://github.com/CaoKha/overview-me/commit/1919c457a053a2892c2a7a1d2b6f2ddd55cdaae5))
+
 ## [0.11.0](https://github.com/CaoKha/overview-me/compare/v0.10.0...v0.11.0) (2026-11-18)
 
 
