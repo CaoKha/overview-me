@@ -137,6 +137,64 @@ impl Git {
             .to_owned())
     }
 
+    /// The text of each of `paths` at `rev`, in one `git cat-file --batch`; `None` for a path
+    /// that is missing or not a file.
+    ///
+    /// # Errors
+    /// When git cannot start or exits non-zero.
+    pub fn read_files(&self, rev: &str, paths: &[&str]) -> Result<Vec<Option<String>>> {
+        use std::io::Write;
+        use std::process::Stdio;
+        let mut child = self
+            .command(&["cat-file", "--batch"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("running git")?;
+        let input: String = paths.iter().map(|p| format!("{rev}:{p}\n")).collect();
+        let mut stdin = child.stdin.take().context("git stdin")?;
+        // Write from another thread: git's output can fill the pipe before it reads all input.
+        let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
+        let out = child.wait_with_output().context("running git")?;
+        writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("writing to git cat-file"))?
+            .context("writing to git cat-file")?;
+        if !out.status.success() {
+            bail!(
+                "git cat-file --batch failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        let mut rest = out.stdout.as_slice();
+        let mut files = Vec::with_capacity(paths.len());
+        for _ in paths {
+            let Some(eol) = rest.iter().position(|&b| b == b'\n') else {
+                bail!("git cat-file --batch: output ends early");
+            };
+            let header = String::from_utf8_lossy(&rest[..eol]).into_owned();
+            rest = &rest[eol + 1..];
+            // `<sha> <type> <size>`, or `<object> missing` / `ambiguous`.
+            let mut parts = header.split(' ');
+            let (kind, size) = (
+                parts.nth(1),
+                parts.next().and_then(|s| s.parse::<usize>().ok()),
+            );
+            let Some(size) = size else {
+                files.push(None);
+                continue;
+            };
+            if rest.len() < size + 1 {
+                bail!("git cat-file --batch: output ends early");
+            }
+            let body = &rest[..size];
+            rest = &rest[size + 1..];
+            files.push((kind == Some("blob")).then(|| String::from_utf8_lossy(body).into_owned()));
+        }
+        Ok(files)
+    }
+
     /// Where maps live: shared by every worktree of the repo.
     ///
     /// # Errors

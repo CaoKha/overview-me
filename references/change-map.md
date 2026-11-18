@@ -25,6 +25,10 @@ The draft already has the structure: one node per changed symbol, import-only hu
 - **renames**, **deletions**: every listed move and every deleted non-test file sits in exactly one node. Fold it into the node whose change explains it, or keep its own node with a caption that says why. Treat a move into a test path as suspect.
 - Never set `touchedByTest` by hand. It is a computed hint, and the validator says what it must be.
 
+## Edges
+
+- **edges**: the draft links a node to the nodes whose symbols it names, following imports to the file that declares them. Between two nodes, the After flow draws an arrow only when `edges` has it. Delete an edge the code does not make, for example two unrelated symbols that share a name; `flow` and `render` keep the arrow out on every run. Adding an edge does not draw an arrow the code does not show.
+
 ## Tour
 
 - **tour**: every node id once, in reading order. The draft puts callees before callers. Reorder only when the contract or shape the reader needs first is elsewhere.

@@ -2,9 +2,9 @@
 //! code at base and head, so the skill neither explores the code nor writes diagram JSON.
 //!
 //! A box is a map node (changed code), a symbol the change removes, or unchanged code one call
-//! away from changed code. An arrow is a call found by name, as `extract` finds `calls` edges: a
-//! reference to a symbol's identifier from the file that defines it, a file in the same Go
-//! package, or a file that imports the name (and, for a method, its type).
+//! away from changed code. An arrow is a call found as `extract` finds `calls` edges: a reference
+//! to a symbol's identifier whose binding can be that symbol (see [`crate::scope`]). Between two
+//! map nodes, the map's `edges` have the last word: an arrow the map leaves out is not drawn.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -17,7 +17,8 @@ use crate::facts;
 use crate::git::Git;
 use crate::map::{ChangeMap, Lane};
 use crate::rules::Rules;
-use crate::symbols::{self, Parsed, Symbol};
+use crate::scope::Scope;
+use crate::symbols::{self, Ident, Parsed, Symbol};
 
 /// Boxes per row of a lane: Before and After share the page width.
 const PER_ROW: usize = 3;
@@ -213,33 +214,10 @@ fn parse_at(git: &Git, rev: &str, path: &str) -> Result<Option<Parsed>> {
     }
 }
 
-/// The type a method is reached through: `Git` for `Git::new`, `C` for `C.m`; `None` for a
-/// top-level symbol.
-fn container<'a>(name: &'a str, ident: &str) -> Option<&'a str> {
-    let rest = name.strip_suffix(ident)?.trim_end_matches([':', '.']);
-    (!rest.is_empty()).then(|| rest.rsplit([':', '.']).next().unwrap_or(rest))
-}
-
 /// Whether a reference to `sym` is a step in a flow: a call to a function, method, macro or
 /// constructor, or a read of a constant. Naming a type, trait, impl block or module is not.
 fn callable(sym: &Symbol) -> bool {
     !matches!(sym.kind, "type" | "trait" | "impl" | "mod")
-}
-
-/// Whether code in `caller` can call `sym`, defined in `callee`.
-fn in_scope(files: &BTreeMap<String, Parsed>, caller: &str, callee: &str, sym: &Symbol) -> bool {
-    if caller == callee || symbols::same_go_package(caller, callee) {
-        return true;
-    }
-    let Some(p) = files.get(caller) else {
-        return false;
-    };
-    if !sym.exported || !p.imports.contains(&sym.ident) {
-        return false;
-    }
-    // `Foo::new` brings `new` into scope too: a method also needs its type.
-    container(&sym.name, &sym.ident)
-        .is_none_or(|c| p.imports.contains(c) || p.identifiers.iter().any(|(n, _)| n == c))
 }
 
 /// Whether the identifier `name` at `line` is the declaration of a symbol, not a reference.
@@ -250,8 +228,8 @@ fn is_declaration(p: &Parsed, name: &str, line: usize) -> bool {
             && line <= s.end
             && p.identifiers
                 .iter()
-                .find(|(n, l)| n == name && *l >= s.start)
-                .is_some_and(|(_, l)| *l == line)
+                .find(|i| i.name == name && i.line >= s.start)
+                .is_some_and(|i| i.line == line)
     })
 }
 
@@ -261,6 +239,7 @@ fn side(
     git: &Git,
     rules: &Rules,
     rev: &str,
+    scope: &Scope<'_>,
     boxes: &[(String, Code)],
     files: &mut BTreeMap<String, Parsed>,
 ) -> Result<Graph> {
@@ -273,11 +252,11 @@ fn side(
         for (file, a, b) in &code.spans {
             let Some(p) = files.get(file) else { continue };
             let local: HashSet<&str> = p.symbols.iter().map(|s| s.ident.as_str()).collect();
-            for (name, line) in &p.identifiers {
-                if (a..=b).contains(&line)
-                    && (p.imports.contains(name) || local.contains(name.as_str()))
+            for i in &p.identifiers {
+                if (a..=b).contains(&&i.line)
+                    && (p.imports.contains(&i.name) || local.contains(i.name.as_str()))
                 {
-                    names.insert(name.clone());
+                    names.insert(i.name.clone());
                 }
             }
         }
@@ -334,13 +313,13 @@ fn side(
         (!in_box(file, s.start, s.end)).then(|| Owner::Existing(file.to_owned(), s.clone()))
     };
 
-    let mut refs: HashMap<&str, Vec<(&str, usize)>> = HashMap::new();
+    let mut refs: HashMap<&str, Vec<(&str, &Parsed, &Ident)>> = HashMap::new();
     let mut decls: HashMap<&str, Vec<(&str, &Symbol)>> = HashMap::new();
     for (path, p) in files {
-        for (n, l) in &p.identifiers {
-            refs.entry(n.as_str())
+        for i in &p.identifiers {
+            refs.entry(i.name.as_str())
                 .or_default()
-                .push((path.as_str(), *l));
+                .push((path.as_str(), p, i));
         }
         for s in &p.symbols {
             decls
@@ -354,15 +333,11 @@ fn side(
     // Into the boxes: every in-scope reference to a box's symbols.
     for (key, code) in boxes {
         for (dfile, d) in code.decls.iter().filter(|(_, d)| callable(d)) {
-            for &(path, line) in refs.get(d.ident.as_str()).into_iter().flatten() {
-                if !in_scope(files, path, dfile, d)
-                    || files
-                        .get(path)
-                        .is_some_and(|p| is_declaration(p, &d.ident, line))
-                {
+            for &(path, p, r) in refs.get(d.ident.as_str()).into_iter().flatten() {
+                if !scope.reaches(path, p, r, dfile, d) || is_declaration(p, &d.ident, r.line) {
                     continue;
                 }
-                match owner(path, line) {
+                match owner(path, r.line) {
                     Some(Owner::Box(k)) if &k != key => {
                         g.edges.insert((k, key.clone()));
                     }
@@ -381,16 +356,18 @@ fn side(
         let own: HashSet<&str> = code.decls.iter().map(|(_, d)| d.ident.as_str()).collect();
         for (file, a, b) in &code.spans {
             let Some(p) = files.get(file) else { continue };
-            for (name, line) in &p.identifiers {
-                if !(a..=b).contains(&line) || own.contains(name.as_str()) {
+            for r in &p.identifiers {
+                if !(a..=b).contains(&&r.line) || own.contains(r.name.as_str()) {
                     continue;
                 }
                 let targets: Vec<(&str, &Symbol)> = decls
-                    .get(name.as_str())
+                    .get(r.name.as_str())
                     .into_iter()
                     .flatten()
                     .filter(|(df, d)| {
-                        callable(d) && in_scope(files, file, df, d) && !in_box(df, d.start, d.end)
+                        callable(d)
+                            && scope.reaches(file, p, r, df, d)
+                            && !in_box(df, d.start, d.end)
                     })
                     .copied()
                     .collect();
@@ -414,6 +391,7 @@ fn dangling(
     git: &Git,
     rules: &Rules,
     rev: &str,
+    scope: &Scope<'_>,
     removed: &[(String, Symbol)],
     files: &mut BTreeMap<String, Parsed>,
 ) -> Result<Vec<Link>> {
@@ -450,14 +428,15 @@ fn dangling(
             continue;
         }
         for (path, p) in files.iter() {
-            if !in_scope(files, path, file, sym) {
-                continue;
-            }
-            for (name, line) in &p.identifiers {
-                if name == &sym.ident && !p.in_tests(*line) && !is_declaration(p, name, *line) {
+            for r in &p.identifiers {
+                if r.name == sym.ident
+                    && !p.in_tests(r.line)
+                    && !is_declaration(p, &r.name, r.line)
+                    && scope.reaches(path, p, r, file, sym)
+                {
                     out.push(Link {
                         symbol: sym.name.clone(),
-                        at: format!("{path}:{line}"),
+                        at: format!("{path}:{}", r.line),
                         nodes: Vec::new(),
                     });
                 }
@@ -673,9 +652,44 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
             })
             .collect()
     };
-    let head_graph = side(git, rules, &map.head, &boxes_at(true), &mut head_files)?;
-    let still_referenced = dangling(git, rules, &map.head, &removed, &mut head_files)?;
-    let base_graph = side(git, rules, &merge_base, &boxes_at(false), &mut base_files)?;
+    let head_scope = Scope::load(git, &map.head)?;
+    let base_scope = Scope::load(git, &merge_base)?;
+    let mut head_graph = side(
+        git,
+        rules,
+        &map.head,
+        &head_scope,
+        &boxes_at(true),
+        &mut head_files,
+    )?;
+    let still_referenced = dangling(
+        git,
+        rules,
+        &map.head,
+        &head_scope,
+        &removed,
+        &mut head_files,
+    )?;
+    let base_graph = side(
+        git,
+        rules,
+        &merge_base,
+        &base_scope,
+        &boxes_at(false),
+        &mut base_files,
+    )?;
+    // Between two map nodes, an arrow needs an edge in the map: a reviewer who deletes a wrong
+    // edge from the map removes its arrow for good.
+    let node_ids: HashSet<&str> = map.nodes.iter().map(|n| n.id.as_str()).collect();
+    let mapped: HashSet<(&str, &str)> = map
+        .edges
+        .iter()
+        .map(|e| (e.from.as_str(), e.to.as_str()))
+        .collect();
+    head_graph.edges.retain(|(a, b)| {
+        !(node_ids.contains(a.as_str()) && node_ids.contains(b.as_str()))
+            || mapped.contains(&(a.as_str(), b.as_str()))
+    });
 
     // Unchanged boxes: the most connected ones, while both diagrams stay traceable.
     let mut score: BTreeMap<&str, usize> = BTreeMap::new();
@@ -771,7 +785,6 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         not_drawn.push(format!("{dropped} arrows in After (over {MAX_EDGES})"));
     }
 
-    let node_ids: HashSet<&str> = map.nodes.iter().map(|n| n.id.as_str()).collect();
     let mut entry_points = Vec::new();
     for i in items
         .iter()
@@ -1094,19 +1107,202 @@ mod tests {
         assert!(flow.still_referenced.iter().all(|l| l.symbol == "oldFee"));
     }
 
+    fn flow_of(repo: &TempRepo, map: &ChangeMap) -> FlowFile {
+        build(
+            &Git::new(repo.path()),
+            &Rules::load(None).expect("rules"),
+            map,
+        )
+        .expect("flow")
+    }
+
+    #[test]
+    fn same_name_in_two_packages_is_not_a_call() {
+        let repo = TempRepo::new("flow-same-name");
+        repo.write("packages/db/package.json", r#"{"name":"@t/db"}"#);
+        repo.write(
+            "packages/db/src/schema.ts",
+            "function pgSchema(n: string) {\n  return { table: (t: string, c: object) => ({ n, t, c }) }\n}\n\nexport const referral = pgSchema('referral')\n",
+        );
+        repo.write(
+            "apps/api/package.json",
+            r#"{"name":"@t/api","dependencies":{"@t/db":"workspace:*"}}"#,
+        );
+        repo.write(
+            "apps/api/src/routers/index.ts",
+            "export { referral } from './referral.js'\n",
+        );
+        let referees = |cols: &str| {
+            format!(
+                "import {{ referral }} from './schema.js'\n\nexport const referees = referral.table('referees', {cols})\n"
+            )
+        };
+        let router = |extra: &str| {
+            format!("const get = () => 1\n\nexport const referral = {{\n  get,{extra}\n}}\n")
+        };
+        let user = |import: &str, body: &str| {
+            format!("import {import}\n\nexport function use() {{\n  return {body}\n}}\n")
+        };
+        let files = |v: &str| {
+            repo.write(
+                "packages/db/src/referees.ts",
+                &referees(if v == "base" { "{}" } else { "{ id: 1 }" }),
+            );
+            repo.write(
+                "apps/api/src/routers/referral.ts",
+                &router(if v == "base" { "" } else { "\n  open: true," }),
+            );
+            // A different edit in each file, so each gets its own node.
+            let wrap = |b: &str, n: u8| {
+                if v == "base" {
+                    b.to_owned()
+                } else {
+                    format!("[{b}, {n}]")
+                }
+            };
+            repo.write(
+                "apps/api/src/direct.ts",
+                &user(
+                    "{ referral } from './routers/referral.js'",
+                    &wrap("referral", 1),
+                ),
+            );
+            repo.write(
+                "apps/api/src/barrel.ts",
+                &user(
+                    "{ referral } from './routers/index.js'",
+                    &wrap("referral", 2),
+                ),
+            );
+            repo.write(
+                "apps/api/src/db.ts",
+                &user("{ referees } from '@t/db/referees'", &wrap("referees", 3)),
+            );
+        };
+        files("base");
+        let base = repo.commit("base");
+        files("head");
+        let head = repo.commit("head");
+        let map = draft(&repo, &base, &head);
+        let id = |file: &str| {
+            map.nodes
+                .iter()
+                .find(|n| n.sites.iter().any(|s| s.file == file))
+                .map(|n| n.id.clone())
+                .unwrap_or_else(|| panic!("no node in {file}: {:?}", map.nodes))
+        };
+        let (table, router) = (
+            id("packages/db/src/referees.ts"),
+            id("apps/api/src/routers/referral.ts"),
+        );
+        let (direct, barrel, db) = (
+            id("apps/api/src/direct.ts"),
+            id("apps/api/src/barrel.ts"),
+            id("apps/api/src/db.ts"),
+        );
+
+        let mapped: Vec<String> = map
+            .edges
+            .iter()
+            .map(|e| format!("{}>{}", e.from, e.to))
+            .collect();
+        for e in [format!("{table}>{router}"), format!("{router}>{table}")] {
+            assert!(!mapped.contains(&e), "draft edge {e}: {mapped:?}");
+        }
+        for e in [
+            format!("{direct}>{router}"),
+            format!("{barrel}>{router}"),
+            format!("{db}>{table}"),
+        ] {
+            assert!(mapped.contains(&e), "draft misses {e}: {mapped:?}");
+        }
+
+        let flow = flow_of(&repo, &map);
+        let after = edges(&flow.after);
+        for e in &after {
+            let ends: Vec<&str> = e.split([' ', '>']).collect();
+            assert!(
+                !(ends[..2].contains(&table.as_str()) && ends[..2].contains(&router.as_str())),
+                "arrow {e} links two different `referral`s: {after:?}"
+            );
+        }
+        for e in [
+            format!("{direct}>{router}"),
+            format!("{barrel}>{router}"),
+            format!("{db}>{table}"),
+        ] {
+            assert!(after.contains(&e), "missing {e}: {after:?}");
+        }
+        // The table file uses the schema's `referral`; nothing else does.
+        let schema: Vec<_> = flow
+            .depends_on
+            .iter()
+            .filter(|l| l.at.starts_with("packages/db/src/schema.ts"))
+            .map(|l| (l.symbol.as_str(), l.nodes.clone()))
+            .collect();
+        assert_eq!(schema, vec![("referral", vec![table.clone()])]);
+        assert!(flow.callers.is_empty(), "{:?}", flow.callers);
+    }
+
+    #[test]
+    fn member_property_is_not_a_call() {
+        let repo = TempRepo::new("flow-member");
+        let src = |n: u8| {
+            format!(
+                "const proc = {{ referral: {{ get: 1 }} }}\n\nexport const get = proc.referral.get + {n}\n\nexport const referral = {{ get, n: {n} }}\n"
+            )
+        };
+        repo.write("src/r.ts", &src(1));
+        let base = repo.commit("base");
+        repo.write("src/r.ts", &src(2));
+        let head = repo.commit("head");
+        let map = draft(&repo, &base, &head);
+        let (get, referral) = (node_id(&map, "get"), node_id(&map, "referral"));
+        let flow = flow_of(&repo, &map);
+        let after = edges(&flow.after);
+        assert!(after.contains(&format!("{referral}>{get}")), "{after:?}");
+        assert!(
+            !after
+                .iter()
+                .any(|e| e.starts_with(&format!("{get}>{referral}"))),
+            "{after:?}"
+        );
+        assert!(
+            flow.callers.is_empty(),
+            "keys are not calls: {:?}",
+            flow.callers
+        );
+    }
+
+    #[test]
+    fn map_edges_decide_arrows_between_nodes() {
+        let repo = TempRepo::new("flow-map-edges");
+        repo.write("src/services/fee.ts", FEE_BASE);
+        repo.write("src/api/handler.ts", HANDLER_BASE);
+        repo.write("src/db/store.ts", STORE);
+        let base = repo.commit("base");
+        repo.write("src/services/fee.ts", FEE_HEAD);
+        repo.write("src/api/handler.ts", HANDLER_HEAD);
+        let head = repo.commit("head");
+        let mut map = draft(&repo, &base, &head);
+        let (handle, fee, discount) = (
+            node_id(&map, "handle"),
+            node_id(&map, "fee"),
+            node_id(&map, "discount"),
+        );
+        map.edges.retain(|e| !(e.from == handle && e.to == fee));
+        let mut got = edges(&flow_of(&repo, &map).after);
+        got.sort();
+        let mut want = vec![format!("{handle}>{discount} added"), format!("{handle}>x1")];
+        want.sort();
+        assert_eq!(got, want, "the reviewer removed {handle}>{fee}");
+    }
+
     #[test]
     fn labels_keep_the_end_of_long_names() {
         assert_eq!(label("short"), "short");
         let long = label("VeryLongContainerName.someMethodName");
         assert_eq!(long.chars().count(), LABEL_MAX);
         assert!(long.starts_with('…') && long.ends_with("someMethodName"));
-    }
-
-    #[test]
-    fn methods_need_their_type_in_scope() {
-        assert_eq!(container("Git::new", "new"), Some("Git"));
-        assert_eq!(container("a::B::c", "c"), Some("B"));
-        assert_eq!(container("C.m", "m"), Some("C"));
-        assert_eq!(container("fee", "fee"), None);
     }
 }

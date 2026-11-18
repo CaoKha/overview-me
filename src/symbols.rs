@@ -1,6 +1,6 @@
 //! Declarations, imports and identifiers of a source file, from tree-sitter.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Result};
 use tree_sitter::{Language, Node, Parser};
@@ -25,12 +25,56 @@ pub struct Parsed {
     pub test_ranges: Vec<(usize, usize)>,
     /// Names brought in by `import` / `use`, including names accessed through them.
     pub imports: HashSet<String>,
-    /// Every identifier with its line.
-    pub identifiers: Vec<(String, usize)>,
+    /// Every identifier with its line and role.
+    pub identifiers: Vec<Ident>,
+    /// Where each imported name comes from, by local name (TypeScript and JavaScript).
+    pub import_from: HashMap<String, Import>,
+    /// `export … from` statements (TypeScript and JavaScript).
+    pub reexports: Vec<ReExport>,
     /// Test declarations: `test(`/`it(`/`describe(` calls, or `#[test]` functions.
     pub tests: Vec<TestDecl>,
     /// Comment nodes as (start row, start byte, end row, end byte), 0-based, end exclusive.
     pub comments: Vec<(usize, usize, usize, usize)>,
+}
+
+/// An identifier in the code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ident {
+    pub name: String,
+    pub line: usize,
+    pub role: Role,
+}
+
+/// How an identifier is used, which decides whether it can name a top-level symbol.
+/// Only TypeScript and JavaScript tell members and keys apart; other languages use `Name`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Role {
+    /// A name on its own: `f` in `f(x)` or `{ f }`.
+    Name,
+    /// The property of a member access, with the object when it is a plain name (`referral`
+    /// for `referral.table`), or empty (`this.x`, `a.b.c`).
+    Member(String),
+    /// A key, field, method or attribute name: `get` in `{ get: h }`. Never a reference.
+    Key,
+}
+
+/// One imported name: `import { name as local } from 'module'`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Import {
+    /// The module specifier as written: `./schema.js`, `@scope/pkg/sub`.
+    pub module: String,
+    /// The name in that module: `Some("default")` for a default import, `None` for `* as ns`.
+    pub name: Option<String>,
+}
+
+/// One `export … from 'module'` statement entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReExport {
+    /// The name this file exports; `None` for `export * from`.
+    pub exported: Option<String>,
+    /// The name in `module`; `None` for `export *` and `export * as ns`.
+    pub name: Option<String>,
+    pub module: String,
 }
 
 /// A test declaration: its name and the line of `test(` or `#[test]`.
@@ -125,6 +169,11 @@ pub fn is_code(path: &str) -> bool {
     Lang::of(path).is_some()
 }
 
+/// Whether imports in `path` are recorded with their module (TypeScript and JavaScript).
+pub fn tracks_imports(path: &str) -> bool {
+    matches!(Lang::of(path), Some(Lang::TypeScript | Lang::Tsx))
+}
+
 /// Two Go files in one directory share a package: they use each other's names without imports.
 pub fn same_go_package(a: &str, b: &str) -> bool {
     fn dir(path: &str) -> &str {
@@ -151,7 +200,10 @@ pub fn parse(path: &str, source: &str) -> Result<Option<Parsed>> {
     let src = source.as_bytes();
     let mut parsed = Parsed::default();
     collect_symbols(lang, tree.root_node(), src, "", &mut parsed);
-    collect_identifiers(tree.root_node(), src, false, &mut parsed);
+    collect_identifiers(lang, tree.root_node(), src, false, &mut parsed);
+    if matches!(lang, Lang::TypeScript | Lang::Tsx) {
+        collect_module_links(tree.root_node(), src, &mut parsed);
+    }
     if lang == Lang::Go {
         collect_go_package_refs(tree.root_node(), src, &mut parsed.imports);
     } else {
@@ -554,7 +606,7 @@ fn collect_tests(lang: Lang, node: Node<'_>, src: &[u8], out: &mut Vec<TestDecl>
     }
 }
 
-fn collect_identifiers(node: Node<'_>, src: &[u8], in_import: bool, out: &mut Parsed) {
+fn collect_identifiers(lang: Lang, node: Node<'_>, src: &[u8], in_import: bool, out: &mut Parsed) {
     let in_import = in_import
         || matches!(
             node.kind(),
@@ -565,13 +617,157 @@ fn collect_identifiers(node: Node<'_>, src: &[u8], in_import: bool, out: &mut Pa
         if in_import {
             out.imports.insert(name.clone());
         }
-        out.identifiers
-            .push((name, line(node.start_position().row)));
+        out.identifiers.push(Ident {
+            name,
+            line: line(node.start_position().row),
+            role: role(lang, node, src),
+        });
         return;
     }
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
-        collect_identifiers(child, src, in_import, out);
+        collect_identifiers(lang, child, src, in_import, out);
+    }
+}
+
+/// The role of a leaf identifier. A TypeScript property name is a member access or a key.
+fn role(lang: Lang, node: Node<'_>, src: &[u8]) -> Role {
+    if !matches!(lang, Lang::TypeScript | Lang::Tsx)
+        || !matches!(
+            node.kind(),
+            "property_identifier" | "private_property_identifier"
+        )
+    {
+        return Role::Name;
+    }
+    let Some(parent) = node.parent().filter(|p| p.kind() == "member_expression") else {
+        return Role::Key;
+    };
+    if parent.child_by_field_name("property") != Some(node) {
+        return Role::Key;
+    }
+    let object = parent
+        .child_by_field_name("object")
+        .filter(|o| o.kind() == "identifier")
+        .map(|o| text(o, src))
+        .unwrap_or_default();
+    Role::Member(object)
+}
+
+/// The module specifier of an import or export statement, without quotes.
+fn source(node: Node<'_>, src: &[u8]) -> Option<String> {
+    let s = node.child_by_field_name("source")?;
+    Some(text(s, src).trim_matches(['"', '\'', '`']).to_owned())
+}
+
+/// TypeScript imports with their modules, and `export … from` re-exports.
+fn collect_module_links(root: Node<'_>, src: &[u8], out: &mut Parsed) {
+    let mut cursor = root.walk();
+    let statements: Vec<_> = root.named_children(&mut cursor).collect();
+    for stmt in statements {
+        let Some(module) = source(stmt, src) else {
+            continue;
+        };
+        let mut c = stmt.walk();
+        let children: Vec<_> = stmt.named_children(&mut c).collect();
+        match stmt.kind() {
+            "import_statement" => {
+                for clause in children.iter().filter(|n| n.kind() == "import_clause") {
+                    let mut cc = clause.walk();
+                    for part in clause.named_children(&mut cc) {
+                        collect_import_part(part, src, &module, out);
+                    }
+                }
+            }
+            "export_statement" => {
+                let mut listed = false;
+                for part in &children {
+                    match part.kind() {
+                        "export_clause" => {
+                            listed = true;
+                            let mut sc = part.walk();
+                            for spec in part
+                                .named_children(&mut sc)
+                                .filter(|n| n.kind() == "export_specifier")
+                            {
+                                let Some(name) = spec.child_by_field_name("name") else {
+                                    continue;
+                                };
+                                let name = text(name, src);
+                                let exported = spec
+                                    .child_by_field_name("alias")
+                                    .map_or_else(|| name.clone(), |a| text(a, src));
+                                out.reexports.push(ReExport {
+                                    exported: Some(exported),
+                                    name: Some(name),
+                                    module: module.clone(),
+                                });
+                            }
+                        }
+                        "namespace_export" => {
+                            listed = true;
+                            let mut nc = part.walk();
+                            let alias = part.named_children(&mut nc).next().map(|n| text(n, src));
+                            out.reexports.push(ReExport {
+                                exported: alias,
+                                name: None,
+                                module: module.clone(),
+                            });
+                        }
+                        _ => {}
+                    }
+                }
+                if !listed {
+                    out.reexports.push(ReExport {
+                        exported: None,
+                        name: None,
+                        module,
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn collect_import_part(part: Node<'_>, src: &[u8], module: &str, out: &mut Parsed) {
+    let mut add = |local: String, name: Option<String>| {
+        out.import_from.insert(
+            local,
+            Import {
+                module: module.to_owned(),
+                name,
+            },
+        );
+    };
+    match part.kind() {
+        "identifier" => add(text(part, src), Some("default".to_owned())),
+        "namespace_import" => {
+            let mut c = part.walk();
+            if let Some(local) = part
+                .named_children(&mut c)
+                .find(|n| n.kind() == "identifier")
+            {
+                add(text(local, src), None);
+            }
+        }
+        "named_imports" => {
+            let mut c = part.walk();
+            for spec in part
+                .named_children(&mut c)
+                .filter(|n| n.kind() == "import_specifier")
+            {
+                let Some(name) = spec.child_by_field_name("name") else {
+                    continue;
+                };
+                let name = text(name, src);
+                let local = spec
+                    .child_by_field_name("alias")
+                    .map_or_else(|| name.clone(), |a| text(a, src));
+                add(local, Some(name));
+            }
+        }
+        _ => {}
     }
 }
 
@@ -707,6 +903,76 @@ function call(obj: Local) {
                 );
             }
         }
+    }
+
+    #[test]
+    fn typescript_imports_keep_their_module() {
+        let src = r#"
+import def, { a, b as c } from './x.js'
+import * as ns from '@scope/pkg/sub'
+import type { T } from "../types"
+export { d, e as f } from './y'
+export * from './z'
+export * as all from './w'
+"#;
+        let parsed = parse("src/app.ts", src)
+            .expect("parses")
+            .expect("typescript");
+        let got = |local: &str| {
+            parsed
+                .import_from
+                .get(local)
+                .map(|i| (i.module.as_str(), i.name.as_deref()))
+        };
+        assert_eq!(got("def"), Some(("./x.js", Some("default"))));
+        assert_eq!(got("a"), Some(("./x.js", Some("a"))));
+        assert_eq!(got("c"), Some(("./x.js", Some("b"))));
+        assert_eq!(got("b"), None, "the local name is the alias");
+        assert_eq!(got("ns"), Some(("@scope/pkg/sub", None)));
+        assert_eq!(got("T"), Some(("../types", Some("T"))));
+        let re: Vec<_> = parsed
+            .reexports
+            .iter()
+            .map(|r| (r.exported.as_deref(), r.name.as_deref(), r.module.as_str()))
+            .collect();
+        assert_eq!(
+            re,
+            vec![
+                (Some("d"), Some("d"), "./y"),
+                (Some("f"), Some("e"), "./y"),
+                (None, None, "./z"),
+                (Some("all"), None, "./w"),
+            ]
+        );
+    }
+
+    #[test]
+    fn typescript_properties_are_members_or_keys() {
+        let src = "const a = referral.table('x', { get: h, other })\nthis.run()\nx.y.z\n";
+        let parsed = parse("a.ts", src).expect("parses").expect("typescript");
+        let role = |name: &str| {
+            parsed
+                .identifiers
+                .iter()
+                .find(|i| i.name == name)
+                .map(|i| i.role.clone())
+        };
+        assert_eq!(role("referral"), Some(Role::Name));
+        assert_eq!(role("table"), Some(Role::Member("referral".into())));
+        assert_eq!(role("get"), Some(Role::Key));
+        assert_eq!(role("h"), Some(Role::Name));
+        assert_eq!(
+            role("other"),
+            Some(Role::Name),
+            "a shorthand is a reference"
+        );
+        assert_eq!(role("run"), Some(Role::Member(String::new())));
+        assert_eq!(role("y"), Some(Role::Member("x".into())));
+        assert_eq!(role("z"), Some(Role::Member(String::new())));
+        let rs = parse("lib.rs", "fn f() { a.b(); }")
+            .expect("parses")
+            .expect("rust");
+        assert!(rs.identifiers.iter().all(|i| i.role == Role::Name));
     }
 
     #[test]

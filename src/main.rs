@@ -10,6 +10,7 @@ mod map;
 mod page;
 mod render;
 mod rules;
+mod scope;
 mod snapshot;
 mod symbols;
 #[cfg(test)]
