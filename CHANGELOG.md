@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/CaoKha/overview-me/compare/v0.10.0...v0.11.0) (2026-11-18)
+
+
+### Features
+
+* **page:** open every side panel on the right ([#43](https://github.com/CaoKha/overview-me/issues/43)) ([de5ca2a](https://github.com/CaoKha/overview-me/commit/de5ca2a498031be49d69bb891f0f0ee93014ce11))
+* **page:** redesign the overview page and put Flow back after Entry points ([#45](https://github.com/CaoKha/overview-me/issues/45)) ([0f3ce45](https://github.com/CaoKha/overview-me/commit/0f3ce4565895f3a4c13db8f487f56ff801cc3619))
+
 ## [0.10.0](https://github.com/CaoKha/overview-me/compare/v0.9.0...v0.10.0) (2026-11-18)
 
 
