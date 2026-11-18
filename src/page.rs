@@ -2,7 +2,7 @@
 //! as a standalone HTML page, for the browser or a Claude artifact.
 //!
 //! The page itself is `assets/overview.html`, compiled in. It styles the markdown as a review
-//! sheet, links `path:line` code spans to the forge with embedded code previews, puts
+//! sheet, links `path:line` code spans to the forge with embedded whole file previews, puts
 //! "### Before" and "### After" side by side, and draws ```` ```flow ```` blocks as lane
 //! diagrams: hovering a box traces its edges, clicking it shows its file paths with copy buttons.
 
@@ -112,8 +112,7 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
     if !errs.is_empty() {
         bail!("{}:\n  {}", md.display(), errs.join("\n  "));
     }
-    let cache = cache.into_inner();
-    let mut snippets = serde_json::json!({});
+    let mut ranges = HashMap::new();
     for (at, span) in citations {
         let Some((path, to)) = cited(&span) else {
             continue;
@@ -125,15 +124,32 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         else {
             continue;
         };
-        if let Some(Some(text)) = cache.get(&(at.clone(), path.to_owned())) {
-            let start = from.saturating_sub(8).max(1);
-            let lines: Vec<_> = text
-                .lines()
-                .skip(start - 1)
-                .take(to.saturating_add(8).saturating_sub(start - 1).min(200))
-                .collect();
-            snippets[format!("{at}:{span}")] =
-                serde_json::json!({ "start": start, "from": from, "to": to, "lines": lines });
+        ranges
+            .entry((at, path.to_owned()))
+            .and_modify(|(first, last): &mut (usize, usize)| {
+                *first = (*first).min(from);
+                *last = (*last).max(to);
+            })
+            .or_insert((from, to));
+    }
+    let cache = cache.into_inner();
+    let mut snippets = serde_json::json!({});
+    for ((at, path), (from, to)) in ranges {
+        if let Some(Some(text)) = cache.get(&(at.clone(), path.clone())) {
+            let whole = text.lines().count() <= 5000;
+            let start = if whole {
+                1
+            } else {
+                from.saturating_sub(8).max(1)
+            };
+            let count = if whole {
+                5000
+            } else {
+                to.saturating_add(8).saturating_sub(start - 1).min(5000)
+            };
+            let lines: Vec<_> = text.lines().skip(start - 1).take(count).collect();
+            snippets[format!("{at}:{path}")] =
+                serde_json::json!({ "start": start, "lines": lines });
         }
     }
     let title = text
@@ -591,19 +607,24 @@ mod tests {
     }
 
     #[test]
-    fn code_previews_clip_context_and_key_by_commit() {
+    fn code_previews_store_whole_files_and_cap_windows_by_commit() {
         let repo = crate::testutil::TempRepo::new("code-previews");
         repo.write("a.rs", &format!("</script>\n{}", "line\n".repeat(19)));
+        let large = (1..=6000)
+            .map(|n| format!("line {n}\n"))
+            .collect::<String>();
+        repo.write("large.rs", &large);
+        repo.write("window.rs", &large);
         let base = repo.commit("code");
         repo.write("a.rs", &format!("</script>\n{}", "new\n".repeat(19)));
         let head = repo.commit("new code");
         let md = repo.path().join(format!("{head}.md"));
         let flow = r#"```flow
-{"nodes":{"a":{"label":"A","paths":["a.rs:10","missing.rs:1","a.rs:21","a.rs","skills/"]}},"tiers":[[{"name":"code","ids":["a"]}]]}
+{"nodes":{"a":{"label":"A","paths":["a.rs:10","large.rs:5990-6000","missing.rs:1","a.rs:21","a.rs","skills/"]}},"tiers":[[{"name":"code","ids":["a"]}]]}
 ```"#;
         std::fs::write(
             &md,
-            format!("# T\n`a.rs:1-2` and `a.rs:19-20`\n{flow}\n## Flow\n### Before\n{flow}\n"),
+            format!("# T\n`a.rs:1-2` and `a.rs:19-20` and `large.rs:100-102` and `window.rs:1-2` and `window.rs:100-102`\n{flow}\n## Flow\n### Before\n`large.rs:5900`\n{flow}\n"),
         )
         .expect("write overview");
         repo.write(
@@ -621,23 +642,31 @@ mod tests {
             .0;
         assert!(!json.contains('<'));
         let snippets: Value = serde_json::from_str(json).expect("snippet JSON");
-        assert_eq!(snippets.as_object().expect("snippet map").len(), 4);
+        assert_eq!(snippets.as_object().expect("snippet map").len(), 5);
         assert_eq!(
-            snippets[format!("{head}:a.rs:1-2")],
-            serde_json::json!({"start": 1, "from": 1, "to": 2, "lines":
-                std::iter::once("</script>").chain(std::iter::repeat_n("new", 9)).collect::<Vec<_>>()})
+            snippets[format!("{head}:a.rs")],
+            serde_json::json!({"start": 1, "lines":
+                std::iter::once("</script>").chain(std::iter::repeat_n("new", 19)).collect::<Vec<_>>()})
         );
         assert_eq!(
-            snippets[format!("{head}:a.rs:19-20")],
-            serde_json::json!({"start": 11, "from": 19, "to": 20, "lines": vec!["new"; 10]})
+            snippets[format!("{base}:a.rs")],
+            serde_json::json!({"start": 1, "lines":
+                std::iter::once("</script>").chain(std::iter::repeat_n("line", 19)).collect::<Vec<_>>()})
         );
         assert_eq!(
-            snippets[format!("{head}:a.rs:10")]["lines"],
-            serde_json::json!(vec!["new"; 17])
+            snippets[format!("{head}:large.rs")],
+            serde_json::json!({"start": 92, "lines":
+                (92..5092).map(|n| format!("line {n}")).collect::<Vec<_>>()})
         );
         assert_eq!(
-            snippets[format!("{base}:a.rs:10")]["lines"],
-            serde_json::json!(vec!["line"; 17])
+            snippets[format!("{base}:large.rs")],
+            serde_json::json!({"start": 5892, "lines":
+                (5892..=6000).map(|n| format!("line {n}")).collect::<Vec<_>>()})
+        );
+        assert_eq!(
+            snippets[format!("{head}:window.rs")],
+            serde_json::json!({"start": 1, "lines":
+                (1..=110).map(|n| format!("line {n}")).collect::<Vec<_>>()})
         );
         assert!(page.contains(&format!("\"head\":\"{head}\"")));
         assert!(page.contains("\"sha\":null"));

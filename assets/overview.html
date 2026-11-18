@@ -9,9 +9,9 @@
 <!--
   Page for the PR overview and the codebase overview, rendered by
   `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
-  one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded code previews,
+  one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded whole file previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
-  traces its edges, clicking it pins it and lists its files in a fixed side panel (a bottom sheet on phones) with copy buttons and inline code previews. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
+  traces its edges, clicking it pins it and lists its files in a fixed side panel (a bottom sheet on phones) with copy buttons and inline whole file previews. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
   and as a local file in the browser.
 -->
 <style>
@@ -185,7 +185,7 @@ button.btn:hover { border-color: var(--accent); }
 button.btn:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
 .detail a.open { font-size: 12px; white-space: nowrap; }
 .code-detail, .detail:has(pre.code) { width: min(760px, calc(100vw - 32px)); }
-pre.code { min-height: 0; padding: 8px 0; font: 12px/1.6 var(--font-mono); }
+pre.code { max-height: calc(100vh - 120px); min-height: 0; padding: 8px 0; font: 12px/1.6 var(--font-mono); }
 pre.code .code-line { display: block; min-width: max-content; padding-right: 12px; }
 pre.code .code-line.cited { background: color-mix(in srgb, var(--hl) 14%, transparent); }
 pre.code .line-number { display: inline-block; width: 4.5em; padding-right: 12px; text-align: right; color: var(--muted); user-select: none; }
@@ -219,7 +219,7 @@ pre.mermaid svg { max-width: none; }
 // (then read from "sha <40 hex>" in the header line); base: commit for references under Before;
 // head: commit for previews, including when unpushed.
 const cfg = {{CONFIG}};
-const snippets = JSON.parse(document.getElementById('code').textContent);
+const codeFiles = JSON.parse(document.getElementById('code').textContent);
 const md = document.getElementById('md').textContent.replace(/<\\(\/script|!--)/gi, '<$1');
 const out = document.getElementById('out');
 out.innerHTML = marked.parse(md);
@@ -366,25 +366,35 @@ codeDetail.hidden = true;
 codeDetail.setAttribute('role', 'region');
 codeDetail.setAttribute('aria-label', 'Code preview');
 document.body.append(codeDetail);
-function codePre(text, snippet) {
+function codePreview(text, at) {
+  const m = text.match(PATH_RE);
+  if (!m || !m[2]) return null;
+  const key = `${at}:${m[1]}`, file = codeFiles[key];
+  const from = Number(m[2]), to = Number(m[3] || m[2]);
+  return file && from >= file.start && to >= from && to < file.start + file.lines.length
+    ? { key, file, from, to, path: m[1] } : null;
+}
+const highlightedFiles = new Map();
+function codePre({ key, file, from, to, path }) {
   const pre = el('pre', 'code');
-  const ext = text.match(PATH_RE)?.[1].match(/\.([\w]+)$/)?.[1].toLowerCase();
-  let highlighted;
-  if (window.hljs && ext && hljs.getLanguage(ext)) {
+  const ext = path.match(/\.([\w]+)$/)?.[1].toLowerCase();
+  let highlighted = highlightedFiles.get(key);
+  if (!highlightedFiles.has(key) && window.hljs && ext && hljs.getLanguage(ext)) {
     const open = [];
-    highlighted = hljs.highlight(snippet.lines.join('\n'), { language: ext }).value.split('\n').map((line, i) => {
+    highlighted = hljs.highlight(file.lines.join('\n'), { language: ext }).value.split('\n').map((line, i) => {
       const prefix = open.join('');
       // Balance each row without losing spans that continue across source lines.
       for (const tag of line.match(/<span\b[^>]*>|<\/span>/g) || []) {
         if (tag === '</span>') open.pop();
         else open.push(tag);
       }
-      return prefix + line + (snippet.lines[i] ? '' : ' ') + '</span>'.repeat(open.length);
+      return prefix + line + (file.lines[i] ? '' : ' ') + '</span>'.repeat(open.length);
     });
+    highlightedFiles.set(key, highlighted);
   }
-  snippet.lines.forEach((line, i) => {
-    const n = snippet.start + i;
-    const row = el('span', `code-line${n >= snippet.from && n <= snippet.to ? ' cited' : ''}`);
+  file.lines.forEach((line, i) => {
+    const n = file.start + i;
+    const row = el('span', `code-line${n >= from && n <= to ? ' cited' : ''}`);
     if (highlighted) row.innerHTML = highlighted[i];
     else row.textContent = line || ' ';
     row.prepend(el('span', 'line-number', n));
@@ -392,7 +402,7 @@ function codePre(text, snippet) {
   });
   return pre;
 }
-function showCode(text, snippet, href, button) {
+function showCode(text, preview, href, button) {
   unpinActive?.();
   const closePanel = () => {
     codeDetail.hidden = true;
@@ -413,17 +423,21 @@ function showCode(text, snippet, href, button) {
   close.type = 'button';
   close.addEventListener('click', closePanel);
   head.append(close);
-  const pre = codePre(text, snippet);
+  const pre = codePre(preview);
   codeDetail.replaceChildren(head, pre);
   codeDetail.hidden = false;
   close.focus({ preventScroll: true });
+  scrollCode(pre);
+}
+function scrollCode(pre) {
   const first = pre.querySelector('.cited');
-  if (first) pre.scrollTop = first.offsetTop - pre.offsetTop;
+  if (first) pre.scrollTop += first.getBoundingClientRect().top - pre.getBoundingClientRect().top
+    - 3 * parseFloat(getComputedStyle(pre).lineHeight);
 }
 for (const code of out.querySelectorAll(':not(pre) > code')) {
   if (!/:\d+(-\d+)?$/.test(code.textContent)) continue;
   const at = cfg.base && code.closest('.panel.before') ? cfg.base : cfg.head || sha;
-  const snippet = snippets[`${at}:${code.textContent}`];
+  const preview = codePreview(code.textContent, at);
   const href = forgeHref(code.textContent, code);
   let reference = code;
   if (href) {
@@ -435,11 +449,11 @@ for (const code of out.querySelectorAll(':not(pre) > code')) {
     a.append(code);
     reference = a;
   }
-  if (snippet) {
+  if (preview) {
     const button = el('button', 'btn preview', 'Preview');
     button.type = 'button';
     button.setAttribute('aria-label', `Preview ${code.textContent}`);
-    button.addEventListener('click', () => showCode(code.textContent, snippet, href, button));
+    button.addEventListener('click', () => showCode(code.textContent, preview, href, button));
     reference.after(button);
   }
 }
@@ -651,8 +665,8 @@ function drawFlow(arch, spec, detail) {
           li.append(a);
         }
         const at = cfg.base && arch.closest('.panel.before') ? cfg.base : cfg.head || sha;
-        const snippet = snippets[`${at}:${p}`];
-        if (/:\d+(-\d+)?$/.test(p) && snippet) {
+        const preview = codePreview(p, at);
+        if (preview) {
           const button = el('button', 'btn', 'Preview');
           button.type = 'button';
           button.setAttribute('aria-label', `Preview ${p}`);
@@ -661,10 +675,9 @@ function drawFlow(arch, spec, detail) {
             const pre = li.querySelector('pre.code');
             if (pre) pre.remove();
             else {
-              const pre = codePre(p, snippet);
+              const pre = codePre(preview);
               li.append(pre);
-              const first = pre.querySelector('.cited');
-              if (first) pre.scrollTop = first.offsetTop - pre.offsetTop;
+              scrollCode(pre);
             }
             button.textContent = pre ? 'Preview' : 'Hide';
             button.setAttribute('aria-expanded', String(!pre));
