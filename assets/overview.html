@@ -11,7 +11,7 @@
   `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
   one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded whole file previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
-  traces its edges, clicking it pins it and lists its files in a resizable, draggable fixed side panel (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline whole file previews. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
+  traces its edges, clicking it pins it and lists its files in a width/height-resizable, draggable fixed side panel (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline whole file previews. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
   and as a local file in the browser.
 -->
 <style>
@@ -176,6 +176,26 @@ tr:last-child td { border-bottom: 0; }
 .panel-resize::after { content: ''; position: absolute; top: 24px; left: 4px; width: 3px; height: 32px; border-radius: var(--r); background: var(--border); }
 .panel-resize:hover::after, .panel-resize:focus-visible::after { background: var(--accent); }
 .panel-resize:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
+.panel-resize-bottom { top: auto; right: 0; width: auto; height: 12px; cursor: ns-resize; }
+.detail.before .panel-resize-bottom { left: 0; }
+.panel-resize-bottom::after { top: 4px; left: calc(50% - 16px); width: 32px; height: 3px; }
+.panel-resize-corner { top: auto; height: 16px; width: 16px; cursor: nesw-resize; }
+.detail.before .panel-resize-corner { cursor: nwse-resize; }
+.panel-resize-corner::after { top: 5px; height: 6px; width: 6px; }
+.detail-body { display: contents; }
+@media (min-width: 641px) {
+  .detail { height: var(--panel-height, auto); max-height: min(calc(100vh - 32px), calc(100vh - var(--panel-top, 16px) - 16px)); overflow: hidden; }
+  .detail > .detail-head { flex-shrink: 0; }
+  .detail-body { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; }
+  :root.panel-sized .detail pre.code { resize: none; }
+  :root.panel-sized .code-detail > pre.code { flex: 1; min-height: 0; max-height: none; }
+  :root.panel-sized .detail.single-preview .detail-body,
+  :root.panel-sized .detail.single-preview ul.paths,
+  :root.panel-sized .detail.single-preview li:has(pre.code) { flex: 1; min-height: 0; }
+  :root.panel-sized .detail.single-preview ul.paths > li:not(:has(pre.code)) { flex-shrink: 0; }
+  :root.panel-sized .detail.single-preview li:has(pre.code) { display: grid; grid-template-columns: auto auto auto 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  :root.panel-sized .detail.single-preview ul.paths pre.code { grid-column: 1 / -1; align-self: stretch; width: auto; height: auto; min-height: 0; }
+}
 .detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; cursor: grab; touch-action: none; }
 .detail.dragging { user-select: none; }
 .detail.dragging .detail-head { cursor: grabbing; }
@@ -367,10 +387,11 @@ function forgeHref(text, node) {
   const lines = m[2] ? `#L${m[2]}${m[3] ? `-L${m[3]}` : ''}` : '';
   return `${cfg.forge}/blob/${at}/${m[1]}${lines}`;
 }
-// Reader preferences for panel width, desktop position and phone sheet height.
+// Reader preferences for panel size, desktop position and phone sheet height.
 const panelWidthKey = 'overview-me:panel-width';
 const panelPositionKey = 'overview-me:panel-position';
 const panelHeightKey = 'overview-me:panel-height';
+const desktopHeightKey = 'overview-me:panel-desktop-height';
 try {
   const width = Number(localStorage.getItem(panelWidthKey));
   if (Number.isFinite(width) && width >= 320) document.documentElement.style.setProperty('--panel-width', `${width}px`);
@@ -384,19 +405,32 @@ try {
   const height = Number(localStorage.getItem(panelHeightKey));
   if (Number.isFinite(height) && height >= 25 && height <= 90) document.documentElement.style.setProperty('--sheet-height', `${height}vh`);
 } catch {}
+try {
+  const height = Number(localStorage.getItem(desktopHeightKey));
+  if (Number.isFinite(height) && height >= 200) {
+    document.documentElement.style.setProperty('--panel-height', `${height}px`);
+    document.documentElement.classList.add('panel-sized');
+  }
+} catch {}
 function panelResize(panel) {
   const handle = el('div', 'panel-resize');
   handle.tabIndex = 0;
   handle.setAttribute('role', 'separator');
   handle.setAttribute('aria-orientation', 'vertical');
   handle.setAttribute('aria-label', 'Resize panel');
+  const bottom = el('div', 'panel-resize panel-resize-bottom');
+  bottom.tabIndex = 0;
+  bottom.setAttribute('role', 'separator');
+  bottom.setAttribute('aria-orientation', 'horizontal');
+  bottom.setAttribute('aria-label', 'Resize panel height');
+  const corner = el('div', 'panel-resize panel-resize-corner');
+  corner.setAttribute('aria-hidden', 'true');
   const direction = panel.classList.contains('before') ? 1 : -1;
   const place = () => {
     if (!panelPosition || panel.hidden || innerWidth <= 640) return;
-    const head = panel.querySelector('.detail-head');
-    if (!head) return;
+    if (!panel.querySelector('.detail-head')) return;
     panelPosition.x = Math.max(0, Math.min(panelPosition.x, innerWidth - panel.getBoundingClientRect().width));
-    panelPosition.y = Math.max(0, Math.min(panelPosition.y, innerHeight - head.offsetTop - head.offsetHeight - 1));
+    panelPosition.y = Math.max(0, Math.min(panelPosition.y, innerHeight - 16 - 200));
     document.documentElement.style.setProperty('--panel-left', `${panelPosition.x}px`);
     document.documentElement.style.setProperty('--panel-top', `${panelPosition.y}px`);
     try { localStorage.setItem(panelPositionKey, JSON.stringify(panelPosition)); } catch {}
@@ -406,6 +440,9 @@ function panelResize(panel) {
     handle.setAttribute('aria-valuemin', '320');
     handle.setAttribute('aria-valuemax', Math.max(320, innerWidth - 32));
     handle.setAttribute('aria-valuenow', Math.round(panel.getBoundingClientRect().width));
+    bottom.setAttribute('aria-valuemin', '200');
+    bottom.setAttribute('aria-valuemax', Math.max(200, Math.min(innerHeight - 32, innerHeight - panel.getBoundingClientRect().top - 16)));
+    bottom.setAttribute('aria-valuenow', Math.round(panel.getBoundingClientRect().height));
   };
   const setWidth = (width) => {
     const rect = panel.getBoundingClientRect();
@@ -416,27 +453,49 @@ function panelResize(panel) {
     place();
     try { localStorage.setItem(panelWidthKey, width); } catch {}
   };
-  let drag = null;
-  handle.addEventListener('pointerdown', (ev) => {
-    if (ev.button !== 0 || innerWidth <= 640) return;
-    ev.preventDefault();
-    handle.focus({ preventScroll: true });
-    handle.setPointerCapture(ev.pointerId);
-    drag = { id: ev.pointerId, x: ev.clientX, width: panel.getBoundingClientRect().width };
-  });
-  handle.addEventListener('pointermove', (ev) => {
-    if (drag?.id === ev.pointerId && innerWidth > 640) setWidth(drag.width + direction * (ev.clientX - drag.x));
-  });
-  handle.addEventListener('lostpointercapture', () => { drag = null; });
-  handle.addEventListener('keydown', (ev) => {
-    if (innerWidth <= 640 || !['ArrowLeft', 'ArrowRight'].includes(ev.key)) return;
-    ev.preventDefault();
-    setWidth(panel.getBoundingClientRect().width + direction * (ev.key === 'ArrowRight' ? 32 : -32));
-  });
-  handle.addEventListener('dblclick', () => {
-    document.documentElement.style.removeProperty('--panel-width');
-    try { localStorage.removeItem(panelWidthKey); } catch {}
-  });
+  const setHeight = (height) => {
+    height = Math.max(200, Math.min(height, innerHeight - 32, innerHeight - panel.getBoundingClientRect().top - 16));
+    document.documentElement.style.setProperty('--panel-height', `${height}px`);
+    document.documentElement.classList.add('panel-sized');
+    place();
+    try { localStorage.setItem(desktopHeightKey, height); } catch {}
+  };
+  for (const grip of [handle, bottom, corner]) {
+    let drag = null;
+    grip.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0 || innerWidth <= 640) return;
+      ev.preventDefault();
+      if (grip !== corner) grip.focus({ preventScroll: true });
+      grip.setPointerCapture(ev.pointerId);
+      const rect = panel.getBoundingClientRect();
+      drag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, width: rect.width, height: rect.height };
+    });
+    grip.addEventListener('pointermove', (ev) => {
+      if (drag?.id !== ev.pointerId || innerWidth <= 640) return;
+      if (grip !== bottom) setWidth(drag.width + direction * (ev.clientX - drag.x));
+      if (grip !== handle) setHeight(drag.height + ev.clientY - drag.y);
+    });
+    grip.addEventListener('lostpointercapture', () => { drag = null; });
+    grip.addEventListener('keydown', (ev) => {
+      const keys = grip === bottom ? ['ArrowUp', 'ArrowDown'] : ['ArrowLeft', 'ArrowRight'];
+      if (innerWidth <= 640 || !keys.includes(ev.key)) return;
+      ev.preventDefault();
+      const rect = panel.getBoundingClientRect();
+      if (grip === bottom) setHeight(rect.height + (ev.key === 'ArrowDown' ? 32 : -32));
+      else setWidth(rect.width + direction * (ev.key === 'ArrowRight' ? 32 : -32));
+    });
+    grip.addEventListener('dblclick', () => {
+      if (grip !== bottom) {
+        document.documentElement.style.removeProperty('--panel-width');
+        try { localStorage.removeItem(panelWidthKey); } catch {}
+      }
+      if (grip !== handle) {
+        document.documentElement.style.removeProperty('--panel-height');
+        document.documentElement.classList.remove('panel-sized');
+        try { localStorage.removeItem(desktopHeightKey); } catch {}
+      }
+    });
+  }
   let move = null;
   panel.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0 || !headTarget(ev)) return;
@@ -476,7 +535,7 @@ function panelResize(panel) {
   });
   new ResizeObserver(() => { place(); updateAria(); }).observe(panel);
   window.addEventListener('resize', () => { place(); updateAria(); });
-  return handle;
+  return [handle, bottom, corner];
 }
 
 let unpinActive = null;
@@ -545,7 +604,7 @@ function showCode(text, preview, href, button) {
   close.addEventListener('click', closePanel);
   head.append(close);
   const pre = codePre(preview);
-  codeDetail.replaceChildren(codeResize, head, pre);
+  codeDetail.replaceChildren(...codeResize, head, pre);
   codeDetail.hidden = false;
   close.focus({ preventScroll: true });
   scrollCode(pre);
@@ -755,7 +814,8 @@ function drawFlow(arch, spec, detail) {
   let pinned = null;
   function showDetail(k) {
     const n = spec.nodes[k];
-    detail.replaceChildren(resize);
+    detail.replaceChildren(...resize);
+    detail.classList.remove('single-preview');
     const head = el('div', 'detail-head');
     if (n.n) head.append(el('span', 'n', n.n));
     head.append(el('span', null, n.label));
@@ -766,9 +826,11 @@ function drawFlow(arch, spec, detail) {
     close.addEventListener('click', unpin);
     head.append(close);
     detail.append(head);
-    if (n.note) detail.append(el('p', 'detail-note', n.note));
+    const body = el('div', 'detail-body');
+    detail.append(body);
+    if (n.note) body.append(el('p', 'detail-note', n.note));
     const paths = Array.isArray(n.paths) ? n.paths : [];
-    if (!paths.length) detail.append(el('p', 'none', 'No file given for this box.'));
+    if (!paths.length) body.append(el('p', 'none', 'No file given for this box.'));
     else {
       const list = el('ul', 'paths');
       for (const p of paths) {
@@ -793,6 +855,7 @@ function drawFlow(arch, spec, detail) {
               li.append(pre);
               scrollCode(pre);
             }
+            detail.classList.toggle('single-preview', detail.querySelectorAll('pre.code').length === 1);
             button.textContent = pre ? 'Preview' : 'Hide';
             button.setAttribute('aria-expanded', String(!pre));
           });
@@ -808,13 +871,13 @@ function drawFlow(arch, spec, detail) {
         }
         list.append(li);
       }
-      detail.append(list);
+      body.append(list);
       if (paths.length > 1) {
         const all = el('button', 'btn', 'Copy all');
         all.type = 'button';
         all.style.alignSelf = 'flex-start';
         all.addEventListener('click', () => copy(paths.join('\n'), all));
-        detail.append(all);
+        body.append(all);
       }
     }
     detail.hidden = false;
