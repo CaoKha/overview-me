@@ -3,8 +3,8 @@
 //!
 //! The page itself is `assets/overview.html`, compiled in. It styles the markdown as a review
 //! sheet, links `path:line` code spans to the forge with embedded code previews, puts
-//! "### Before" and "### After" side by side, and draws ```` ```flow ```` blocks as lane diagrams: hovering a box traces its edges,
-//! clicking it shows its file paths with copy buttons.
+//! "### Before" and "### After" side by side, and draws ```` ```flow ```` blocks as lane
+//! diagrams: hovering a box traces its edges, clicking it shows its file paths with copy buttons.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
