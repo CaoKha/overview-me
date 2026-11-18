@@ -11,7 +11,7 @@
   `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
   one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded code previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
-  traces its edges, clicking it pins it and lists its files in a fixed side panel (a bottom sheet on phones) with copy buttons. Works as a Claude artifact (inline styles, pinned CDN script, Google Fonts)
+  traces its edges, clicking it pins it and lists its files in a fixed side panel (a bottom sheet on phones) with copy buttons. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
   and as a local file in the browser.
 -->
 <style>
@@ -188,6 +188,13 @@ button.btn:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
 .code-line { display: block; min-width: max-content; padding-right: 12px; }
 .code-line.cited { background: color-mix(in srgb, var(--hl) 14%, transparent); }
 .line-number { display: inline-block; width: 4.5em; padding-right: 12px; text-align: right; color: var(--muted); user-select: none; }
+.code-detail :is(.hljs-keyword, .hljs-built_in, .hljs-selector-tag) { color: var(--link); }
+.code-detail :is(.hljs-string, .hljs-regexp, .hljs-addition) { color: var(--ok); }
+.code-detail :is(.hljs-comment, .hljs-quote) { color: var(--muted); font-style: italic; }
+.code-detail :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-variable.constant_) { color: var(--id); }
+.code-detail :is(.hljs-title, .hljs-section) { color: var(--warn); }
+.code-detail :is(.hljs-type, .hljs-meta, .hljs-attr, .hljs-attribute, .hljs-params) { color: var(--accent); }
+.code-detail .hljs-deletion { color: var(--bad); }
 .preview { margin-left: 5px; }
 pre.mermaid { background: var(--card); text-align: center; }
 pre.mermaid svg { max-width: none; }
@@ -205,6 +212,7 @@ pre.mermaid svg { max-width: none; }
 <script type="text/markdown" id="md">{{MD}}</script>
 <script type="application/json" id="code">{{CODE}}</script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script type="module">
 // forge: https web URL of the repo or null; sha: commit of the `path:line` references or null
 // (then read from "sha <40 hex>" in the header line); base: commit for references under Before;
@@ -379,10 +387,26 @@ function showCode(text, snippet, href, button) {
   close.addEventListener('click', closePanel);
   head.append(close);
   const pre = el('pre');
+  const ext = text.match(PATH_RE)?.[1].match(/\.([\w]+)$/)?.[1].toLowerCase();
+  let highlighted;
+  if (window.hljs && ext && hljs.getLanguage(ext)) {
+    const open = [];
+    highlighted = hljs.highlight(snippet.lines.join('\n'), { language: ext }).value.split('\n').map((line, i) => {
+      const prefix = open.join('');
+      // Balance each row without losing spans that continue across source lines.
+      for (const tag of line.match(/<span\b[^>]*>|<\/span>/g) || []) {
+        if (tag === '</span>') open.pop();
+        else open.push(tag);
+      }
+      return prefix + line + (snippet.lines[i] ? '' : ' ') + '</span>'.repeat(open.length);
+    });
+  }
   snippet.lines.forEach((line, i) => {
     const n = snippet.start + i;
     const row = el('span', `code-line${n >= snippet.from && n <= snippet.to ? ' cited' : ''}`);
-    row.append(el('span', 'line-number', n), line || ' ');
+    if (highlighted) row.innerHTML = highlighted[i];
+    else row.textContent = line || ' ';
+    row.prepend(el('span', 'line-number', n));
     pre.append(row);
   });
   codeDetail.replaceChildren(head, pre);
