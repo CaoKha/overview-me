@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0](https://github.com/CaoKha/overview-me/compare/v0.8.1...v0.9.0) (2026-11-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* **skills:** `/overview-me:folder-overview` is gone. Use
+
+### Features
+
+* **page:** preview cited code in the overview page ([#39](https://github.com/CaoKha/overview-me/issues/39)) ([0354100](https://github.com/CaoKha/overview-me/commit/0354100ea9157edba7a598cece380c092f2b78da))
+* **skills:** remove folder-overview ([#37](https://github.com/CaoKha/overview-me/issues/37)) ([5bccd9f](https://github.com/CaoKha/overview-me/commit/5bccd9f867b5d19d12b2aeab30aea1418fc753bc))
+
 ## [0.8.1](https://github.com/CaoKha/overview-me/compare/v0.8.0...v0.8.1) (2026-11-18)
 
 
