@@ -11,7 +11,7 @@
   `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
   one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded whole file previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
-  traces its edges, clicking it pins it and lists its files in a resizable fixed side panel (a bottom sheet on phones) with copy buttons and vertically resizable inline whole file previews. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
+  traces its edges, clicking it pins it and lists its files in a resizable, draggable fixed side panel (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline whole file previews. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
   and as a local file in the browser.
 -->
 <style>
@@ -168,15 +168,17 @@ tr:last-child td { border-bottom: 0; }
 .legend i.removed { border: 1.5px dashed var(--bad); }
 .flow-error { color: var(--bad); font-size: 14px; }
 /* The clicked box: its files in a viewport side panel, or a bottom sheet on phones. */
-.detail { position: fixed; top: 16px; right: 16px; max-height: calc(100vh - 32px); overflow-y: auto; width: min(var(--panel-width, 440px), calc(100vw - 32px)); z-index: 10; box-shadow: 0 8px 32px color-mix(in srgb, var(--fg) 20%, transparent); border: 1px solid var(--border); border-radius: var(--r); background: var(--card); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.detail.before { left: 16px; right: auto; }
+.detail { position: fixed; top: var(--panel-top, 16px); left: var(--panel-left, auto); right: 16px; max-height: calc(100vh - 32px); overflow-y: auto; width: min(var(--panel-width, 440px), calc(100vw - 32px)); z-index: 10; box-shadow: 0 8px 32px color-mix(in srgb, var(--fg) 20%, transparent); border: 1px solid var(--border); border-radius: var(--r); background: var(--card); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.detail.before { left: var(--panel-left, 16px); right: auto; }
 .detail[hidden] { display: none; }
 .panel-resize { position: absolute; top: 0; bottom: 0; left: 0; width: 12px; cursor: ew-resize; touch-action: none; user-select: none; }
 .detail.before .panel-resize { left: auto; right: 0; }
 .panel-resize::after { content: ''; position: absolute; top: 24px; left: 4px; width: 3px; height: 32px; border-radius: var(--r); background: var(--border); }
 .panel-resize:hover::after, .panel-resize:focus-visible::after { background: var(--accent); }
 .panel-resize:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
-.detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+.detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; cursor: grab; touch-action: none; }
+.detail.dragging { user-select: none; }
+.detail.dragging .detail-head { cursor: grabbing; }
 .detail-kind { font-size: 12px; font-weight: 400; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .detail-head .close { margin-left: auto; }
 .detail-note { color: var(--accent); font-size: 14px; }
@@ -209,7 +211,7 @@ pre.mermaid svg { max-width: none; }
   body { padding-block: 24px 48px; }
   h1 { font-size: 24px; }
   .panel-resize { display: none; }
-  .detail, .detail.before, .detail:has(pre.code) { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 60vh; border-radius: var(--r) var(--r) 0 0; }
+  .detail, .detail.before, .detail:has(pre.code) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
 }
 @media (prefers-reduced-motion: reduce) { .box, .edges path.line, .edge-label { transition: none; } }
 </style>
@@ -365,11 +367,22 @@ function forgeHref(text, node) {
   const lines = m[2] ? `#L${m[2]}${m[3] ? `-L${m[3]}` : ''}` : '';
   return `${cfg.forge}/blob/${at}/${m[1]}${lines}`;
 }
-// A single reader preference overrides automatic widths for every desktop panel.
+// Reader preferences for panel width, desktop position and phone sheet height.
 const panelWidthKey = 'overview-me:panel-width';
+const panelPositionKey = 'overview-me:panel-position';
+const panelHeightKey = 'overview-me:panel-height';
 try {
   const width = Number(localStorage.getItem(panelWidthKey));
   if (Number.isFinite(width) && width >= 320) document.documentElement.style.setProperty('--panel-width', `${width}px`);
+} catch {}
+let panelPosition = null;
+try {
+  const saved = JSON.parse(localStorage.getItem(panelPositionKey));
+  if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) panelPosition = saved;
+} catch {}
+try {
+  const height = Number(localStorage.getItem(panelHeightKey));
+  if (Number.isFinite(height) && height >= 25 && height <= 90) document.documentElement.style.setProperty('--sheet-height', `${height}vh`);
 } catch {}
 function panelResize(panel) {
   const handle = el('div', 'panel-resize');
@@ -378,14 +391,29 @@ function panelResize(panel) {
   handle.setAttribute('aria-orientation', 'vertical');
   handle.setAttribute('aria-label', 'Resize panel');
   const direction = panel.classList.contains('before') ? 1 : -1;
+  const place = () => {
+    if (!panelPosition || panel.hidden || innerWidth <= 640) return;
+    const head = panel.querySelector('.detail-head');
+    if (!head) return;
+    panelPosition.x = Math.max(0, Math.min(panelPosition.x, innerWidth - panel.getBoundingClientRect().width));
+    panelPosition.y = Math.max(0, Math.min(panelPosition.y, innerHeight - head.offsetTop - head.offsetHeight - 1));
+    document.documentElement.style.setProperty('--panel-left', `${panelPosition.x}px`);
+    document.documentElement.style.setProperty('--panel-top', `${panelPosition.y}px`);
+    try { localStorage.setItem(panelPositionKey, JSON.stringify(panelPosition)); } catch {}
+  };
+  const headTarget = (ev) => ev.target.closest('.detail-head') && !ev.target.closest('button, a, .panel-resize');
   const updateAria = () => {
     handle.setAttribute('aria-valuemin', '320');
     handle.setAttribute('aria-valuemax', Math.max(320, innerWidth - 32));
     handle.setAttribute('aria-valuenow', Math.round(panel.getBoundingClientRect().width));
   };
   const setWidth = (width) => {
-    width = Math.min(Math.max(320, width), innerWidth - 32);
+    const rect = panel.getBoundingClientRect();
+    const limit = panelPosition ? (direction === -1 ? rect.right : innerWidth - rect.left) : innerWidth - 32;
+    width = Math.min(Math.max(320, width), innerWidth - 32, limit);
     document.documentElement.style.setProperty('--panel-width', `${width}px`);
+    if (panelPosition && direction === -1) panelPosition.x = rect.right - width;
+    place();
     try { localStorage.setItem(panelWidthKey, width); } catch {}
   };
   let drag = null;
@@ -409,8 +437,45 @@ function panelResize(panel) {
     document.documentElement.style.removeProperty('--panel-width');
     try { localStorage.removeItem(panelWidthKey); } catch {}
   });
-  new ResizeObserver(updateAria).observe(panel);
-  window.addEventListener('resize', updateAria);
+  let move = null;
+  panel.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0 || !headTarget(ev)) return;
+    ev.preventDefault();
+    const rect = panel.getBoundingClientRect();
+    move = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, left: rect.left, top: rect.top, height: rect.height, phone: innerWidth <= 640 };
+    ev.target.closest('.detail-head').setPointerCapture(ev.pointerId);
+    panel.classList.add('dragging');
+  });
+  panel.addEventListener('pointermove', (ev) => {
+    if (move?.id !== ev.pointerId) return;
+    if (move.phone) {
+      const height = Math.max(25, Math.min(90, (move.height + move.y - ev.clientY) / innerHeight * 100));
+      document.documentElement.style.setProperty('--sheet-height', `${height}vh`);
+      try { localStorage.setItem(panelHeightKey, height); } catch {}
+    } else {
+      panelPosition = { x: move.left + ev.clientX - move.x, y: move.top + ev.clientY - move.y };
+      place();
+    }
+  });
+  panel.addEventListener('lostpointercapture', (ev) => {
+    if (move?.id !== ev.pointerId) return;
+    move = null;
+    panel.classList.remove('dragging');
+  });
+  panel.addEventListener('dblclick', (ev) => {
+    if (!headTarget(ev)) return;
+    if (innerWidth <= 640) {
+      document.documentElement.style.removeProperty('--sheet-height');
+      try { localStorage.removeItem(panelHeightKey); } catch {}
+    } else {
+      panelPosition = null;
+      document.documentElement.style.removeProperty('--panel-left');
+      document.documentElement.style.removeProperty('--panel-top');
+      try { localStorage.removeItem(panelPositionKey); } catch {}
+    }
+  });
+  new ResizeObserver(() => { place(); updateAria(); }).observe(panel);
+  window.addEventListener('resize', () => { place(); updateAria(); });
   return handle;
 }
 
