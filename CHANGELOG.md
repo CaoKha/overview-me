@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/CaoKha/overview-me/compare/v0.11.1...v0.11.2) (2026-11-18)
+
+
+### Performance
+
+* **cli:** read files through one git cat-file process ([#48](https://github.com/CaoKha/overview-me/issues/48)) ([4684d01](https://github.com/CaoKha/overview-me/commit/4684d0126a59a68da8698d6563b7634218fc6819))
+
 ## [0.11.1](https://github.com/CaoKha/overview-me/compare/v0.11.0...v0.11.1) (2026-11-18)
 
 
