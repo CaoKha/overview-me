@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.1](https://github.com/CaoKha/overview-me/compare/v0.8.0...v0.8.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* **flow:** link a reference only to the symbol its import points to ([#36](https://github.com/CaoKha/overview-me/issues/36)) ([0ce1394](https://github.com/CaoKha/overview-me/commit/0ce1394a765e2f415c7dc344afbc8893acce61d3))
+
+
+### Documentation
+
+* add architecture diagram screenshots to the README ([#34](https://github.com/CaoKha/overview-me/issues/34)) ([5733824](https://github.com/CaoKha/overview-me/commit/5733824b60add466bb0235caac0f789dbafa5f51))
+
 ## [0.8.0](https://github.com/CaoKha/overview-me/compare/v0.7.0...v0.8.0) (2026-11-17)
 
 
