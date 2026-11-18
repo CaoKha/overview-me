@@ -54,14 +54,22 @@ Ask in plain words, or run the command:
 | "overview of my changes" | `/overview-me:change-overview` | the same, for your uncommitted files |
 | "explain this codebase" | `/overview-me:codebase-overview` | a map of the repo; PR overviews use it to place a change |
 
-The result opens as a page. Hover a box in a flow diagram to trace its links, click it to copy its file paths into your editor, and follow any `path:line` to the code.
+The result opens as a page. Hover a box in a flow diagram to trace its links, click it to copy its file paths into your editor, and preview any `path:line` in the page or follow it to the code.
 
 This is the architecture diagram from the codebase overview of overview-me itself. Each box is a module, and each arrow shows which module calls which:
 
 ![Architecture of overview-me: skills and the installer call the CLI, which runs the git and map commands; these use the core modules and write to the store](docs/images/architecture.png)
 
-Click a box to open its side panel with the box's note and the files to copy or open. The box's links stay highlighted:
+Click a box to open its side panel with the box's note and the files to copy, preview or open. Preview shows the file inside the panel, scrolled to the cited line. The box's links stay highlighted:
 
-![The side panel for the extract module, with its note and four file locations to copy or open](docs/images/architecture-side-panel.png)
+| Dark | Light |
+| --- | --- |
+| ![The side panel for the CLI entry box in dark mode, with src/main.rs:40 previewed inline and line 40 highlighted](docs/images/architecture-side-panel-dark.png) | ![The same side panel in light mode](docs/images/architecture-side-panel-light.png) |
+
+Every `path:line` in the text has a Preview button too. It opens the whole file in a panel you can move and resize, with syntax colors and the cited lines highlighted:
+
+| Dark | Light |
+| --- | --- |
+| ![The code panel for src/main.rs:57 in dark mode, opened from the entry points list, with line 57 highlighted](docs/images/code-preview-dark.png) | ![The same code panel in light mode](docs/images/code-preview-light.png) |
 
 Working on overview-me itself? See [CONTRIBUTING.md](CONTRIBUTING.md).

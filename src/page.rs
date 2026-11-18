@@ -2,9 +2,9 @@
 //! as a standalone HTML page, for the browser or a Claude artifact.
 //!
 //! The page itself is `assets/overview.html`, compiled in. It styles the markdown as a review
-//! sheet, links `path:line` code spans to the forge, puts "### Before" and "### After" side by
-//! side, and draws ```` ```flow ```` blocks as lane diagrams: hovering a box traces its edges,
-//! clicking it shows its file paths with copy buttons.
+//! sheet, links `path:line` code spans to the forge with embedded code previews, puts
+//! "### Before" and "### After" side by side, and draws ```` ```flow ```` blocks as lane
+//! diagrams: hovering a box traces its edges, clicking it shows its file paths with copy buttons.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -15,6 +15,7 @@ use serde_json::Value;
 
 use crate::git::Git;
 
+const PREVIEW_BUDGET: usize = 8 * 1024 * 1024;
 const TEMPLATE: &str = include_str!("../assets/overview.html");
 
 const NODE_KINDS: [&str; 4] = ["existing", "added", "removed", "store"];
@@ -39,7 +40,6 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()
     });
     let (text, mut errs) = expand_flows(&text, flows.as_ref());
-    errs.extend(check_flows(&text));
     // `<head>.review.md`, `<head>.md`: references point at head; Before ones at the map's base.
     let sha = head;
     let map: Option<Value> = sha.and_then(|s| {
@@ -65,27 +65,79 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
             .filter(|s| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit()))
             .map(str::to_owned)
     });
-    let cache: RefCell<HashMap<(String, String), Option<usize>>> = RefCell::default();
+    let cache: RefCell<HashMap<(String, String), Option<String>>> = RefCell::default();
     let lines_at = |at: &str, path: &str| {
-        *cache
+        cache
             .borrow_mut()
             .entry((at.to_owned(), path.to_owned()))
             .or_insert_with(|| {
                 git.run(&["show", "--end-of-options", &format!("{at}:{path}")])
                     .ok()
-                    .map(|t| t.lines().count())
             })
+            .as_ref()
+            .map(|t| t.lines().count())
     };
-    errs.extend(check_page(
+    let mut citations = Vec::new();
+    let page_errs = check_page(
         &text,
         ids.as_ref(),
         cited_at.as_deref(),
         base.as_deref(),
         &lines_at,
-    ));
+        &mut |at, span| citations.push((at.to_owned(), span.to_owned())),
+    );
+    errs.extend(walk_flows(&text, &mut |in_before, spec| {
+        let at = if in_before {
+            base.as_deref().or(cited_at.as_deref())
+        } else {
+            cited_at.as_deref()
+        };
+        if let Some(at) = at {
+            for span in spec["nodes"]
+                .as_object()
+                .into_iter()
+                .flat_map(|nodes| nodes.values())
+                .flat_map(|n| n["paths"].as_array().into_iter().flatten())
+                .filter_map(Value::as_str)
+            {
+                if let Some((path, last)) = cited(span)
+                    && last > 0
+                    && lines_at(at, path).is_some_and(|n| last <= n)
+                {
+                    citations.push((at.to_owned(), span.to_owned()));
+                }
+            }
+        }
+    }));
+    errs.extend(page_errs);
     if !errs.is_empty() {
         bail!("{}:\n  {}", md.display(), errs.join("\n  "));
     }
+    let mut ranges = HashMap::new();
+    for (at, span) in citations {
+        let Some((path, to)) = cited(&span) else {
+            continue;
+        };
+        let Some(from) = span
+            .rsplit_once(':')
+            .and_then(|(_, range)| range.split('-').next()?.parse::<usize>().ok())
+            .filter(|&from| from > 0 && from <= to)
+        else {
+            continue;
+        };
+        ranges
+            .entry((at, path.to_owned()))
+            .or_insert_with(Vec::new)
+            .push((from, to));
+    }
+    let cache = cache.into_inner();
+    let mut snippets = serde_json::json!({});
+    for ((at, path), ranges) in ranges {
+        if let Some(Some(text)) = cache.get(&(at.clone(), path.clone())) {
+            snippets[format!("{at}:{path}")] = preview_windows(text, &ranges);
+        }
+    }
+    let snippets = budget_previews(snippets, PREVIEW_BUDGET);
     let title = text
         .lines()
         .find_map(|l| l.strip_prefix("# "))
@@ -101,9 +153,75 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         forge.as_deref(),
         sha.filter(|_| !unpushed),
         base.as_deref(),
+        cited_at.as_deref(),
+        &snippets,
     );
     std::fs::write(&out, page).with_context(|| format!("writing {}", out.display()))?;
     Ok(out)
+}
+
+// Keep citations before context, merging adjacent windows so each source line appears once.
+fn preview_windows(text: &str, ranges: &[(usize, usize)]) -> Value {
+    const CAP: usize = 5000;
+    let lines: Vec<_> = text.lines().collect();
+    let mut windows = vec![(1, lines.len())];
+    if lines.len() > CAP {
+        for context in (0..=100).rev() {
+            let mut expanded: Vec<_> = ranges
+                .iter()
+                .map(|&(from, to)| {
+                    (
+                        from.saturating_sub(context).max(1),
+                        to.saturating_add(context).min(lines.len()),
+                    )
+                })
+                .collect();
+            expanded.sort_unstable();
+            windows.clear();
+            for (from, to) in expanded {
+                if let Some((_, end)) = windows.last_mut()
+                    && from <= *end + 1
+                {
+                    *end = (*end).max(to);
+                } else {
+                    windows.push((from, to));
+                }
+            }
+            if windows
+                .iter()
+                .map(|(from, to)| to - from + 1)
+                .sum::<usize>()
+                <= CAP
+            {
+                break;
+            }
+        }
+    }
+    let mut remaining = CAP;
+    Value::Array(windows.into_iter().filter_map(|(start, end)| {
+        let count = (end - start + 1).min(remaining);
+        remaining -= count;
+        (count > 0).then(|| serde_json::json!({"start": start, "lines": &lines[start - 1..start - 1 + count]}))
+    }).collect())
+}
+
+// Count the actual escaped JSON bytes, including keys, separators and outer braces.
+fn budget_previews(snippets: Value, budget: usize) -> Value {
+    let mut entries: Vec<_> = snippets.as_object().expect("preview map").iter().collect();
+    entries.sort_unstable_by_key(|(key, _)| *key);
+    let mut kept = serde_json::Map::new();
+    let mut used = 2;
+    for (key, value) in entries {
+        let bytes = (serde_json::to_string(key).expect("preview key") + ":" + &value.to_string())
+            .replace('<', "\\u003c")
+            .len()
+            + usize::from(!kept.is_empty());
+        if used + bytes <= budget {
+            used += bytes;
+            kept.insert(key.clone(), value.clone());
+        }
+    }
+    Value::Object(kept)
 }
 
 fn escape(s: &str) -> String {
@@ -136,18 +254,23 @@ fn guard(md: &str) -> String {
 
 /// The page for `md`. `sha` is the commit the `path:line` references point at (or `None` to read
 /// "sha <40 hex>" from the header line); `base` is the commit for references under Before.
+/// `head` remains available for embedded `snippets` even when forge links are disabled.
 pub fn render(
     title: &str,
     md: &str,
     forge: Option<&str>,
     sha: Option<&str>,
     base: Option<&str>,
+    head: Option<&str>,
+    snippets: &Value,
 ) -> String {
-    let config = serde_json::json!({ "forge": forge, "sha": sha, "base": base }).to_string();
+    let config =
+        serde_json::json!({ "forge": forge, "sha": sha, "base": base, "head": head }).to_string();
     let values = [
         ("TITLE", escape(title)),
         ("MD", guard(md)),
         ("CONFIG", config),
+        ("CODE", snippets.to_string().replace('<', "\\u003c")),
     ];
     // One pass over the template, so placeholder-like text inside the values is left alone.
     let mut out = String::with_capacity(TEMPLATE.len() + md.len());
@@ -216,12 +339,14 @@ fn spans(line: &str) -> (Vec<&str>, String) {
 /// point at no line (at `base` under "### Before", else at `head`), node ids the map does not
 /// have, and open questions that cite neither code nor a criterion. `lines_at(sha, path)` gives
 /// a file's line count, or `None` when the file is not there.
+/// Calls `on_cited(sha, span)` for each reference that resolves to a line.
 pub fn check_page(
     md: &str,
     ids: Option<&HashSet<String>>,
     head: Option<&str>,
     base: Option<&str>,
     lines_at: &dyn Fn(&str, &str) -> Option<usize>,
+    on_cited: &mut dyn FnMut(&str, &str),
 ) -> Vec<String> {
     let mut errs = Vec::new();
     let (mut fenced, mut in_before, mut section) = (false, false, String::new());
@@ -262,7 +387,7 @@ pub fn check_page(
                     Some(n) if last > n || last == 0 => {
                         errs.push(format!("{at}: `{span}`: the file has {n} lines at {short}"));
                     }
-                    Some(_) => {}
+                    Some(_) => on_cited(sha, span),
                 }
             }
         }
@@ -339,21 +464,43 @@ pub fn expand_flows(md: &str, flows: Option<&Value>) -> (String, Vec<String>) {
 }
 
 /// Problems in the ```` ```flow ```` blocks of `md` (empty when all are valid).
+#[cfg(test)]
 pub fn check_flows(md: &str) -> Vec<String> {
+    walk_flows(md, &mut |_, _| {})
+}
+
+fn walk_flows(md: &str, on_flow: &mut dyn FnMut(bool, &Value)) -> Vec<String> {
+    let (mut in_before, mut fenced) = (false, false);
     let mut errs = Vec::new();
     let mut block: Option<(usize, Vec<&str>)> = None;
     for (i, line) in md.lines().enumerate() {
         match &mut block {
             Some((start, lines)) => {
                 if line.trim_end() == "```" {
-                    check_flow(&lines.join("\n"), *start, &mut errs);
+                    if let Some(spec) = check_flow(&lines.join("\n"), *start, &mut errs) {
+                        on_flow(in_before, &spec);
+                    }
                     block = None;
                 } else {
                     lines.push(line);
                 }
             }
             None if line.trim_end() == "```flow" => block = Some((i + 1, Vec::new())),
-            None => {}
+            None => {
+                if line.trim_start().starts_with("```") {
+                    fenced = !fenced;
+                } else if !fenced {
+                    if line.starts_with("# ") || line.starts_with("## ") {
+                        in_before = false;
+                    } else if let Some(h) = line.strip_prefix("### ") {
+                        in_before = h
+                            .trim_start()
+                            .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                            .next()
+                            .is_some_and(|word| word.eq_ignore_ascii_case("before"));
+                    }
+                }
+            }
         }
     }
     if let Some((start, _)) = block {
@@ -362,17 +509,21 @@ pub fn check_flows(md: &str) -> Vec<String> {
     errs
 }
 
-fn check_flow(text: &str, line: usize, errs: &mut Vec<String>) {
+fn check_flow(text: &str, line: usize, errs: &mut Vec<String>) -> Option<Value> {
     let mut err = |msg: String| errs.push(format!("flow block at line {line}: {msg}"));
     let spec: Value = match serde_json::from_str(text) {
         Ok(v) => v,
-        Err(e) => return err(format!("not valid JSON ({e})")),
+        Err(e) => {
+            err(format!("not valid JSON ({e})"));
+            return None;
+        }
     };
     let (Some(nodes), Some(tiers)) = (
         spec.get("nodes").and_then(Value::as_object),
         spec.get("tiers").and_then(Value::as_array),
     ) else {
-        return err("needs \"nodes\" (object) and \"tiers\" (array)".into());
+        err("needs \"nodes\" (object) and \"tiers\" (array)".into());
+        return None;
     };
     for (id, n) in nodes {
         if n.get("label").and_then(Value::as_str).is_none() {
@@ -436,6 +587,7 @@ fn check_flow(text: &str, line: usize, errs: &mut Vec<String>) {
             _ => err(format!("edge {e}: both ends must be placed nodes")),
         }
     }
+    Some(spec)
 }
 
 /// https web URL of a remote, from ssh or https remote URLs; `None` when it is not one.
@@ -489,11 +641,99 @@ mod tests {
     #[test]
     fn render_fills_once_and_guards_script() {
         let md = "# T\n</SCRIPT> <!-- x {{CONFIG}}";
-        let page = render("a<b", md, Some("https://h/o/r"), None, None);
+        let page = render(
+            "a<b",
+            md,
+            Some("https://h/o/r"),
+            None,
+            None,
+            None,
+            &serde_json::json!({}),
+        );
         assert!(page.contains("<title>a&lt;b</title>"));
         assert!(page.contains("<\\/SCRIPT> <\\!-- x {{CONFIG}}"));
         assert!(page.contains(r#""forge":"https://h/o/r""#));
         assert!(!page.contains("{{MD}}") && !page.contains("{{TITLE}}"));
+    }
+
+    #[test]
+    fn code_previews_store_whole_files_and_cap_windows_by_commit() {
+        let repo = crate::testutil::TempRepo::new("code-previews");
+        repo.write("a.rs", &format!("</script>\n{}", "line\n".repeat(19)));
+        let large = (1..=6000)
+            .map(|n| format!("line {n}\n"))
+            .collect::<String>();
+        repo.write("large.rs", &large);
+        repo.write("window.rs", &large);
+        let base = repo.commit("code");
+        repo.write("a.rs", &format!("</script>\n{}", "new\n".repeat(19)));
+        let head = repo.commit("new code");
+        let md = repo.path().join(format!("{head}.md"));
+        let flow = r#"```flow
+{"nodes":{"a":{"label":"A","paths":["a.rs:10","large.rs:5990-6000","missing.rs:1","a.rs:21","a.rs","skills/"]}},"tiers":[[{"name":"code","ids":["a"]}]]}
+```"#;
+        std::fs::write(
+            &md,
+            format!("# T\n`a.rs:1-2` and `a.rs:19-20` and `large.rs:100-102` and `window.rs:1-2` and `window.rs:100-102`\n{flow}\n## Flow\n### Before\n`large.rs:5900`\n{flow}\n"),
+        )
+        .expect("write overview");
+        repo.write(
+            &format!("{head}.json"),
+            &serde_json::json!({"base": base}).to_string(),
+        );
+        let out = run(&Git::new(repo.path()), &md, None, true).expect("render page");
+        let page = std::fs::read_to_string(out).expect("read page");
+        let json = page
+            .split_once("id=\"code\">")
+            .expect("code data block")
+            .1
+            .split_once("</script>")
+            .expect("closed data block")
+            .0;
+        assert!(!json.contains('<'));
+        let snippets: Value = serde_json::from_str(json).expect("snippet JSON");
+        assert_eq!(snippets.as_object().expect("snippet map").len(), 5);
+        assert_eq!(
+            snippets[format!("{head}:a.rs")],
+            serde_json::json!([{"start": 1, "lines":
+                std::iter::once("</script>").chain(std::iter::repeat_n("new", 19)).collect::<Vec<_>>()}])
+        );
+        assert_eq!(
+            snippets[format!("{base}:a.rs")],
+            serde_json::json!([{"start": 1, "lines":
+                std::iter::once("</script>").chain(std::iter::repeat_n("line", 19)).collect::<Vec<_>>()}])
+        );
+        assert_eq!(
+            snippets[format!("{head}:large.rs")],
+            serde_json::json!([{"start": 1, "lines":
+                (1..=202).map(|n| format!("line {n}")).collect::<Vec<_>>()},
+                {"start": 5890, "lines": (5890..=6000).map(|n| format!("line {n}")).collect::<Vec<_>>()}])
+        );
+        assert_eq!(
+            snippets[format!("{base}:large.rs")],
+            serde_json::json!([{"start": 5800, "lines":
+                (5800..=6000).map(|n| format!("line {n}")).collect::<Vec<_>>()}])
+        );
+        assert_eq!(
+            snippets[format!("{head}:window.rs")],
+            serde_json::json!([{"start": 1, "lines":
+                (1..=202).map(|n| format!("line {n}")).collect::<Vec<_>>()}])
+        );
+        assert_eq!(
+            budget_previews(serde_json::json!({"c": 0, "b": "<", "a": 0}), 15),
+            serde_json::json!({"a": 0, "c": 0})
+        );
+        // Exhaust context before truncating a citation that itself exceeds the line cap.
+        let capped = preview_windows(&large, &[(1, 5001), (6000, 6000)]);
+        assert_eq!(
+            capped[0]["lines"].as_array().expect("capped lines").len(),
+            5000
+        );
+        let crowded = preview_windows(&large, &[(100, 2599), (3500, 5999)]);
+        assert_eq!(crowded[0]["start"], 100);
+        assert_eq!(crowded[1]["start"], 3500);
+        assert!(page.contains(&format!("\"head\":\"{head}\"")));
+        assert!(page.contains("\"sha\":null"));
     }
 
     #[test]
@@ -521,7 +761,14 @@ mod tests {
             ("head", "src/a.ts") => Some(5),
             _ => None,
         };
-        let errs = check_page(md, Some(&ids), Some("head"), Some("base"), &lines_at);
+        let errs = check_page(
+            md,
+            Some(&ids),
+            Some("head"),
+            Some("base"),
+            &lines_at,
+            &mut |_, _| {},
+        );
         assert_eq!(
             errs,
             vec![

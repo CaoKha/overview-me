@@ -8,10 +8,10 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
 <!--
   Page for the PR overview and the codebase overview, rendered by
-  `overview-me page` (src/page.rs), which fills in the title, markdown and config placeholders. The markdown is turned into a review sheet:
-  one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge,
+  `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
+  one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded code previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
-  traces its edges, clicking it pins it and lists its files in a fixed side panel (a bottom sheet on phones) with copy buttons. Works as a Claude artifact (inline styles, pinned CDN script, Google Fonts)
+  traces its edges, clicking it pins it and lists its files in a draggable fixed side panel resizable from every edge and corner (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline code previews. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
   and as a local file in the browser.
 -->
 <style>
@@ -168,28 +168,79 @@ tr:last-child td { border-bottom: 0; }
 .legend i.removed { border: 1.5px dashed var(--bad); }
 .flow-error { color: var(--bad); font-size: 14px; }
 /* The clicked box: its files in a viewport side panel, or a bottom sheet on phones. */
-.detail { position: fixed; top: 16px; right: 16px; max-height: calc(100vh - 32px); overflow-y: auto; width: min(440px, calc(100vw - 32px)); z-index: 10; box-shadow: 0 8px 32px color-mix(in srgb, var(--fg) 20%, transparent); border: 1px solid var(--border); border-radius: var(--r); background: var(--card); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.detail.before { left: 16px; right: auto; }
+.detail { position: fixed; top: var(--panel-top, 16px); left: var(--panel-left, auto); right: 16px; max-height: calc(100vh - 32px); overflow-y: auto; width: min(var(--panel-width, 440px), calc(100vw - 32px)); z-index: 10; box-shadow: 0 8px 32px color-mix(in srgb, var(--fg) 20%, transparent); border: 1px solid var(--border); border-radius: var(--r); background: var(--card); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.detail.before { left: var(--panel-left, 16px); right: auto; }
 .detail[hidden] { display: none; }
-.detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+.panel-resize { position: absolute; z-index: 1; touch-action: none; user-select: none; }
+.panel-resize::after { content: ''; position: absolute; border-radius: var(--r); background: var(--accent); opacity: 0; }
+.panel-resize:hover::after, .panel-resize:focus-visible::after { opacity: 1; }
+.panel-resize:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
+.panel-resize-n, .panel-resize-s { left: 16px; right: 16px; height: 6px; cursor: ns-resize; }
+.panel-resize-n { top: 0; }
+.panel-resize-s { bottom: 0; }
+.panel-resize-n::after, .panel-resize-s::after { top: 1px; left: calc(50% - 16px); width: 32px; height: 3px; }
+.panel-resize-e, .panel-resize-w { top: 6px; bottom: 16px; width: 6px; cursor: ew-resize; }
+.panel-resize-e { right: 0; }
+.panel-resize-w { left: 0; }
+.panel-resize-e::after, .panel-resize-w::after { top: 24px; left: 1px; width: 3px; height: 32px; }
+.panel-resize-ne, .panel-resize-nw, .panel-resize-se, .panel-resize-sw { width: 16px; height: 16px; }
+.panel-resize-ne, .panel-resize-nw { top: 0; height: 6px; }
+.panel-resize-se, .panel-resize-sw { bottom: 0; }
+.panel-resize-ne, .panel-resize-se { right: 0; }
+.panel-resize-nw, .panel-resize-sw { left: 0; }
+.panel-resize-nw, .panel-resize-se { cursor: nwse-resize; }
+.panel-resize-ne, .panel-resize-sw { cursor: nesw-resize; }
+.panel-resize:is(.panel-resize-ne, .panel-resize-nw, .panel-resize-se, .panel-resize-sw)::after { inset: 1px; border: 2px solid var(--accent); background: none; }
+.detail-body { display: contents; }
+@media (min-width: 641px) {
+  .detail { height: var(--panel-height, auto); max-height: min(calc(100vh - 32px), calc(100vh - var(--panel-top, 16px) - 16px)); overflow: hidden; }
+  .detail > .detail-head { flex-shrink: 0; }
+  .detail-body { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; }
+  :root.panel-sized .detail pre.code { resize: none; }
+  :root.panel-sized .code-detail > pre.code { flex: 1; min-height: 0; max-height: none; }
+  :root.panel-sized .detail.single-preview .detail-body,
+  :root.panel-sized .detail.single-preview ul.paths,
+  :root.panel-sized .detail.single-preview li:has(pre.code) { flex: 1; min-height: 0; }
+  :root.panel-sized .detail.single-preview ul.paths > li:not(:has(pre.code)) { flex-shrink: 0; }
+  :root.panel-sized .detail.single-preview li:has(pre.code) { display: grid; grid-template-columns: auto auto auto 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  :root.panel-sized .detail.single-preview ul.paths pre.code { grid-column: 1 / -1; align-self: stretch; width: auto; height: auto; min-height: 0; }
+}
+.detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; cursor: grab; touch-action: none; }
+.detail.dragging { user-select: none; }
+.detail.dragging .detail-head { cursor: grabbing; }
 .detail-kind { font-size: 12px; font-weight: 400; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .detail-head .close { margin-left: auto; }
 .detail-note { color: var(--accent); font-size: 14px; }
 .detail ul.paths { list-style: none; padding: 0; gap: 6px; }
-.detail ul.paths li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.detail ul.paths li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.detail ul.paths pre.code { flex-basis: 100%; width: 0; height: 320px; max-height: none; resize: vertical; }
 .detail ul.paths code { flex: 0 1 auto; min-width: 0; user-select: all; }
 .detail .none { color: var(--muted); font-size: 14px; }
 button.btn { font: 500 12px var(--font-sans); padding: 2px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--popover); color: var(--fg); cursor: pointer; white-space: nowrap; }
 button.btn:hover { border-color: var(--accent); }
 button.btn:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
 .detail a.open { font-size: 12px; white-space: nowrap; }
+.code-detail, .detail:has(pre.code) { width: min(var(--panel-width, 760px), calc(100vw - 32px)); }
+pre.code { max-height: calc(100vh - 120px); min-height: 0; padding: 8px 0; font: 12px/1.6 var(--font-mono); }
+pre.code .code-line { display: block; min-width: max-content; padding-right: 12px; }
+pre.code .code-line.cited { background: color-mix(in srgb, var(--hl) 14%, transparent); }
+pre.code .line-number { display: inline-block; width: 4.5em; padding-right: 12px; text-align: right; color: var(--muted); user-select: none; }
+pre.code :is(.hljs-keyword, .hljs-built_in, .hljs-selector-tag) { color: var(--link); }
+pre.code :is(.hljs-string, .hljs-regexp, .hljs-addition) { color: var(--ok); }
+pre.code :is(.hljs-comment, .hljs-quote) { color: var(--muted); font-style: italic; }
+pre.code :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-variable.constant_) { color: var(--id); }
+pre.code :is(.hljs-title, .hljs-section) { color: var(--warn); }
+pre.code :is(.hljs-type, .hljs-meta, .hljs-attr, .hljs-attribute, .hljs-params) { color: var(--accent); }
+pre.code .hljs-deletion { color: var(--bad); }
+.preview { margin-left: 5px; }
 pre.mermaid { background: var(--card); text-align: center; }
 pre.mermaid svg { max-width: none; }
 
 @media (max-width: 640px) {
   body { padding-block: 24px 48px; }
   h1 { font-size: 24px; }
-  .detail, .detail.before { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 60vh; border-radius: var(--r) var(--r) 0 0; }
+  .panel-resize { display: none; }
+  .detail, .detail.before, .detail:has(pre.code) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
 }
 @media (prefers-reduced-motion: reduce) { .box, .edges path.line, .edge-label { transition: none; } }
 </style>
@@ -197,11 +248,15 @@ pre.mermaid svg { max-width: none; }
 <body>
 <main id="out"></main>
 <script type="text/markdown" id="md">{{MD}}</script>
+<script type="application/json" id="code">{{CODE}}</script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script type="module">
 // forge: https web URL of the repo or null; sha: commit of the `path:line` references or null
-// (then read from "sha <40 hex>" in the header line); base: commit for references under Before.
+// (then read from "sha <40 hex>" in the header line); base: commit for references under Before;
+// head: commit for previews, including when unpushed.
 const cfg = {{CONFIG}};
+const codeFiles = JSON.parse(document.getElementById('code').textContent);
 const md = document.getElementById('md').textContent.replace(/<\\(\/script|!--)/gi, '<$1');
 const out = document.getElementById('out');
 out.innerHTML = marked.parse(md);
@@ -341,16 +396,268 @@ function forgeHref(text, node) {
   const lines = m[2] ? `#L${m[2]}${m[3] ? `-L${m[3]}` : ''}` : '';
   return `${cfg.forge}/blob/${at}/${m[1]}${lines}`;
 }
+// Reader preferences for panel size, desktop position and phone sheet height.
+const panelWidthKey = 'overview-me:panel-width';
+const panelPositionKey = 'overview-me:panel-position';
+const panelHeightKey = 'overview-me:panel-height';
+const desktopHeightKey = 'overview-me:panel-desktop-height';
+try {
+  const width = Number(localStorage.getItem(panelWidthKey));
+  if (Number.isFinite(width) && width >= 320) document.documentElement.style.setProperty('--panel-width', `${width}px`);
+} catch {}
+let panelPosition = null;
+try {
+  const saved = JSON.parse(localStorage.getItem(panelPositionKey));
+  if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) panelPosition = saved;
+} catch {}
+try {
+  const height = Number(localStorage.getItem(panelHeightKey));
+  if (Number.isFinite(height) && height >= 25 && height <= 90) document.documentElement.style.setProperty('--sheet-height', `${height}vh`);
+} catch {}
+try {
+  const height = Number(localStorage.getItem(desktopHeightKey));
+  if (Number.isFinite(height) && height >= 200) {
+    document.documentElement.style.setProperty('--panel-height', `${height}px`);
+    document.documentElement.classList.add('panel-sized');
+  }
+} catch {}
+function panelResize(panel) {
+  const place = () => {
+    if (!panelPosition || panel.hidden || innerWidth <= 640) return;
+    if (!panel.querySelector('.detail-head')) return;
+    panelPosition.x = Math.max(0, Math.min(panelPosition.x, innerWidth - panel.getBoundingClientRect().width));
+    panelPosition.y = Math.max(0, Math.min(panelPosition.y, innerHeight - 16 - Math.max(200, panel.getBoundingClientRect().height)));
+    document.documentElement.style.setProperty('--panel-left', `${panelPosition.x}px`);
+    document.documentElement.style.setProperty('--panel-top', `${panelPosition.y}px`);
+  };
+  const persistPosition = () => {
+    try { if (panelPosition) localStorage.setItem(panelPositionKey, JSON.stringify(panelPosition)); } catch {}
+  };
+  const persistSize = (dx, dy) => {
+    const style = document.documentElement.style;
+    for (const [axis, property, key] of [[dx, '--panel-width', panelWidthKey], [dy, '--panel-height', desktopHeightKey]]) {
+      if (axis && style.getPropertyValue(property)) {
+        try { localStorage.setItem(key, parseFloat(style.getPropertyValue(property))); } catch {}
+      }
+    }
+    persistPosition();
+  };
+  const headTarget = (ev) => ev.target.closest('.detail-head') && !ev.target.closest('button, a, .panel-resize');
+  const resize = (rect, dx, dy, x, y) => {
+    const root = document.documentElement;
+    const size = (sign, delta, length, end, limit, min, property, key) => {
+      if (!sign) return length;
+      const max = Math.min(limit - 32, sign < 0 ? end : limit - (end - length) - (key === desktopHeightKey ? 16 : 0));
+      const value = Math.min(Math.max(min, length + sign * delta), max);
+      root.style.setProperty(property, `${value}px`);
+      return value;
+    };
+    const width = size(dx, x, rect.width, rect.right, innerWidth, 320, '--panel-width', panelWidthKey);
+    const height = size(dy, y, rect.height, rect.bottom, innerHeight, 200, '--panel-height', desktopHeightKey);
+    if (dy) root.classList.add('panel-sized');
+    panelPosition = { x: dx < 0 ? rect.right - width : rect.left, y: dy < 0 ? rect.bottom - height : rect.top };
+    place();
+  };
+  const grips = [[-1, 0, 'w'], [0, 1, 's'], [0, -1, 'n'], [1, 0, 'e'], [1, -1, 'ne'], [-1, -1, 'nw'], [1, 1, 'se'], [-1, 1, 'sw']].map(([dx, dy, direction]) => {
+    const grip = el('div', `panel-resize panel-resize-${direction}`);
+    const keyboard = direction === 'w' || direction === 's';
+    if (keyboard) {
+      grip.tabIndex = 0;
+      grip.setAttribute('role', 'separator');
+      grip.setAttribute('aria-orientation', dx ? 'vertical' : 'horizontal');
+      grip.setAttribute('aria-label', dx ? 'Resize panel' : 'Resize panel height');
+    } else grip.setAttribute('aria-hidden', 'true');
+    let drag = null;
+    grip.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0 || innerWidth <= 640) return;
+      ev.preventDefault();
+      if (keyboard) grip.focus({ preventScroll: true });
+      grip.setPointerCapture(ev.pointerId);
+      drag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, rect: panel.getBoundingClientRect() };
+    });
+    grip.addEventListener('pointermove', (ev) => {
+      if (drag?.id === ev.pointerId && innerWidth > 640) resize(drag.rect, dx, dy, ev.clientX - drag.x, ev.clientY - drag.y);
+    });
+    grip.addEventListener('lostpointercapture', () => {
+      if (drag) persistSize(dx, dy);
+      drag = null;
+    });
+    if (keyboard) grip.addEventListener('keydown', (ev) => {
+      const keys = dx ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
+      if (innerWidth <= 640 || !keys.includes(ev.key)) return;
+      ev.preventDefault();
+      const rect = panel.getBoundingClientRect();
+      const side = dx ? (rect.left > innerWidth - rect.right ? -1 : 1) : (rect.top > innerHeight - 16 - rect.bottom ? -1 : 1);
+      const delta = side * (keys.indexOf(ev.key) ? 32 : -32);
+      resize(rect, dx ? side : 0, dy ? side : 0, dx ? delta : 0, dy ? delta : 0);
+      persistSize(dx, dy);
+    });
+    grip.addEventListener('dblclick', () => {
+      if (dx) {
+        document.documentElement.style.removeProperty('--panel-width');
+        try { localStorage.removeItem(panelWidthKey); } catch {}
+      }
+      if (dy) {
+        document.documentElement.style.removeProperty('--panel-height');
+        document.documentElement.classList.remove('panel-sized');
+        try { localStorage.removeItem(desktopHeightKey); } catch {}
+      }
+      place();
+      persistPosition();
+    });
+    return grip;
+  });
+  const updateAria = () => {
+    for (const grip of grips.filter((g) => g.tabIndex === 0)) {
+      const width = grip.getAttribute('aria-orientation') === 'vertical';
+      grip.setAttribute('aria-valuemin', width ? 320 : 200);
+      grip.setAttribute('aria-valuemax', Math.max(width ? 320 : 200, (width ? innerWidth : innerHeight) - 32));
+      grip.setAttribute('aria-valuenow', Math.round(panel.getBoundingClientRect()[width ? 'width' : 'height']));
+    }
+  };
+  let move = null;
+  panel.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0 || !headTarget(ev)) return;
+    ev.preventDefault();
+    const rect = panel.getBoundingClientRect();
+    move = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, left: rect.left, top: rect.top, height: rect.height, phone: innerWidth <= 640 };
+    ev.target.closest('.detail-head').setPointerCapture(ev.pointerId);
+    panel.classList.add('dragging');
+  });
+  panel.addEventListener('pointermove', (ev) => {
+    if (move?.id !== ev.pointerId) return;
+    if (move.phone) {
+      const height = Math.max(25, Math.min(90, (move.height + move.y - ev.clientY) / innerHeight * 100));
+      document.documentElement.style.setProperty('--sheet-height', `${height}vh`);
+    } else {
+      panelPosition = { x: move.left + ev.clientX - move.x, y: move.top + ev.clientY - move.y };
+      place();
+    }
+  });
+  panel.addEventListener('lostpointercapture', (ev) => {
+    if (move?.id !== ev.pointerId) return;
+    if (move.phone) {
+      const height = document.documentElement.style.getPropertyValue('--sheet-height');
+      try { if (height) localStorage.setItem(panelHeightKey, parseFloat(height)); } catch {}
+    } else persistPosition();
+    move = null;
+    panel.classList.remove('dragging');
+  });
+  panel.addEventListener('dblclick', (ev) => {
+    if (!headTarget(ev)) return;
+    if (innerWidth <= 640) {
+      document.documentElement.style.removeProperty('--sheet-height');
+      try { localStorage.removeItem(panelHeightKey); } catch {}
+    } else {
+      panelPosition = null;
+      document.documentElement.style.removeProperty('--panel-left');
+      document.documentElement.style.removeProperty('--panel-top');
+      try { localStorage.removeItem(panelPositionKey); } catch {}
+    }
+  });
+  new ResizeObserver(() => { place(); updateAria(); }).observe(panel);
+  window.addEventListener('resize', () => { place(); updateAria(); });
+  return grips;
+}
+
+let unpinActive = null;
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') unpinActive?.(); });
+const codeDetail = el('div', 'detail code-detail');
+codeDetail.hidden = true;
+codeDetail.setAttribute('role', 'region');
+codeDetail.setAttribute('aria-label', 'Code preview');
+document.body.append(codeDetail);
+const codeResize = panelResize(codeDetail);
+function codePreview(text, at) {
+  const m = text.match(PATH_RE);
+  if (!m || !m[2]) return null;
+  const key = `${at}:${m[1]}`;
+  const from = Number(m[2]), to = Number(m[3] || m[2]);
+  const file = codeFiles[key]?.find((window) => from >= window.start && to >= from && to < window.start + window.lines.length);
+  return file ? { key: `${key}:${file.start}`, file, from, to, path: m[1] } : null;
+}
+const highlightedFiles = new Map();
+function codePre({ key, file, from, to, path }) {
+  const pre = el('pre', 'code');
+  const ext = path.match(/\.([\w]+)$/)?.[1].toLowerCase();
+  let highlighted = highlightedFiles.get(key);
+  if (!highlightedFiles.has(key) && window.hljs && ext && hljs.getLanguage(ext)) {
+    const open = [];
+    highlighted = hljs.highlight(file.lines.join('\n'), { language: ext }).value.split('\n').map((line, i) => {
+      const prefix = open.join('');
+      // Balance each row without losing spans that continue across source lines.
+      for (const tag of line.match(/<span\b[^>]*>|<\/span>/g) || []) {
+        if (tag === '</span>') open.pop();
+        else open.push(tag);
+      }
+      return prefix + line + (file.lines[i] ? '' : ' ') + '</span>'.repeat(open.length);
+    });
+    highlightedFiles.set(key, highlighted);
+  }
+  file.lines.forEach((line, i) => {
+    const n = file.start + i;
+    const row = el('span', `code-line${n >= from && n <= to ? ' cited' : ''}`);
+    if (highlighted) row.innerHTML = highlighted[i];
+    else row.textContent = line || ' ';
+    row.prepend(el('span', 'line-number', n));
+    pre.append(row);
+  });
+  return pre;
+}
+function showCode(text, preview, href, button) {
+  unpinActive?.();
+  const closePanel = () => {
+    codeDetail.hidden = true;
+    unpinActive = null;
+    button.focus({ preventScroll: true });
+  };
+  unpinActive = closePanel;
+  const head = el('div', 'detail-head');
+  head.append(el('code', null, text));
+  if (href) {
+    const a = el('a', 'open', 'Open ↗');
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    head.append(a);
+  }
+  const close = el('button', 'btn close', 'Close');
+  close.type = 'button';
+  close.addEventListener('click', closePanel);
+  head.append(close);
+  const pre = codePre(preview);
+  codeDetail.replaceChildren(...codeResize, head, pre);
+  codeDetail.hidden = false;
+  close.focus({ preventScroll: true });
+  scrollCode(pre);
+}
+function scrollCode(pre) {
+  const first = pre.querySelector('.cited');
+  if (first) pre.scrollTop += first.getBoundingClientRect().top - pre.getBoundingClientRect().top
+    - 3 * parseFloat(getComputedStyle(pre).lineHeight);
+}
 for (const code of out.querySelectorAll(':not(pre) > code')) {
   if (!/:\d+(-\d+)?$/.test(code.textContent)) continue;
+  const at = cfg.base && code.closest('.panel.before') ? cfg.base : cfg.head || sha;
+  const preview = codePreview(code.textContent, at);
   const href = forgeHref(code.textContent, code);
-  if (!href) continue;
-  const a = el('a');
-  a.href = href;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  code.replaceWith(a);
-  a.append(code);
+  let reference = code;
+  if (href) {
+    const a = el('a');
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    code.replaceWith(a);
+    a.append(code);
+    reference = a;
+  }
+  if (preview) {
+    const button = el('button', 'btn preview', 'Preview');
+    button.type = 'button';
+    button.setAttribute('aria-label', `Preview ${code.textContent}`);
+    button.addEventListener('click', () => showCode(code.textContent, preview, href, button));
+    reference.after(button);
+  }
 }
 
 // Copies text; falls back to a selected textarea where the clipboard API is blocked (iframes).
@@ -394,10 +701,8 @@ function legend(spec) {
   return box;
 }
 
-let unpinActive = null;
-document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') unpinActive?.(); });
-
 function drawFlow(arch, spec, detail) {
+  const resize = panelResize(detail);
   uid += 1;
   const id = uid;
   const svg = document.createElementNS(NS, 'svg');
@@ -531,7 +836,8 @@ function drawFlow(arch, spec, detail) {
   let pinned = null;
   function showDetail(k) {
     const n = spec.nodes[k];
-    detail.replaceChildren();
+    detail.replaceChildren(...resize);
+    detail.classList.remove('single-preview');
     const head = el('div', 'detail-head');
     if (n.n) head.append(el('span', 'n', n.n));
     head.append(el('span', null, n.label));
@@ -542,9 +848,11 @@ function drawFlow(arch, spec, detail) {
     close.addEventListener('click', unpin);
     head.append(close);
     detail.append(head);
-    if (n.note) detail.append(el('p', 'detail-note', n.note));
+    const body = el('div', 'detail-body');
+    detail.append(body);
+    if (n.note) body.append(el('p', 'detail-note', n.note));
     const paths = Array.isArray(n.paths) ? n.paths : [];
-    if (!paths.length) detail.append(el('p', 'none', 'No file given for this box.'));
+    if (!paths.length) body.append(el('p', 'none', 'No file given for this box.'));
     else {
       const list = el('ul', 'paths');
       for (const p of paths) {
@@ -554,6 +862,27 @@ function drawFlow(arch, spec, detail) {
         b.type = 'button';
         b.addEventListener('click', () => copy(p, b));
         li.append(b);
+        const at = cfg.base && arch.closest('.panel.before') ? cfg.base : cfg.head || sha;
+        const preview = codePreview(p, at);
+        if (preview) {
+          const button = el('button', 'btn', 'Preview');
+          button.type = 'button';
+          button.setAttribute('aria-label', `Preview ${p}`);
+          button.setAttribute('aria-expanded', 'false');
+          button.addEventListener('click', () => {
+            const pre = li.querySelector('pre.code');
+            if (pre) pre.remove();
+            else {
+              const pre = codePre(preview);
+              li.append(pre);
+              scrollCode(pre);
+            }
+            detail.classList.toggle('single-preview', detail.querySelectorAll('pre.code').length === 1);
+            button.textContent = pre ? 'Preview' : 'Hide';
+            button.setAttribute('aria-expanded', String(!pre));
+          });
+          li.append(button);
+        }
         const href = forgeHref(p, arch);
         if (href) {
           const a = el('a', 'open', 'open ↗');
@@ -564,13 +893,13 @@ function drawFlow(arch, spec, detail) {
         }
         list.append(li);
       }
-      detail.append(list);
+      body.append(list);
       if (paths.length > 1) {
         const all = el('button', 'btn', 'Copy all');
         all.type = 'button';
         all.style.alignSelf = 'flex-start';
         all.addEventListener('click', () => copy(paths.join('\n'), all));
-        detail.append(all);
+        body.append(all);
       }
     }
     detail.hidden = false;
@@ -595,6 +924,7 @@ function drawFlow(arch, spec, detail) {
     unpinActive = null;
     clear();
     detail.hidden = true;
+    detail.replaceChildren();
     back?.focus();
   }
   for (const [k, b] of Object.entries(boxes)) {
