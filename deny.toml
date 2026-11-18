@@ -1,0 +1,22 @@
+# cargo-deny: run by .github/workflows/security.yml. `cargo deny check` runs it locally.
+
+[graph]
+all-features = true
+
+[advisories]
+# Known vulnerable, unmaintained, unsound or yanked crates fail the check.
+yanked = "deny"
+
+[licenses]
+# Licenses the dependency tree may use; a new one fails the check until it is added here.
+allow = ["Apache-2.0", "MIT", "Unicode-3.0", "Unlicense", "Zlib"]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+
+[sources]
+# Crates only from crates.io: no git or other registries.
+unknown-registry = "deny"
+unknown-git = "deny"

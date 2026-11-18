@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # Crate updates change the shipped binary, so `fix` makes Release Please cut a release.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    # Skip versions younger than a week: most compromised releases are pulled within days.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: fix
+      include: scope
+    groups:
+      cargo:
+        patterns: ["*"]
+
+  # Actions are pinned to commit SHAs; this keeps the pins current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
