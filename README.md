@@ -64,7 +64,7 @@ Click a box to open its side panel with the box's note and the files to copy, pr
 
 | Dark | Light |
 | --- | --- |
-| ![The side panel for the CLI entry box in dark mode, with src/main.rs:40 previewed inline and line 40 highlighted](docs/images/architecture-side-panel-dark.png) | ![The same side panel in light mode](docs/images/architecture-side-panel-light.png) |
+| ![The side panel for the CLI box in dark mode, with src/main.rs:42 previewed inline and line 42 highlighted](docs/images/architecture-side-panel-dark.png) | ![The same side panel in light mode](docs/images/architecture-side-panel-light.png) |
 
 Every `path:line` in the text has a Preview button too. It opens the whole file in a panel you can move and resize, with syntax colors and the cited lines highlighted:
 
