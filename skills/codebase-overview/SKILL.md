@@ -50,6 +50,11 @@ The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(ov
 # <Repo name> · codebase overview
 <REF> · sha <SHA full> · <date> · <N> files
 
+## Architecture
+```flow
+<modules and how they call each other, see rules>
+```
+
 ## In one paragraph
 What the system does, for whom, and its shape (monorepo of X apps, a CLI, a service and a worker, …).
 
@@ -61,11 +66,6 @@ What the system does, for whom, and its shape (monorepo of X apps, a CLI, a serv
 ## Modules
 | Module | Path | Lane | What it does | Depends on |
 | --- | --- | --- | --- | --- |
-
-## Architecture
-```flow
-<modules and how they call each other, see rules>
-```
 
 ## Entry points
 - <kind: route, command, job, UI root> `<name>` → `<path:line>` (<module>)

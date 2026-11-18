@@ -160,39 +160,12 @@ pub fn page(map: &ChangeMap, flow: &FlowFile, changes: &Changes, kind: &Kind<'_>
         map.spec.as_deref().unwrap_or("none")
     );
 
-    let _ = writeln!(w, "## In one paragraph");
-    let _ = writeln!(
-        w,
-        "{}\n",
-        slot(
-            "what the feature does for its user, and the approach the code takes, in 3 to 5 sentences"
-        )
-    );
-    let _ = writeln!(w, "## Where it sits");
-    let _ = writeln!(
-        w,
-        "{}\n",
-        slot(
-            "modules touched, as `module (lane)` from the codebase overview, and which of its main flows this joins; or \"No codebase overview.\""
-        )
-    );
-
-    let _ = writeln!(w, "## Entry points");
-    let mut entries: Vec<String> = Vec::new();
-    for e in &flow.entry_points {
-        let (id, label) = e.symbol.split_once(' ').unwrap_or((&e.symbol, ""));
-        entries.push(id.to_owned());
-        let _ = writeln!(
-            w,
-            "- {} → `{label}` `{}` ({id})",
-            slot("the route, command, job, event or UI action that reaches it"),
-            e.at
-        );
-    }
-    if flow.entry_points.is_empty() {
-        let _ = writeln!(w, "None.");
-    }
-    let _ = writeln!(w);
+    let entry_ids: Vec<(&str, &str)> = flow
+        .entry_points
+        .iter()
+        .map(|e| e.symbol.split_once(' ').unwrap_or((&e.symbol, "")))
+        .collect();
+    let entries: Vec<String> = entry_ids.iter().map(|(id, _)| (*id).to_owned()).collect();
 
     let _ = writeln!(w, "## Flow");
     let after_order = runtime_order(&flow.after, &entries, &map.tour);
@@ -253,6 +226,37 @@ pub fn page(map: &ChangeMap, flow: &FlowFile, changes: &Changes, kind: &Kind<'_>
             slot("what this step does"),
             first_path(&flow.after, k)
         );
+    }
+    let _ = writeln!(w);
+
+    let _ = writeln!(w, "## In one paragraph");
+    let _ = writeln!(
+        w,
+        "{}\n",
+        slot(
+            "what the feature does for its user, and the approach the code takes, in 3 to 5 sentences"
+        )
+    );
+    let _ = writeln!(w, "## Where it sits");
+    let _ = writeln!(
+        w,
+        "{}\n",
+        slot(
+            "modules touched, as `module (lane)` from the codebase overview, and which of its main flows this joins; or \"No codebase overview.\""
+        )
+    );
+
+    let _ = writeln!(w, "## Entry points");
+    for (e, (id, label)) in flow.entry_points.iter().zip(&entry_ids) {
+        let _ = writeln!(
+            w,
+            "- {} → `{label}` `{}` ({id})",
+            slot("the route, command, job, event or UI action that reaches it"),
+            e.at
+        );
+    }
+    if flow.entry_points.is_empty() {
+        let _ = writeln!(w, "None.");
     }
     let _ = writeln!(w);
 
@@ -622,15 +626,6 @@ mod tests {
 
 0123456789...89abcdef01 · 3 stops · 2 criteria · spec: none
 
-## In one paragraph
-<!-- fill: what the feature does for its user, and the approach the code takes, in 3 to 5 sentences -->
-
-## Where it sits
-<!-- fill: modules touched, as `module (lane)` from the codebase overview, and which of its main flows this joins; or "No codebase overview." -->
-
-## Entry points
-- <!-- fill: the route, command, job, event or UI action that reaches it --> → `handle` `src/api/h.ts:4-6` (N1)
-
 ## Flow
 ### Before: <!-- fill: how it worked at base, in one line -->
 ```flow
@@ -649,6 +644,15 @@ mod tests {
 1. <!-- fill: what this step does --> `src/api/h.ts:4-6` (N1)
 2. <!-- fill: what this step does --> `src/services/f.ts:1-3` (N3)
 3. <!-- fill: what this step does --> `src/services/d.ts:5-7` (N2)
+
+## In one paragraph
+<!-- fill: what the feature does for its user, and the approach the code takes, in 3 to 5 sentences -->
+
+## Where it sits
+<!-- fill: modules touched, as `module (lane)` from the codebase overview, and which of its main flows this joins; or "No codebase overview." -->
+
+## Entry points
+- <!-- fill: the route, command, job, event or UI action that reaches it --> → `handle` `src/api/h.ts:4-6` (N1)
 
 ## Data and state
 <!-- fill: a table `| Thing | Kind | Written by | Read by |` with one row per type, table, column, cache key, env var or message the change adds, changes or removes (say which), citing node ids and `path:line`; or "None." -->
