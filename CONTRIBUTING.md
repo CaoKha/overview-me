@@ -18,6 +18,14 @@ After changing a skill's `description`, run the trigger tests in `evals/` (see `
 claude plugin eval . --ablation none --tag trigger --model sonnet --no-publish
 ```
 
+## Security checks
+
+The Security workflow runs on every PR, on `main` and weekly:
+
+- `cargo deny check` checks crates for advisories, licenses and sources (rules in `deny.toml`). A new license fails it until you add it there.
+- [zizmor](https://docs.zizmor.sh) checks the workflows. Pin every action to a commit SHA; Dependabot keeps the pins current.
+- CodeQL checks the Rust code. Results are in the repo's Security tab.
+
 ## Publish a new version
 
 Users only get new skills and a new CLI with a new version and GitHub release. [Release Please](https://github.com/googleapis/release-please) does both from the commit messages, so use conventional commits (`fix:` for a patch, `feat:` for a minor while below 1.0, `feat!:` for a breaking change).
