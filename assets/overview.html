@@ -8,8 +8,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
 <!--
   Page for the PR overview and the codebase overview, rendered by
-  `overview-me page` (src/page.rs), which fills in the title, markdown and config placeholders. The markdown is turned into a review sheet:
-  one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge,
+  `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
+  one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded code previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
   traces its edges, clicking it pins it and lists its files in a fixed side panel (a bottom sheet on phones) with copy buttons. Works as a Claude artifact (inline styles, pinned CDN script, Google Fonts)
   and as a local file in the browser.
@@ -183,6 +183,12 @@ button.btn { font: 500 12px var(--font-sans); padding: 2px 9px; border: 1px soli
 button.btn:hover { border-color: var(--accent); }
 button.btn:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
 .detail a.open { font-size: 12px; white-space: nowrap; }
+.code-detail { width: min(760px, calc(100vw - 32px)); }
+.code-detail pre { min-height: 0; padding: 8px 0; font: 12px/1.6 var(--font-mono); }
+.code-line { display: block; min-width: max-content; padding-right: 12px; }
+.code-line.cited { background: color-mix(in srgb, var(--hl) 14%, transparent); }
+.line-number { display: inline-block; width: 4.5em; padding-right: 12px; text-align: right; color: var(--muted); user-select: none; }
+.preview { margin-left: 5px; }
 pre.mermaid { background: var(--card); text-align: center; }
 pre.mermaid svg { max-width: none; }
 
@@ -197,11 +203,14 @@ pre.mermaid svg { max-width: none; }
 <body>
 <main id="out"></main>
 <script type="text/markdown" id="md">{{MD}}</script>
+<script type="application/json" id="code">{{CODE}}</script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script type="module">
 // forge: https web URL of the repo or null; sha: commit of the `path:line` references or null
-// (then read from "sha <40 hex>" in the header line); base: commit for references under Before.
+// (then read from "sha <40 hex>" in the header line); base: commit for references under Before;
+// head: commit for previews, including when unpushed.
 const cfg = {{CONFIG}};
+const snippets = JSON.parse(document.getElementById('code').textContent);
 const md = document.getElementById('md').textContent.replace(/<\\(\/script|!--)/gi, '<$1');
 const out = document.getElementById('out');
 out.innerHTML = marked.parse(md);
@@ -341,16 +350,69 @@ function forgeHref(text, node) {
   const lines = m[2] ? `#L${m[2]}${m[3] ? `-L${m[3]}` : ''}` : '';
   return `${cfg.forge}/blob/${at}/${m[1]}${lines}`;
 }
+let unpinActive = null;
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') unpinActive?.(); });
+const codeDetail = el('div', 'detail code-detail');
+codeDetail.hidden = true;
+codeDetail.setAttribute('role', 'region');
+codeDetail.setAttribute('aria-label', 'Code preview');
+document.body.append(codeDetail);
+function showCode(text, snippet, href, button) {
+  unpinActive?.();
+  const closePanel = () => {
+    codeDetail.hidden = true;
+    unpinActive = null;
+    button.focus({ preventScroll: true });
+  };
+  unpinActive = closePanel;
+  const head = el('div', 'detail-head');
+  head.append(el('code', null, text));
+  if (href) {
+    const a = el('a', 'open', 'Open ↗');
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    head.append(a);
+  }
+  const close = el('button', 'btn close', 'Close');
+  close.type = 'button';
+  close.addEventListener('click', closePanel);
+  head.append(close);
+  const pre = el('pre');
+  snippet.lines.forEach((line, i) => {
+    const n = snippet.start + i;
+    const row = el('span', `code-line${n >= snippet.from && n <= snippet.to ? ' cited' : ''}`);
+    row.append(el('span', 'line-number', n), line || ' ');
+    pre.append(row);
+  });
+  codeDetail.replaceChildren(head, pre);
+  codeDetail.hidden = false;
+  close.focus({ preventScroll: true });
+  const first = pre.querySelector('.cited');
+  if (first) pre.scrollTop = first.offsetTop - pre.offsetTop;
+}
 for (const code of out.querySelectorAll(':not(pre) > code')) {
   if (!/:\d+(-\d+)?$/.test(code.textContent)) continue;
+  const at = cfg.base && code.closest('.panel.before') ? cfg.base : cfg.head || sha;
+  const snippet = snippets[`${at}:${code.textContent}`];
   const href = forgeHref(code.textContent, code);
-  if (!href) continue;
-  const a = el('a');
-  a.href = href;
-  a.target = '_blank';
-  a.rel = 'noopener';
-  code.replaceWith(a);
-  a.append(code);
+  let reference = code;
+  if (href) {
+    const a = el('a');
+    a.href = href;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    code.replaceWith(a);
+    a.append(code);
+    reference = a;
+  }
+  if (snippet) {
+    const button = el('button', 'btn preview', 'Preview');
+    button.type = 'button';
+    button.setAttribute('aria-label', `Preview ${code.textContent}`);
+    button.addEventListener('click', () => showCode(code.textContent, snippet, href, button));
+    reference.after(button);
+  }
 }
 
 // Copies text; falls back to a selected textarea where the clipboard API is blocked (iframes).
@@ -393,9 +455,6 @@ function legend(spec) {
   box.append(el('span', null, 'Hover a box to trace its links; click it for its files.'));
   return box;
 }
-
-let unpinActive = null;
-document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') unpinActive?.(); });
 
 function drawFlow(arch, spec, detail) {
   uid += 1;

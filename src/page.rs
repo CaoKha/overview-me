@@ -2,8 +2,8 @@
 //! as a standalone HTML page, for the browser or a Claude artifact.
 //!
 //! The page itself is `assets/overview.html`, compiled in. It styles the markdown as a review
-//! sheet, links `path:line` code spans to the forge, puts "### Before" and "### After" side by
-//! side, and draws ```` ```flow ```` blocks as lane diagrams: hovering a box traces its edges,
+//! sheet, links `path:line` code spans to the forge with embedded code previews, puts
+//! "### Before" and "### After" side by side, and draws ```` ```flow ```` blocks as lane diagrams: hovering a box traces its edges,
 //! clicking it shows its file paths with copy buttons.
 
 use std::cell::RefCell;
@@ -65,26 +65,53 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
             .filter(|s| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit()))
             .map(str::to_owned)
     });
-    let cache: RefCell<HashMap<(String, String), Option<usize>>> = RefCell::default();
+    let cache: RefCell<HashMap<(String, String), Option<String>>> = RefCell::default();
     let lines_at = |at: &str, path: &str| {
-        *cache
+        cache
             .borrow_mut()
             .entry((at.to_owned(), path.to_owned()))
             .or_insert_with(|| {
                 git.run(&["show", "--end-of-options", &format!("{at}:{path}")])
                     .ok()
-                    .map(|t| t.lines().count())
             })
+            .as_ref()
+            .map(|t| t.lines().count())
     };
+    let mut citations = Vec::new();
     errs.extend(check_page(
         &text,
         ids.as_ref(),
         cited_at.as_deref(),
         base.as_deref(),
         &lines_at,
+        &mut |at, span| citations.push((at.to_owned(), span.to_owned())),
     ));
     if !errs.is_empty() {
         bail!("{}:\n  {}", md.display(), errs.join("\n  "));
+    }
+    let cache = cache.into_inner();
+    let mut snippets = serde_json::json!({});
+    for (at, span) in citations {
+        let Some((path, to)) = cited(&span) else {
+            continue;
+        };
+        let Some(from) = span
+            .rsplit_once(':')
+            .and_then(|(_, range)| range.split('-').next()?.parse::<usize>().ok())
+            .filter(|&from| from > 0 && from <= to)
+        else {
+            continue;
+        };
+        if let Some(Some(text)) = cache.get(&(at.clone(), path.to_owned())) {
+            let start = from.saturating_sub(8).max(1);
+            let lines: Vec<_> = text
+                .lines()
+                .skip(start - 1)
+                .take(to.saturating_add(8).saturating_sub(start - 1).min(200))
+                .collect();
+            snippets[format!("{at}:{span}")] =
+                serde_json::json!({ "start": start, "from": from, "to": to, "lines": lines });
+        }
     }
     let title = text
         .lines()
@@ -101,6 +128,8 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         forge.as_deref(),
         sha.filter(|_| !unpushed),
         base.as_deref(),
+        cited_at.as_deref(),
+        &snippets,
     );
     std::fs::write(&out, page).with_context(|| format!("writing {}", out.display()))?;
     Ok(out)
@@ -136,18 +165,23 @@ fn guard(md: &str) -> String {
 
 /// The page for `md`. `sha` is the commit the `path:line` references point at (or `None` to read
 /// "sha <40 hex>" from the header line); `base` is the commit for references under Before.
+/// `head` remains available for embedded `snippets` even when forge links are disabled.
 pub fn render(
     title: &str,
     md: &str,
     forge: Option<&str>,
     sha: Option<&str>,
     base: Option<&str>,
+    head: Option<&str>,
+    snippets: &Value,
 ) -> String {
-    let config = serde_json::json!({ "forge": forge, "sha": sha, "base": base }).to_string();
+    let config =
+        serde_json::json!({ "forge": forge, "sha": sha, "base": base, "head": head }).to_string();
     let values = [
         ("TITLE", escape(title)),
         ("MD", guard(md)),
         ("CONFIG", config),
+        ("CODE", snippets.to_string().replace('<', "\\u003c")),
     ];
     // One pass over the template, so placeholder-like text inside the values is left alone.
     let mut out = String::with_capacity(TEMPLATE.len() + md.len());
@@ -216,12 +250,14 @@ fn spans(line: &str) -> (Vec<&str>, String) {
 /// point at no line (at `base` under "### Before", else at `head`), node ids the map does not
 /// have, and open questions that cite neither code nor a criterion. `lines_at(sha, path)` gives
 /// a file's line count, or `None` when the file is not there.
+/// Calls `on_cited(sha, span)` for each reference that resolves to a line.
 pub fn check_page(
     md: &str,
     ids: Option<&HashSet<String>>,
     head: Option<&str>,
     base: Option<&str>,
     lines_at: &dyn Fn(&str, &str) -> Option<usize>,
+    on_cited: &mut dyn FnMut(&str, &str),
 ) -> Vec<String> {
     let mut errs = Vec::new();
     let (mut fenced, mut in_before, mut section) = (false, false, String::new());
@@ -262,7 +298,7 @@ pub fn check_page(
                     Some(n) if last > n || last == 0 => {
                         errs.push(format!("{at}: `{span}`: the file has {n} lines at {short}"));
                     }
-                    Some(_) => {}
+                    Some(_) => on_cited(sha, span),
                 }
             }
         }
@@ -489,11 +525,51 @@ mod tests {
     #[test]
     fn render_fills_once_and_guards_script() {
         let md = "# T\n</SCRIPT> <!-- x {{CONFIG}}";
-        let page = render("a<b", md, Some("https://h/o/r"), None, None);
+        let page = render(
+            "a<b",
+            md,
+            Some("https://h/o/r"),
+            None,
+            None,
+            None,
+            &serde_json::json!({}),
+        );
         assert!(page.contains("<title>a&lt;b</title>"));
         assert!(page.contains("<\\/SCRIPT> <\\!-- x {{CONFIG}}"));
         assert!(page.contains(r#""forge":"https://h/o/r""#));
         assert!(!page.contains("{{MD}}") && !page.contains("{{TITLE}}"));
+    }
+
+    #[test]
+    fn code_previews_clip_context_and_key_by_commit() {
+        let repo = crate::testutil::TempRepo::new("code-previews");
+        repo.write("a.rs", &format!("</script>\n{}", "line\n".repeat(19)));
+        let head = repo.commit("code");
+        let md = repo.path().join(format!("{head}.md"));
+        std::fs::write(&md, "# T\n`a.rs:1-2` and `a.rs:19-20`\n").expect("write overview");
+        let out = run(&Git::new(repo.path()), &md, None, true).expect("render page");
+        let page = std::fs::read_to_string(out).expect("read page");
+        let json = page
+            .split_once("id=\"code\">")
+            .expect("code data block")
+            .1
+            .split_once("</script>")
+            .expect("closed data block")
+            .0;
+        assert!(!json.contains('<'));
+        let snippets: Value = serde_json::from_str(json).expect("snippet JSON");
+        assert_eq!(snippets.as_object().expect("snippet map").len(), 2);
+        assert_eq!(
+            snippets[format!("{head}:a.rs:1-2")],
+            serde_json::json!({"start": 1, "from": 1, "to": 2, "lines":
+                std::iter::once("</script>").chain(std::iter::repeat_n("line", 9)).collect::<Vec<_>>()})
+        );
+        assert_eq!(
+            snippets[format!("{head}:a.rs:19-20")],
+            serde_json::json!({"start": 11, "from": 19, "to": 20, "lines": vec!["line"; 10]})
+        );
+        assert!(page.contains(&format!("\"head\":\"{head}\"")));
+        assert!(page.contains("\"sha\":null"));
     }
 
     #[test]
@@ -521,7 +597,14 @@ mod tests {
             ("head", "src/a.ts") => Some(5),
             _ => None,
         };
-        let errs = check_page(md, Some(&ids), Some("head"), Some("base"), &lines_at);
+        let errs = check_page(
+            md,
+            Some(&ids),
+            Some("head"),
+            Some("base"),
+            &lines_at,
+            &mut |_, _| {},
+        );
         assert_eq!(
             errs,
             vec![
