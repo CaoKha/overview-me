@@ -9,9 +9,9 @@
 <!--
   Page for the PR overview and the codebase overview, rendered by
   `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
-  one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded whole file previews,
+  one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded code previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
-  traces its edges, clicking it pins it and lists its files in a draggable fixed side panel resizable from every edge and corner (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline whole file previews. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
+  traces its edges, clicking it pins it and lists its files in a draggable fixed side panel resizable from every edge and corner (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline code previews. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
   and as a local file in the browser.
 -->
 <style>
@@ -429,21 +429,32 @@ function panelResize(panel) {
     panelPosition.y = Math.max(0, Math.min(panelPosition.y, innerHeight - 16 - Math.max(200, panel.getBoundingClientRect().height)));
     document.documentElement.style.setProperty('--panel-left', `${panelPosition.x}px`);
     document.documentElement.style.setProperty('--panel-top', `${panelPosition.y}px`);
-    try { localStorage.setItem(panelPositionKey, JSON.stringify(panelPosition)); } catch {}
+  };
+  const persistPosition = () => {
+    try { if (panelPosition) localStorage.setItem(panelPositionKey, JSON.stringify(panelPosition)); } catch {}
+  };
+  const persistSize = (dx, dy) => {
+    const style = document.documentElement.style;
+    for (const [axis, property, key] of [[dx, '--panel-width', panelWidthKey], [dy, '--panel-height', desktopHeightKey]]) {
+      if (axis && style.getPropertyValue(property)) {
+        try { localStorage.setItem(key, parseFloat(style.getPropertyValue(property))); } catch {}
+      }
+    }
+    persistPosition();
   };
   const headTarget = (ev) => ev.target.closest('.detail-head') && !ev.target.closest('button, a, .panel-resize');
   const resize = (rect, dx, dy, x, y) => {
     const root = document.documentElement;
     const size = (sign, delta, length, end, limit, min, property, key) => {
+      if (!sign) return length;
       const max = Math.min(limit - 32, sign < 0 ? end : limit - (end - length) - (key === desktopHeightKey ? 16 : 0));
-      const value = sign ? Math.min(Math.max(min, length + sign * delta), max) : length;
+      const value = Math.min(Math.max(min, length + sign * delta), max);
       root.style.setProperty(property, `${value}px`);
-      try { localStorage.setItem(key, value); } catch {}
       return value;
     };
     const width = size(dx, x, rect.width, rect.right, innerWidth, 320, '--panel-width', panelWidthKey);
     const height = size(dy, y, rect.height, rect.bottom, innerHeight, 200, '--panel-height', desktopHeightKey);
-    root.classList.add('panel-sized');
+    if (dy) root.classList.add('panel-sized');
     panelPosition = { x: dx < 0 ? rect.right - width : rect.left, y: dy < 0 ? rect.bottom - height : rect.top };
     place();
   };
@@ -467,7 +478,10 @@ function panelResize(panel) {
     grip.addEventListener('pointermove', (ev) => {
       if (drag?.id === ev.pointerId && innerWidth > 640) resize(drag.rect, dx, dy, ev.clientX - drag.x, ev.clientY - drag.y);
     });
-    grip.addEventListener('lostpointercapture', () => { drag = null; });
+    grip.addEventListener('lostpointercapture', () => {
+      if (drag) persistSize(dx, dy);
+      drag = null;
+    });
     if (keyboard) grip.addEventListener('keydown', (ev) => {
       const keys = dx ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
       if (innerWidth <= 640 || !keys.includes(ev.key)) return;
@@ -476,6 +490,7 @@ function panelResize(panel) {
       const side = dx ? (rect.left > innerWidth - rect.right ? -1 : 1) : (rect.top > innerHeight - 16 - rect.bottom ? -1 : 1);
       const delta = side * (keys.indexOf(ev.key) ? 32 : -32);
       resize(rect, dx ? side : 0, dy ? side : 0, dx ? delta : 0, dy ? delta : 0);
+      persistSize(dx, dy);
     });
     grip.addEventListener('dblclick', () => {
       if (dx) {
@@ -488,6 +503,7 @@ function panelResize(panel) {
         try { localStorage.removeItem(desktopHeightKey); } catch {}
       }
       place();
+      persistPosition();
     });
     return grip;
   });
@@ -513,7 +529,6 @@ function panelResize(panel) {
     if (move.phone) {
       const height = Math.max(25, Math.min(90, (move.height + move.y - ev.clientY) / innerHeight * 100));
       document.documentElement.style.setProperty('--sheet-height', `${height}vh`);
-      try { localStorage.setItem(panelHeightKey, height); } catch {}
     } else {
       panelPosition = { x: move.left + ev.clientX - move.x, y: move.top + ev.clientY - move.y };
       place();
@@ -521,6 +536,10 @@ function panelResize(panel) {
   });
   panel.addEventListener('lostpointercapture', (ev) => {
     if (move?.id !== ev.pointerId) return;
+    if (move.phone) {
+      const height = document.documentElement.style.getPropertyValue('--sheet-height');
+      try { if (height) localStorage.setItem(panelHeightKey, parseFloat(height)); } catch {}
+    } else persistPosition();
     move = null;
     panel.classList.remove('dragging');
   });
@@ -552,10 +571,10 @@ const codeResize = panelResize(codeDetail);
 function codePreview(text, at) {
   const m = text.match(PATH_RE);
   if (!m || !m[2]) return null;
-  const key = `${at}:${m[1]}`, file = codeFiles[key];
+  const key = `${at}:${m[1]}`;
   const from = Number(m[2]), to = Number(m[3] || m[2]);
-  return file && from >= file.start && to >= from && to < file.start + file.lines.length
-    ? { key, file, from, to, path: m[1] } : null;
+  const file = codeFiles[key]?.find((window) => from >= window.start && to >= from && to < window.start + window.lines.length);
+  return file ? { key: `${key}:${file.start}`, file, from, to, path: m[1] } : null;
 }
 const highlightedFiles = new Map();
 function codePre({ key, file, from, to, path }) {

@@ -2,7 +2,7 @@
 //! as a standalone HTML page, for the browser or a Claude artifact.
 //!
 //! The page itself is `assets/overview.html`, compiled in. It styles the markdown as a review
-//! sheet, links `path:line` code spans to the forge with embedded whole file previews, puts
+//! sheet, links `path:line` code spans to the forge with embedded code previews, puts
 //! "### Before" and "### After" side by side, and draws ```` ```flow ```` blocks as lane
 //! diagrams: hovering a box traces its edges, clicking it shows its file paths with copy buttons.
 
@@ -15,6 +15,7 @@ use serde_json::Value;
 
 use crate::git::Git;
 
+const PREVIEW_BUDGET: usize = 8 * 1024 * 1024;
 const TEMPLATE: &str = include_str!("../assets/overview.html");
 
 const NODE_KINDS: [&str; 4] = ["existing", "added", "removed", "store"];
@@ -126,32 +127,17 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         };
         ranges
             .entry((at, path.to_owned()))
-            .and_modify(|(first, last): &mut (usize, usize)| {
-                *first = (*first).min(from);
-                *last = (*last).max(to);
-            })
-            .or_insert((from, to));
+            .or_insert_with(Vec::new)
+            .push((from, to));
     }
     let cache = cache.into_inner();
     let mut snippets = serde_json::json!({});
-    for ((at, path), (from, to)) in ranges {
+    for ((at, path), ranges) in ranges {
         if let Some(Some(text)) = cache.get(&(at.clone(), path.clone())) {
-            let whole = text.lines().count() <= 5000;
-            let start = if whole {
-                1
-            } else {
-                from.saturating_sub(8).max(1)
-            };
-            let count = if whole {
-                5000
-            } else {
-                to.saturating_add(8).saturating_sub(start - 1).min(5000)
-            };
-            let lines: Vec<_> = text.lines().skip(start - 1).take(count).collect();
-            snippets[format!("{at}:{path}")] =
-                serde_json::json!({ "start": start, "lines": lines });
+            snippets[format!("{at}:{path}")] = preview_windows(text, &ranges);
         }
     }
+    let snippets = budget_previews(snippets, PREVIEW_BUDGET);
     let title = text
         .lines()
         .find_map(|l| l.strip_prefix("# "))
@@ -172,6 +158,70 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
     );
     std::fs::write(&out, page).with_context(|| format!("writing {}", out.display()))?;
     Ok(out)
+}
+
+// Keep citations before context, merging adjacent windows so each source line appears once.
+fn preview_windows(text: &str, ranges: &[(usize, usize)]) -> Value {
+    const CAP: usize = 5000;
+    let lines: Vec<_> = text.lines().collect();
+    let mut windows = vec![(1, lines.len())];
+    if lines.len() > CAP {
+        for context in (0..=100).rev() {
+            let mut expanded: Vec<_> = ranges
+                .iter()
+                .map(|&(from, to)| {
+                    (
+                        from.saturating_sub(context).max(1),
+                        to.saturating_add(context).min(lines.len()),
+                    )
+                })
+                .collect();
+            expanded.sort_unstable();
+            windows.clear();
+            for (from, to) in expanded {
+                if let Some((_, end)) = windows.last_mut()
+                    && from <= *end + 1
+                {
+                    *end = (*end).max(to);
+                } else {
+                    windows.push((from, to));
+                }
+            }
+            if windows
+                .iter()
+                .map(|(from, to)| to - from + 1)
+                .sum::<usize>()
+                <= CAP
+            {
+                break;
+            }
+        }
+    }
+    let mut remaining = CAP;
+    Value::Array(windows.into_iter().filter_map(|(start, end)| {
+        let count = (end - start + 1).min(remaining);
+        remaining -= count;
+        (count > 0).then(|| serde_json::json!({"start": start, "lines": &lines[start - 1..start - 1 + count]}))
+    }).collect())
+}
+
+// Count the actual escaped JSON bytes, including keys, separators and outer braces.
+fn budget_previews(snippets: Value, budget: usize) -> Value {
+    let mut entries: Vec<_> = snippets.as_object().expect("preview map").iter().collect();
+    entries.sort_unstable_by_key(|(key, _)| *key);
+    let mut kept = serde_json::Map::new();
+    let mut used = 2;
+    for (key, value) in entries {
+        let bytes = (serde_json::to_string(key).expect("preview key") + ":" + &value.to_string())
+            .replace('<', "\\u003c")
+            .len()
+            + usize::from(!kept.is_empty());
+        if used + bytes <= budget {
+            used += bytes;
+            kept.insert(key.clone(), value.clone());
+        }
+    }
+    Value::Object(kept)
 }
 
 fn escape(s: &str) -> String {
@@ -645,29 +695,43 @@ mod tests {
         assert_eq!(snippets.as_object().expect("snippet map").len(), 5);
         assert_eq!(
             snippets[format!("{head}:a.rs")],
-            serde_json::json!({"start": 1, "lines":
-                std::iter::once("</script>").chain(std::iter::repeat_n("new", 19)).collect::<Vec<_>>()})
+            serde_json::json!([{"start": 1, "lines":
+                std::iter::once("</script>").chain(std::iter::repeat_n("new", 19)).collect::<Vec<_>>()}])
         );
         assert_eq!(
             snippets[format!("{base}:a.rs")],
-            serde_json::json!({"start": 1, "lines":
-                std::iter::once("</script>").chain(std::iter::repeat_n("line", 19)).collect::<Vec<_>>()})
+            serde_json::json!([{"start": 1, "lines":
+                std::iter::once("</script>").chain(std::iter::repeat_n("line", 19)).collect::<Vec<_>>()}])
         );
         assert_eq!(
             snippets[format!("{head}:large.rs")],
-            serde_json::json!({"start": 92, "lines":
-                (92..5092).map(|n| format!("line {n}")).collect::<Vec<_>>()})
+            serde_json::json!([{"start": 1, "lines":
+                (1..=202).map(|n| format!("line {n}")).collect::<Vec<_>>()},
+                {"start": 5890, "lines": (5890..=6000).map(|n| format!("line {n}")).collect::<Vec<_>>()}])
         );
         assert_eq!(
             snippets[format!("{base}:large.rs")],
-            serde_json::json!({"start": 5892, "lines":
-                (5892..=6000).map(|n| format!("line {n}")).collect::<Vec<_>>()})
+            serde_json::json!([{"start": 5800, "lines":
+                (5800..=6000).map(|n| format!("line {n}")).collect::<Vec<_>>()}])
         );
         assert_eq!(
             snippets[format!("{head}:window.rs")],
-            serde_json::json!({"start": 1, "lines":
-                (1..=110).map(|n| format!("line {n}")).collect::<Vec<_>>()})
+            serde_json::json!([{"start": 1, "lines":
+                (1..=202).map(|n| format!("line {n}")).collect::<Vec<_>>()}])
         );
+        assert_eq!(
+            budget_previews(serde_json::json!({"c": 0, "b": "<", "a": 0}), 15),
+            serde_json::json!({"a": 0, "c": 0})
+        );
+        // Exhaust context before truncating a citation that itself exceeds the line cap.
+        let capped = preview_windows(&large, &[(1, 5001), (6000, 6000)]);
+        assert_eq!(
+            capped[0]["lines"].as_array().expect("capped lines").len(),
+            5000
+        );
+        let crowded = preview_windows(&large, &[(100, 2599), (3500, 5999)]);
+        assert_eq!(crowded[0]["start"], 100);
+        assert_eq!(crowded[1]["start"], 3500);
         assert!(page.contains(&format!("\"head\":\"{head}\"")));
         assert!(page.contains("\"sha\":null"));
     }
