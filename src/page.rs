@@ -39,7 +39,6 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         serde_json::from_str(&std::fs::read_to_string(file).ok()?).ok()
     });
     let (text, mut errs) = expand_flows(&text, flows.as_ref());
-    errs.extend(check_flows(&text));
     // `<head>.review.md`, `<head>.md`: references point at head; Before ones at the map's base.
     let sha = head;
     let map: Option<Value> = sha.and_then(|s| {
@@ -78,14 +77,38 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
             .map(|t| t.lines().count())
     };
     let mut citations = Vec::new();
-    errs.extend(check_page(
+    let page_errs = check_page(
         &text,
         ids.as_ref(),
         cited_at.as_deref(),
         base.as_deref(),
         &lines_at,
         &mut |at, span| citations.push((at.to_owned(), span.to_owned())),
-    ));
+    );
+    errs.extend(walk_flows(&text, &mut |in_before, spec| {
+        let at = if in_before {
+            base.as_deref().or(cited_at.as_deref())
+        } else {
+            cited_at.as_deref()
+        };
+        if let Some(at) = at {
+            for span in spec["nodes"]
+                .as_object()
+                .into_iter()
+                .flat_map(|nodes| nodes.values())
+                .flat_map(|n| n["paths"].as_array().into_iter().flatten())
+                .filter_map(Value::as_str)
+            {
+                if let Some((path, last)) = cited(span)
+                    && last > 0
+                    && lines_at(at, path).is_some_and(|n| last <= n)
+                {
+                    citations.push((at.to_owned(), span.to_owned()));
+                }
+            }
+        }
+    }));
+    errs.extend(page_errs);
     if !errs.is_empty() {
         bail!("{}:\n  {}", md.display(), errs.join("\n  "));
     }
@@ -375,21 +398,43 @@ pub fn expand_flows(md: &str, flows: Option<&Value>) -> (String, Vec<String>) {
 }
 
 /// Problems in the ```` ```flow ```` blocks of `md` (empty when all are valid).
+#[cfg(test)]
 pub fn check_flows(md: &str) -> Vec<String> {
+    walk_flows(md, &mut |_, _| {})
+}
+
+fn walk_flows(md: &str, on_flow: &mut dyn FnMut(bool, &Value)) -> Vec<String> {
+    let (mut in_before, mut fenced) = (false, false);
     let mut errs = Vec::new();
     let mut block: Option<(usize, Vec<&str>)> = None;
     for (i, line) in md.lines().enumerate() {
         match &mut block {
             Some((start, lines)) => {
                 if line.trim_end() == "```" {
-                    check_flow(&lines.join("\n"), *start, &mut errs);
+                    if let Some(spec) = check_flow(&lines.join("\n"), *start, &mut errs) {
+                        on_flow(in_before, &spec);
+                    }
                     block = None;
                 } else {
                     lines.push(line);
                 }
             }
             None if line.trim_end() == "```flow" => block = Some((i + 1, Vec::new())),
-            None => {}
+            None => {
+                if line.trim_start().starts_with("```") {
+                    fenced = !fenced;
+                } else if !fenced {
+                    if line.starts_with("# ") || line.starts_with("## ") {
+                        in_before = false;
+                    } else if let Some(h) = line.strip_prefix("### ") {
+                        in_before = h
+                            .trim_start()
+                            .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                            .next()
+                            .is_some_and(|word| word.eq_ignore_ascii_case("before"));
+                    }
+                }
+            }
         }
     }
     if let Some((start, _)) = block {
@@ -398,17 +443,21 @@ pub fn check_flows(md: &str) -> Vec<String> {
     errs
 }
 
-fn check_flow(text: &str, line: usize, errs: &mut Vec<String>) {
+fn check_flow(text: &str, line: usize, errs: &mut Vec<String>) -> Option<Value> {
     let mut err = |msg: String| errs.push(format!("flow block at line {line}: {msg}"));
     let spec: Value = match serde_json::from_str(text) {
         Ok(v) => v,
-        Err(e) => return err(format!("not valid JSON ({e})")),
+        Err(e) => {
+            err(format!("not valid JSON ({e})"));
+            return None;
+        }
     };
     let (Some(nodes), Some(tiers)) = (
         spec.get("nodes").and_then(Value::as_object),
         spec.get("tiers").and_then(Value::as_array),
     ) else {
-        return err("needs \"nodes\" (object) and \"tiers\" (array)".into());
+        err("needs \"nodes\" (object) and \"tiers\" (array)".into());
+        return None;
     };
     for (id, n) in nodes {
         if n.get("label").and_then(Value::as_str).is_none() {
@@ -472,6 +521,7 @@ fn check_flow(text: &str, line: usize, errs: &mut Vec<String>) {
             _ => err(format!("edge {e}: both ends must be placed nodes")),
         }
     }
+    Some(spec)
 }
 
 /// https web URL of a remote, from ssh or https remote URLs; `None` when it is not one.
@@ -544,9 +594,22 @@ mod tests {
     fn code_previews_clip_context_and_key_by_commit() {
         let repo = crate::testutil::TempRepo::new("code-previews");
         repo.write("a.rs", &format!("</script>\n{}", "line\n".repeat(19)));
-        let head = repo.commit("code");
+        let base = repo.commit("code");
+        repo.write("a.rs", &format!("</script>\n{}", "new\n".repeat(19)));
+        let head = repo.commit("new code");
         let md = repo.path().join(format!("{head}.md"));
-        std::fs::write(&md, "# T\n`a.rs:1-2` and `a.rs:19-20`\n").expect("write overview");
+        let flow = r#"```flow
+{"nodes":{"a":{"label":"A","paths":["a.rs:10","missing.rs:1","a.rs:21","a.rs","skills/"]}},"tiers":[[{"name":"code","ids":["a"]}]]}
+```"#;
+        std::fs::write(
+            &md,
+            format!("# T\n`a.rs:1-2` and `a.rs:19-20`\n{flow}\n## Flow\n### Before\n{flow}\n"),
+        )
+        .expect("write overview");
+        repo.write(
+            &format!("{head}.json"),
+            &serde_json::json!({"base": base}).to_string(),
+        );
         let out = run(&Git::new(repo.path()), &md, None, true).expect("render page");
         let page = std::fs::read_to_string(out).expect("read page");
         let json = page
@@ -558,15 +621,23 @@ mod tests {
             .0;
         assert!(!json.contains('<'));
         let snippets: Value = serde_json::from_str(json).expect("snippet JSON");
-        assert_eq!(snippets.as_object().expect("snippet map").len(), 2);
+        assert_eq!(snippets.as_object().expect("snippet map").len(), 4);
         assert_eq!(
             snippets[format!("{head}:a.rs:1-2")],
             serde_json::json!({"start": 1, "from": 1, "to": 2, "lines":
-                std::iter::once("</script>").chain(std::iter::repeat_n("line", 9)).collect::<Vec<_>>()})
+                std::iter::once("</script>").chain(std::iter::repeat_n("new", 9)).collect::<Vec<_>>()})
         );
         assert_eq!(
             snippets[format!("{head}:a.rs:19-20")],
-            serde_json::json!({"start": 11, "from": 19, "to": 20, "lines": vec!["line"; 10]})
+            serde_json::json!({"start": 11, "from": 19, "to": 20, "lines": vec!["new"; 10]})
+        );
+        assert_eq!(
+            snippets[format!("{head}:a.rs:10")]["lines"],
+            serde_json::json!(vec!["new"; 17])
+        );
+        assert_eq!(
+            snippets[format!("{base}:a.rs:10")]["lines"],
+            serde_json::json!(vec!["line"; 17])
         );
         assert!(page.contains(&format!("\"head\":\"{head}\"")));
         assert!(page.contains("\"sha\":null"));
