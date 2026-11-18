@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.3](https://github.com/CaoKha/overview-me/compare/v0.11.2...v0.11.3) (2026-11-18)
+
+
+### Documentation
+
+* add a demo GIF and explain why overview-me exists ([#52](https://github.com/CaoKha/overview-me/issues/52)) ([e22af70](https://github.com/CaoKha/overview-me/commit/e22af7032dc3d8abc71a60b1a1db4ff53a54e0a1))
+
 ## [0.11.2](https://github.com/CaoKha/overview-me/compare/v0.11.1...v0.11.2) (2026-11-18)
 
 
