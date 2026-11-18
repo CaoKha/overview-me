@@ -70,10 +70,7 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         cache
             .borrow_mut()
             .entry((at.to_owned(), path.to_owned()))
-            .or_insert_with(|| {
-                git.run(&["show", "--end-of-options", &format!("{at}:{path}")])
-                    .ok()
-            })
+            .or_insert_with(|| git.show(at, path))
             .as_ref()
             .map(|t| t.lines().count())
     };

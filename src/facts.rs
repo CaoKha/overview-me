@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::git::Git;
@@ -388,8 +388,16 @@ pub fn changes(git: &Git, rules: &Rules, base: &str, head: &str) -> Result<Chang
         .run(&["merge-base", "--end-of-options", base, head])?
         .trim()
         .to_owned();
+    let files = parse_diff(&diff);
+    // Files marked `-diff` in .gitattributes are generated: one check-attr for all of them.
+    let paths: Vec<&str> = files
+        .iter()
+        .filter(|f| !f.bad_path && !f.path.is_empty() && !f.deleted)
+        .map(|f| f.path.as_str())
+        .collect();
+    let generated = generated_paths(git, &paths)?;
     let mut out = Changes::default();
-    for mut f in parse_diff(&diff) {
+    for mut f in files {
         if f.bad_path || f.path.is_empty() {
             out.skipped.push(Skipped {
                 file: f.path,
@@ -427,19 +435,16 @@ pub fn changes(git: &Git, rules: &Rules, base: &str, head: &str) -> Result<Chang
             out.deleted.push(f.path);
             continue;
         }
-        let generated = f.binary
-            || git
-                .run(&["check-attr", "diff", "--", &f.path])?
-                .trim()
-                .ends_with("diff: unset");
-        if generated {
+        if f.binary || generated.contains(&f.path) {
             out.skipped.push(Skipped {
                 file: f.path,
                 reason: "generated or binary",
             });
             continue;
         }
-        let source = git.run(&["show", "--end-of-options", &format!("{head}:{}", f.path)])?;
+        let source = git
+            .show(head, &f.path)
+            .with_context(|| format!("reading {} at {head}", f.path))?;
         let parsed = symbols::parse(&f.path, &source)?;
         let lines: Vec<&str> = source.lines().collect();
         if from_tests {
@@ -457,12 +462,7 @@ pub fn changes(git: &Git, rules: &Rules, base: &str, head: &str) -> Result<Chang
             .collect();
         // The base side is only needed to judge removed lines.
         let base_source = if all_pieces.iter().any(|p| !p.removed.is_empty()) {
-            git.run(&[
-                "show",
-                "--end-of-options",
-                &format!("{merge_base}:{}", f.old_path),
-            ])
-            .unwrap_or_default()
+            git.show(&merge_base, &f.old_path).unwrap_or_default()
         } else {
             String::new()
         };
@@ -523,6 +523,25 @@ pub fn changes(git: &Git, rules: &Rules, base: &str, head: &str) -> Result<Chang
     Ok(out)
 }
 
+/// Which of `paths` have the `diff` attribute unset.
+fn generated_paths(git: &Git, paths: &[&str]) -> Result<HashSet<String>> {
+    if paths.is_empty() {
+        return Ok(HashSet::new());
+    }
+    let mut args = vec!["check-attr", "-z", "diff", "--"];
+    args.extend(paths);
+    // `-z`: path NUL attribute NUL value NUL, for each path.
+    let out = git.run(&args)?;
+    let fields: Vec<&str> = out.split('\0').collect();
+    Ok(fields
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .filter(|[_, _, value]| *value == "unset")
+        .map(|[path, _, _]| (*path).to_owned())
+        .collect())
+}
+
 fn to_u32(n: usize) -> u32 {
     u32::try_from(n).unwrap_or(u32::MAX)
 }
@@ -552,7 +571,9 @@ pub fn declarations_in(source: &str, file: &str) -> Result<Vec<TestRef>> {
 pub fn test_declarations(git: &Git, head: &str, changes: &Changes) -> Result<Vec<TestRef>> {
     let mut out = Vec::new();
     for file in &changes.test_files {
-        let source = git.run(&["show", "--end-of-options", &format!("{head}:{file}")])?;
+        let source = git
+            .show(head, file)
+            .with_context(|| format!("reading {file} at {head}"))?;
         out.extend(declarations_in(&source, file)?);
     }
     for f in &changes.files {

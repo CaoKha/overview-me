@@ -208,9 +208,9 @@ fn label(name: &str) -> String {
 }
 
 fn parse_at(git: &Git, rev: &str, path: &str) -> Result<Option<Parsed>> {
-    match git.run(&["show", "--end-of-options", &format!("{rev}:{path}")]) {
-        Ok(src) => symbols::parse(path, &src),
-        Err(_) => Ok(None),
+    match git.show(rev, path) {
+        Some(src) => symbols::parse(path, &src),
+        None => Ok(None),
     }
 }
 
