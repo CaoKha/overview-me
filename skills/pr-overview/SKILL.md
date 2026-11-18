@@ -28,7 +28,7 @@ The CLI does the mechanical work. It finds the base, drafts the map, draws the B
    - `mode uncommitted`: the work is not committed. Tell the user, and follow `<root>/skills/change-overview/SKILL.md` instead.
    - If it fails, or the user names another base (for example the PR below a stacked PR), use the base the user gives, or ask.
 2. **Draft the map.** Run `overview-me extract --base <base> --head <head> [--spec <spec file>]`. It writes the draft map to `<store>/<head>.json` and prints:
-   - the codebase and folder overviews that cover the change. Read them, and use their module names and terms;
+   - the codebase overview, if one exists. Read it, and use its module names and terms;
    - every draft node with its diff, and the tests in the changed test files.
    
    The draft already folds import-only hunks into their function, groups the same edit at several places, and sets the tour. If it says it kept a map for this base, go to step 4, unless the user asked to rebuild it (`--fresh`).

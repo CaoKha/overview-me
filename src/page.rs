@@ -57,7 +57,7 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
             .filter_map(|n| n["id"].as_str().map(str::to_owned))
             .collect()
     });
-    // A codebase or folder overview names its commit in the header: "sha <40 hex>".
+    // A codebase overview names its commit in the header: "sha <40 hex>".
     let cited_at = sha.map(str::to_owned).or_else(|| {
         text.split_whitespace()
             .skip_while(|w| *w != "sha")

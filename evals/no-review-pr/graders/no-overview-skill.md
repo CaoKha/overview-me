@@ -1,7 +1,7 @@
 ---
 type: tool_used
 tool: Skill
-input_match: '"skill"\s*:\s*"(?:[\w-]+:)?(?:pr-overview|change-overview|codebase-overview|folder-overview)"'
+input_match: '"skill"\s*:\s*"(?:[\w-]+:)?(?:pr-overview|change-overview|codebase-overview)"'
 min: 0
 max: 0
 arm: both

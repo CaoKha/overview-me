@@ -1,6 +1,6 @@
 # Flow blocks
 
-Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR or change overview, `overview-me flow` draws both diagrams from the code and the page holds only `@before` and `@after`: do not write them by hand. To label an arrow or add a note to a box there, edit `<store>/<head>.flow.json` with the fields below. In a codebase or folder overview, you write the block. The page draws it as lanes stacked top to bottom, boxes in each lane, and curved arrows. Hovering or tabbing to a box highlights its arrows and the boxes at their other ends, so keep the graph honest and small enough to trace. `overview-me page` checks every block and lists what is wrong.
+Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR or change overview, `overview-me flow` draws both diagrams from the code and the page holds only `@before` and `@after`: do not write them by hand. To label an arrow or add a note to a box there, edit `<store>/<head>.flow.json` with the fields below. In a codebase overview, you write the block. The page draws it as lanes stacked top to bottom, boxes in each lane, and curved arrows. Hovering or tabbing to a box highlights its arrows and the boxes at their other ends, so keep the graph honest and small enough to trace. `overview-me page` checks every block and lists what is wrong.
 
 ```json
 {
@@ -32,9 +32,9 @@ Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR 
 
 ## By overview
 
-| | PR or change overview | Codebase or folder overview |
+| | PR or change overview | Codebase overview |
 | --- | --- | --- |
-| A box is | one piece of code in the flow | one module (in a folder overview, one submodule or one outside module) |
+| A box is | one piece of code in the flow | one module |
 | `kind` | `existing`, `added`, `removed`, each with or without `store` | `store` only |
 | `n` | on changed code | never |
 | `paths` | for changed code, the node's sites; in Before, at the base | the module's folder, then its entry points |

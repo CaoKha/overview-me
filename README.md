@@ -53,7 +53,6 @@ Ask in plain words, or run the command:
 | "PR overview", "explain PR 3389" | `/overview-me:pr-overview` | the overview of the PR checked out |
 | "overview of my changes" | `/overview-me:change-overview` | the same, for your uncommitted files |
 | "explain this codebase" | `/overview-me:codebase-overview` | a map of the repo; PR overviews use it to place a change |
-| "explain packages/api" | `/overview-me:folder-overview <folder>` | the same map for one folder |
 
 The result opens as a page. Hover a box in a flow diagram to trace its links, click it to copy its file paths into your editor, and follow any `path:line` to the code.
 

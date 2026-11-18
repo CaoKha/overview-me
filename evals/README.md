@@ -2,7 +2,7 @@
 
 Each case is one prompt and one check: which overview-me skill Claude picks, if any. They do not test what a skill writes.
 
-- `pr-overview-*`, `change-overview-*`, `codebase-overview`, `folder-overview`: the named skill must be invoked.
+- `pr-overview-*`, `change-overview-*`, `codebase-overview`: the named skill must be invoked.
 - `no-*`: a review request ("review this PR", "find bugs in this diff"). No overview-me skill may be invoked.
 
 Run them from the repo root:
