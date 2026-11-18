@@ -309,9 +309,8 @@ fn tour(ids: &[String], edges: &[Edge]) -> Vec<String> {
     placed
 }
 
-/// The codebase and folder overviews that cover this change, one line each.
-fn context(git: &Git, store: &Path, base: &str, head: &str) -> Result<Vec<String>> {
-    let mut out = Vec::new();
+/// The line naming the codebase overview this change sits in, if one exists.
+fn context(store: &Path) -> String {
     let codebase = store.join("codebase.md");
     match std::fs::read_to_string(&codebase) {
         Ok(text) => {
@@ -319,44 +318,11 @@ fn context(git: &Git, store: &Path, base: &str, head: &str) -> Result<Vec<String
                 .split_whitespace()
                 .skip_while(|w| *w != "sha")
                 .nth(1)
-                .map_or("?", |s| &s[..s.len().min(10)])
-                .to_owned();
-            out.push(format!(
-                "codebase overview: {} (at {sha})",
-                codebase.display()
-            ));
+                .map_or("?", |s| &s[..s.len().min(10)]);
+            format!("codebase overview: {} (at {sha})", codebase.display())
         }
-        Err(_) => {
-            out.push("codebase overview: none (suggest /codebase-overview at hand-off)".into())
-        }
+        Err(_) => "codebase overview: none (suggest /codebase-overview at hand-off)".into(),
     }
-    let changed = git.run(&[
-        "diff",
-        "--name-only",
-        "--end-of-options",
-        &format!("{base}...{head}"),
-    ])?;
-    let mut folders: Vec<PathBuf> = std::fs::read_dir(store.join("folders"))
-        .map(|d| d.filter_map(|e| e.ok().map(|e| e.path())).collect())
-        .unwrap_or_default();
-    folders.sort();
-    for f in folders
-        .iter()
-        .filter(|f| f.extension().is_some_and(|e| e == "md"))
-    {
-        let Some(slug) = f.file_stem().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        let folder = format!("{}/", slug.replace("--", "/"));
-        let n = changed.lines().filter(|l| l.starts_with(&folder)).count();
-        if n > 0 {
-            out.push(format!(
-                "folder overview: {} ({folder}, {n} changed files)",
-                f.display()
-            ));
-        }
-    }
-    Ok(out)
 }
 
 /// Writes `<store>/<head>.facts.json` (or `out`) and, unless a map for this base exists (or
@@ -510,9 +476,7 @@ pub fn run(
         }
     );
     println!("tour: {}", draft.tour.join(" "));
-    for line in context(git, &store, &base, &head)? {
-        println!("{line}");
-    }
+    println!("{}", context(&store));
     for d in &drafts {
         let n = &d.node;
         let mut flags = vec![n.risk.as_str()];
