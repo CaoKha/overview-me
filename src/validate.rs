@@ -43,10 +43,7 @@ pub fn run(git: &Git, rules: &Rules, path: &Path) -> Result<bool> {
         .collect();
     let tested = facts::tested_names(git, &map.head, &changes.test_files, &exported)?;
     let read_spec = |p: &Path| std::fs::read_to_string(p).ok();
-    let read_head = |file: &str| {
-        git.run(&["show", "--end-of-options", &format!("{}:{file}", map.head)])
-            .ok()
-    };
+    let read_head = |file: &str| git.show(&map.head, file);
     // Inline Rust test modules live in ordinary .rs files.
     let is_test_file = |file: &str| rules.is_test(file) || file.ends_with(".rs");
     let problems = check(

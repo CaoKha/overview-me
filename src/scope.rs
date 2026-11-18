@@ -130,9 +130,7 @@ impl<'a> Scope<'a> {
             .collect();
         let rev = rev.to_owned();
         let load: Loader<'a> = Box::new(move |path: &str| {
-            let src = git
-                .run(&["show", "--end-of-options", &format!("{rev}:{path}")])
-                .ok()?;
+            let src = git.show(&rev, path)?;
             symbols::parse(path, &src).ok().flatten()
         });
         Ok(Self::new(tree, &manifests, load))
