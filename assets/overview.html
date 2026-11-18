@@ -9,7 +9,7 @@
 <!--
   Page for the PR overview and the codebase overview, rendered by
   `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
-  one section per `##`, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded code previews,
+  one section per `##` with a sticky section bar, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded code previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
   traces its edges, clicking it pins it and lists its files in a draggable fixed side panel resizable from every edge and corner (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline code previews.
   Previewing a `path:line` elsewhere highlights the boxes that hold it and links to them from the preview. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
@@ -26,9 +26,11 @@
   --bad: #C21F37; --bad-bg: #FDE3E7;
   --id: #B8640A; --id-bg: #FBEBD6;
   --link: #2F5F9E;
+  --secondary: #E3E5DF; --on-hl: #FFFFFF;
   --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --r: 8px;
+  --r: 8px; --r-block: 12px;
+  --bar: 56px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -41,6 +43,7 @@
     --bad: #F43F56; --bad-bg: #3A0C14;
     --id: #F7931A; --id-bg: #2E1C05;
     --link: #7FB2F0;
+    --secondary: #333531; --on-hl: #000000;
   }
 }
 :root[data-theme="dark"] {
@@ -53,23 +56,28 @@
   --bad: #F43F56; --bad-bg: #3A0C14;
   --id: #F7931A; --id-bg: #2E1C05;
   --link: #7FB2F0;
+  --secondary: #333531; --on-hl: #000000;
 }
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--fg); overflow-x: clip;
   font-family: var(--font-sans); font-size: 15px; line-height: 1.6;
-  padding: 40px 16px 64px;
+  padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
-main { max-width: 920px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+main { max-width: 1640px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+.content { display: flex; flex-direction: column; gap: 40px; min-width: 0; }
 header { display: flex; flex-direction: column; gap: 12px; }
-section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; scroll-margin-top: calc(var(--bar) + 16px + env(safe-area-inset-top, 0px)); }
 section > * { margin: 0; }
 .tag { font-size: 11.5px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-h1 { font-size: 30px; line-height: 1.2; font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
-h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+h1 { font-size: 32px; line-height: 1.2; font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-size: 18px; line-height: 1.3; font-weight: 600; letter-spacing: -0.005em; color: var(--fg); margin: 0; text-wrap: balance; }
 h3 { font-size: 15px; font-weight: 600; margin: 8px 0 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 p { margin: 0; }
-section > p { max-width: 72ch; }
+/* Sections share the flow's width; running text keeps a readable line length. */
+section > p { max-width: 80ch; }
+section > ul:not(.cards), section > ol:not(.read) { max-width: 100ch; }
 section[data-name="in one paragraph"] > p { font-size: 16.5px; line-height: 1.65; }
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -80,8 +88,11 @@ pre code { background: none; padding: 0; overflow-wrap: normal; }
 blockquote { margin: 0; padding: 0 14px; border-left: 3px solid var(--border); color: var(--accent); }
 hr { border: 0; border-top: 1px solid var(--border); margin: 0; }
 strong { font-weight: 600; }
-.meta { display: flex; flex-wrap: wrap; gap: 8px; font-family: var(--font-mono); font-size: 12.5px; color: var(--accent); }
-.meta span { border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; }
+.facts { display: flex; flex-wrap: wrap; gap: 0; margin-top: 8px; background: var(--card); border-radius: var(--r-block); padding-block: 12px; }
+.fact { display: flex; flex-direction: column; gap: 2px; padding: 0 20px; min-width: 0; }
+.fact + .fact { border-left: 1px solid var(--border); }
+.fact-label { font-size: 12px; color: var(--accent); }
+.fact-value { font-family: var(--font-mono); font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .n { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--id); background: var(--id-bg); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
 .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .chip.ok { color: var(--ok); background: var(--ok-bg); }
@@ -89,7 +100,7 @@ strong { font-weight: 600; }
 .chip.bad { color: var(--bad); background: var(--bad-bg); }
 .chip.note { color: var(--id); background: var(--id-bg); }
 h3 .chip, .chip.callout { text-transform: uppercase; letter-spacing: 0.04em; }
-.chip.callout { font-size: 11px; margin-right: 6px; vertical-align: 1px; }
+.chip.callout { font-size: 11px; margin-right: 6px; vertical-align: 1px; border-radius: 4px; }
 
 /* Lists: plain bullets; numbered steps; cards for entry points, open questions and gaps; read-first cards. */
 ul, ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
@@ -108,13 +119,13 @@ li > div { min-width: 0; }
 .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--card); }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-th { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); background: var(--popover); white-space: nowrap; }
+th { font-size: 12px; font-weight: 500; color: var(--accent); white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
 
-/* "### Before" and "### After": stacked, side by side and wider than the column on a wide screen. */
+/* "### Before" and "### After": stacked, side by side on a wide screen. */
 .compare { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
 @media (min-width: 1500px) {
-  .compare { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; width: min(1640px, calc(100vw - 32px)); position: relative; left: 50%; transform: translateX(-50%); }
+  .compare { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
   /* Both panels share the title, diagram and text rows, so the text under each diagram starts at the same height. */
   .compare > .panel { display: grid; grid-row: span 3; grid-template-rows: subgrid; align-content: start; }
   .compare > .panel > .panel-fig { grid-row: 2; }
@@ -170,8 +181,30 @@ tr:last-child td { border-bottom: 0; }
 .legend i.added { border: 2px solid var(--ok); }
 .legend i.removed { border: 1.5px dashed var(--bad); }
 .flow-error { color: var(--bad); font-size: 14px; }
+/* Section bar: one pill per section, stuck to the top while scrolling; the section in view is filled. */
+.toc { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; margin-block: -12px; padding-block: 8px; background: var(--bg); box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax); }
+.toc-track { display: flex; gap: 2px; width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding: 4px; background: var(--card); border-radius: 999px; }
+.toc-track::-webkit-scrollbar { display: none; }
+.toc a { flex-shrink: 0; font-size: 12px; font-weight: 500; line-height: 16px; padding: 6px 10px; border-radius: 999px; color: var(--accent); white-space: nowrap; }
+.toc a:hover { color: var(--fg); text-decoration: none; }
+.toc a[aria-current="true"] { background: var(--hl); color: var(--on-hl); }
+.toc a:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+.toc-title { display: none; }
+/* Wide screens: the sections as a list in a left rail, which the panels on the right never cover. */
+@media (min-width: 1200px) {
+  main { max-width: 1888px; display: grid; grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 40px 48px; }
+  main > header { grid-column: 2; }
+  .content { grid-column: 2; }
+  .toc { grid-column: 1; grid-row: 1 / 3; align-self: start; top: calc(24px + env(safe-area-inset-top, 0px)); margin: 0; padding: 0; background: none; box-shadow: none; clip-path: none; max-height: calc(100vh - 48px); overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .toc-title { display: block; font-size: 12px; font-weight: 500; color: var(--accent); }
+  .toc-track { flex-direction: column; gap: 0; width: auto; padding: 0; background: none; border-radius: 0; border-left: 1px solid var(--border); overflow: visible; }
+  .toc a { font-size: 13px; line-height: 18px; padding: 6px 12px; margin-left: -1px; border-radius: 0; border-left: 2px solid transparent; white-space: normal; }
+  .toc a[aria-current="true"] { background: none; color: var(--fg); border-left-color: var(--hl); }
+  section { scroll-margin-top: calc(24px + env(safe-area-inset-top, 0px)); }
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
 /* The clicked box: its files in a viewport side panel, or a bottom sheet on phones. */
-.detail { position: fixed; top: var(--panel-top, 16px); left: var(--panel-left, auto); right: 16px; max-height: calc(100vh - 32px); overflow-y: auto; width: min(var(--panel-width, 440px), calc(100vw - 32px)); z-index: 10; box-shadow: 0 8px 32px color-mix(in srgb, var(--fg) 20%, transparent); border: 1px solid var(--border); border-radius: var(--r); background: var(--card); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.detail { position: fixed; top: var(--panel-top, 16px); left: var(--panel-left, auto); right: 16px; max-height: calc(100vh - 32px); overflow-y: auto; width: min(var(--panel-width, 440px), calc(100vw - 32px)); z-index: 10; border: 1px solid var(--border); border-radius: var(--r-block); background: var(--popover); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .detail[hidden] { display: none; }
 .panel-resize { position: absolute; z-index: 1; touch-action: none; user-select: none; }
 .panel-resize::after { content: ''; position: absolute; border-radius: var(--r); background: var(--accent); opacity: 0; }
@@ -217,9 +250,16 @@ tr:last-child td { border-bottom: 0; }
 .detail ul.paths li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
 .detail ul.paths pre.code { flex-basis: 100%; width: 0; height: 320px; max-height: none; resize: vertical; }
 .detail ul.paths code { flex: 0 1 auto; min-width: 0; user-select: all; }
+.detail code { background: var(--card); }
 .detail .none { color: var(--muted); font-size: 14px; }
-button.btn { font: 500 12px var(--font-sans); padding: 2px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--popover); color: var(--fg); cursor: pointer; white-space: nowrap; }
-button.btn:hover { border-color: var(--accent); }
+button.btn { font: 500 12px/1.5 var(--font-sans); padding: 3px 10px; border: 0; border-radius: var(--r); background: var(--secondary); color: var(--fg); cursor: pointer; white-space: nowrap; }
+button.btn:hover { opacity: 0.85; }
+/* Preview of a path:line in the text: an icon button, so long paragraphs and tables stay readable. */
+button.peek { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 2px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--accent); cursor: pointer; vertical-align: -6px; }
+button.peek:hover { color: var(--fg); background: var(--secondary); }
+button.peek[aria-expanded="true"] { color: var(--on-hl); background: var(--hl); }
+button.peek:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+button.peek svg { width: 15px; height: 15px; }
 button.btn:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
 .detail a.open { font-size: 12px; white-space: nowrap; }
 .flow-hits { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--muted); }
@@ -236,13 +276,16 @@ pre.code :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-variable.constant_
 pre.code :is(.hljs-title, .hljs-section) { color: var(--warn); }
 pre.code :is(.hljs-type, .hljs-meta, .hljs-attr, .hljs-attribute, .hljs-params) { color: var(--accent); }
 pre.code .hljs-deletion { color: var(--bad); }
-.preview { margin-left: 5px; }
 pre.mermaid { background: var(--card); text-align: center; }
 pre.mermaid svg { max-width: none; }
 
 @media (max-width: 640px) {
   body { padding-block: 24px 48px; }
   h1 { font-size: 24px; }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 0; }
+  .fact { padding: 0 16px; }
+  .fact + .fact { border-left: 0; }
+  .fact.wide { grid-column: 1 / -1; }
   .panel-resize { display: none; }
   .detail, .detail:has(pre.code) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
 }
@@ -284,12 +327,25 @@ if (h1) {
     h1.textContent = parts.join(' · ');
   }
   header.append(h1);
+  // "14 stops", "spec: none", "sha <hex>", "base...head" and dates become labelled facts.
   const meta = header.nextElementSibling;
   if (meta && meta.tagName === 'P' && meta.textContent.includes(' · ')) {
-    const pills = el('div', 'meta');
-    for (const p of meta.textContent.split(' · ')) pills.append(el('span', null, shortSha(p.trim())));
+    const facts = el('div', 'facts');
+    for (const raw of meta.textContent.split(' · ')) {
+      const p = raw.trim();
+      const m = p.match(/^(\d+)\s+(.+)$/) || p.match(/^([a-z][\w ]*):\s*(.+)$/i);
+      const [label, value] = /^\d+\s/.test(p) ? [m[2], m[1]]
+        : m ? [m[1], m[2]]
+        : /^sha\s/.test(p) ? ['commit', p.slice(4)]
+        : p.includes('...') ? ['commits', p]
+        : /^\d{4}-\d{2}-\d{2}$/.test(p) ? ['date', p]
+        : [/\s/.test(p) ? 'scope' : 'branch', p];
+      const fact = el('div', value.length > 14 ? 'fact wide' : 'fact');
+      fact.append(el('span', 'fact-label', label[0].toUpperCase() + label.slice(1)), el('span', 'fact-value', shortSha(value)));
+      facts.append(fact);
+    }
     meta.remove();
-    header.append(pills);
+    header.append(facts);
   }
 }
 
@@ -301,6 +357,43 @@ for (const h2 of out.querySelectorAll('h2')) {
   for (let n = h2.nextElementSibling; n && n.tagName !== 'H2'; n = n.nextElementSibling) nodes.push(n);
   h2.before(sec);
   sec.append(...nodes);
+}
+
+// Section bar: a link per section; the last section whose top has passed the bar is current.
+const sections = [...out.querySelectorAll('section')];
+if (sections.length > 1) {
+  const toc = el('nav', 'toc');
+  toc.setAttribute('aria-label', 'Sections');
+  const track = el('div', 'toc-track');
+  const links = sections.map((sec) => {
+    sec.id = sec.dataset.name.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const a = el('a', null, sec.querySelector('h2').textContent.trim());
+    a.href = `#${sec.id}`;
+    track.append(a);
+    return a;
+  });
+  toc.append(el('p', 'toc-title', 'On this page'), track);
+  // After the header: the bar, then the sections. On a wide screen the bar becomes the left rail.
+  const content = el('div', 'content');
+  content.append(...sections);
+  out.append(toc, content);
+  let current = -1;
+  const rail = matchMedia('(min-width: 1200px)');
+  const spy = () => {
+    const line = rail.matches ? 120 : toc.getBoundingClientRect().bottom + 24;
+    let i = 0;
+    sections.forEach((sec, k) => { if (sec.getBoundingClientRect().top <= line) i = k; });
+    if (innerHeight + scrollY >= document.documentElement.scrollHeight - 2) i = sections.length - 1;
+    if (i === current) return;
+    links[current]?.removeAttribute('aria-current');
+    links[i].setAttribute('aria-current', 'true');
+    current = i;
+    if (!rail.matches) track.scrollTo({ left: links[i].offsetLeft - (track.clientWidth - links[i].offsetWidth) / 2 });
+  };
+  let queued = false;
+  addEventListener('scroll', () => { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; spy(); }); } }, { passive: true });
+  addEventListener('resize', spy);
+  spy();
 }
 
 // "### Before …" and "### After …": a panel each, with what follows up to the next heading; a
@@ -617,11 +710,17 @@ function codePre({ key, file, from, to, path }) {
   });
   return pre;
 }
+const EYE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8S3.8 3.5 8 3.5 14.5 8 14.5 8 12.2 12.5 8 12.5 1.5 8 1.5 8Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>';
 function showCode(text, preview, href, button, before) {
+  // The same button again closes its preview.
+  const open = button.getAttribute('aria-expanded') === 'true';
   unpinActive?.();
+  if (open) return;
+  button.setAttribute('aria-expanded', 'true');
   const located = flows.filter((f) => f.before === before).flatMap((f) => f.locate(preview));
   const closePanel = () => {
     codeDetail.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
     for (const f of flows) f.locate(null);
     unpinActive = null;
     button.focus({ preventScroll: true });
@@ -681,9 +780,12 @@ for (const code of out.querySelectorAll(':not(pre) > code')) {
     reference = a;
   }
   if (preview) {
-    const button = el('button', 'btn preview', 'Preview');
+    const button = el('button', 'peek');
     button.type = 'button';
+    button.title = 'Preview';
+    button.innerHTML = EYE;
     button.setAttribute('aria-label', `Preview ${code.textContent}`);
+    button.setAttribute('aria-expanded', 'false');
     const before = !!code.closest('.panel.before');
     button.addEventListener('click', () => showCode(code.textContent, preview, href, button, before));
     reference.after(button);

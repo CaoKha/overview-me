@@ -54,7 +54,7 @@ Ask in plain words, or run the command:
 | "overview of my changes" | `/overview-me:change-overview` | the same, for your uncommitted files |
 | "explain this codebase" | `/overview-me:codebase-overview` | a map of the repo; PR overviews use it to place a change |
 
-The result opens as a page. Hover a box in a flow diagram to trace its links, click it to copy its file paths into your editor, and preview any `path:line` in the page or follow it to the code. A preview highlights the boxes that hold that code, with a link to each.
+The result opens as a page, with a bar at the top to jump between its sections. Hover a box in a flow diagram to trace its links, click it to copy its file paths into your editor, and preview any `path:line` in the page or follow it to the code. A preview highlights the boxes that hold that code, with a link to each.
 
 This is the architecture diagram from the codebase overview of overview-me itself. Each box is a module, and each arrow shows which module calls which:
 
@@ -66,7 +66,7 @@ Click a box to open its side panel with the box's note and the files to copy, pr
 | --- | --- |
 | ![The side panel for the CLI box in dark mode, with src/main.rs:42 previewed inline and line 42 highlighted](docs/images/architecture-side-panel-dark.png) | ![The same side panel in light mode](docs/images/architecture-side-panel-light.png) |
 
-Every `path:line` in the text has a Preview button too. It opens the whole file in a panel you can move and resize, with syntax colors and the cited lines highlighted:
+Every `path:line` in the text has a preview (eye) button too. It opens the whole file in a panel you can move and resize, with syntax colors and the cited lines highlighted:
 
 | Dark | Light |
 | --- | --- |
