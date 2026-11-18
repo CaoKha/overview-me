@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.10.0](https://github.com/CaoKha/overview-me/compare/v0.9.0...v0.10.0) (2026-11-18)
+
+
+### Features
+
+* **page:** show the flow first and highlight previewed code in it ([#40](https://github.com/CaoKha/overview-me/issues/40)) ([aed9d0e](https://github.com/CaoKha/overview-me/commit/aed9d0e42cdaaef677e81486619942a7f8962263))
+
+
+### Documentation
+
+* retake the side panel screenshots without arrow labels ([#42](https://github.com/CaoKha/overview-me/issues/42)) ([30b6a20](https://github.com/CaoKha/overview-me/commit/30b6a205e95cca17ec5217a7db81e757736cecbe))
+
 ## [0.9.0](https://github.com/CaoKha/overview-me/compare/v0.8.1...v0.9.0) (2026-11-18)
 
 
