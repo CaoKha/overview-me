@@ -656,14 +656,6 @@ function drawFlow(arch, spec, detail) {
         b.type = 'button';
         b.addEventListener('click', () => copy(p, b));
         li.append(b);
-        const href = forgeHref(p, arch);
-        if (href) {
-          const a = el('a', 'open', 'open ↗');
-          a.href = href;
-          a.target = '_blank';
-          a.rel = 'noopener';
-          li.append(a);
-        }
         const at = cfg.base && arch.closest('.panel.before') ? cfg.base : cfg.head || sha;
         const preview = codePreview(p, at);
         if (preview) {
@@ -683,6 +675,14 @@ function drawFlow(arch, spec, detail) {
             button.setAttribute('aria-expanded', String(!pre));
           });
           li.append(button);
+        }
+        const href = forgeHref(p, arch);
+        if (href) {
+          const a = el('a', 'open', 'open ↗');
+          a.href = href;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          li.append(a);
         }
         list.append(li);
       }
