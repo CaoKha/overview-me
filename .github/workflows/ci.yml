@@ -52,6 +52,13 @@ jobs:
           cargo_v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
           plugin_v="$(jq -r .version .claude-plugin/plugin.json)"
           [ "$cargo_v" = "$plugin_v" ] || { echo "::error::Cargo.toml $cargo_v != plugin.json $plugin_v"; exit 1; }
+          pi_v="$(jq -r .version package.json)"
+          [ "$cargo_v" = "$pi_v" ] || { echo "::error::Cargo.toml $cargo_v != package.json $pi_v"; exit 1; }
+      # pi installs the skills listed under package.json's "pi" key.
+      - name: pi package
+        run: |
+          jq -e '.pi.skills | length > 0' package.json
+          for d in $(jq -r '.pi.skills[]' package.json); do ls "$d"/*/SKILL.md; done
       - name: Install script
         run: bash -n scripts/ensure-cli.sh && shellcheck scripts/ensure-cli.sh
       # Checks .claude-plugin/plugin.json, marketplace.json, hooks and the skills' frontmatter.

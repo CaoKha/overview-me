@@ -7,7 +7,7 @@ description: Write a map of the whole codebase at the default branch, covering w
 
 A change map shows one PR. Without the rest of the system around it, the reader gets lost: they do not know what a module is for, what a term means, or what normally calls the changed code. The codebase overview is that context. It is written once per repo, kept up to date as main moves, and shared by every change map in the repo.
 
-`<root>` is `${CLAUDE_SKILL_DIR}/../..`, the overview-me plugin root. The steps run its CLI, `overview-me`. Read `<root>/references/cli.md` first: it says where the CLI is, what to do if it is missing, and what each command does.
+`<root>` is the overview-me plugin root: `${CLAUDE_SKILL_DIR}/../..` in Claude Code, and in other agents the folder two levels above the folder holding this SKILL.md. The steps run its CLI, `overview-me`. Read `<root>/references/cli.md` first: it says where the CLI is, what to do if it is missing, and what each command does.
 
 The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(overview-me path)")`. Like the maps, it is never committed and is shared by all worktrees.
 

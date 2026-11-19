@@ -1,8 +1,8 @@
 name: Release
 
 # Builds the CLI for macOS and Linux and attaches it to the GitHub release `v<version>` (the version
-# in Cargo.toml and .claude-plugin/plugin.json). The plugin's SessionStart hook downloads the asset
-# that matches the plugin version. Release Please calls it with the tag it created; pushing a `v*`
+# in Cargo.toml, .claude-plugin/plugin.json and package.json). scripts/ensure-cli.sh downloads the
+# asset that matches the plugin version. Release Please calls it with the tag it created; pushing a `v*`
 # tag by hand also works. Run it by hand to build without releasing.
 on:
   push:
@@ -38,8 +38,9 @@ jobs:
           tag="${TAG#v}"
           cargo_v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)"
           plugin_v="$(jq -r .version .claude-plugin/plugin.json)"
-          if [ "$tag" != "$cargo_v" ] || [ "$tag" != "$plugin_v" ]; then
-            echo "::error::tag v$tag, Cargo.toml $cargo_v and plugin.json $plugin_v must match"
+          pi_v="$(jq -r .version package.json)"
+          if [ "$tag" != "$cargo_v" ] || [ "$tag" != "$plugin_v" ] || [ "$tag" != "$pi_v" ]; then
+            echo "::error::tag v$tag, Cargo.toml $cargo_v, plugin.json $plugin_v and package.json $pi_v must match"
             exit 1
           fi
 
