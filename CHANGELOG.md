@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/CaoKha/overview-me/compare/v0.12.1...v0.13.0) (2026-11-19)
+
+
+### Features
+
+* support pi as a second agent ([#58](https://github.com/CaoKha/overview-me/issues/58)) ([3fef872](https://github.com/CaoKha/overview-me/commit/3fef872442e9abc0830608ba6d0760b05cc7a749))
+
 ## [0.12.1](https://github.com/CaoKha/overview-me/compare/v0.12.0...v0.12.1) (2026-11-19)
 
 
