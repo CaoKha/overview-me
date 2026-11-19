@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Makes sure <plugin root>/bin/overview-me exists and matches the plugin version.
-# Run by the plugin's SessionStart hook; the skills run it too when the binary is missing.
+# Run by the plugin's SessionStart hook in Claude Code, and by the skills before their first CLI call.
 #
 # Order: keep a binary of the right version; else download the release for this OS and CPU
 # (gh first, so a private repo works with your GitHub login, then curl); else build from
@@ -74,5 +74,5 @@ download() {
 }
 
 download || build_from_source ||
-  say "could not install the CLI: no release v$VERSION for $(uname -s) $(uname -m) and no cargo. Install Rust (https://rustup.rs) or the gh CLI, then start a new session."
+  say "could not install the CLI: no release v$VERSION for $(uname -s) $(uname -m) and no cargo. Install Rust (https://rustup.rs) or the gh CLI, then run the skill again."
 exit 0

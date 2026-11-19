@@ -58,7 +58,11 @@ jobs:
       - name: pi package
         run: |
           jq -e '.pi.skills | length > 0' package.json
-          for d in $(jq -r '.pi.skills[]' package.json); do ls "$d"/*/SKILL.md; done
+          jq -r '.pi.skills[]' package.json | while IFS= read -r d; do
+            for s in "$d"/*/; do
+              [ -f "$s/SKILL.md" ] || { echo "::error::$s has no SKILL.md"; exit 1; }
+            done
+          done
       - name: Install script
         run: bash -n scripts/ensure-cli.sh && shellcheck scripts/ensure-cli.sh
       # Checks .claude-plugin/plugin.json, marketplace.json, hooks and the skills' frontmatter.

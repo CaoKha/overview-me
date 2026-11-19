@@ -34,7 +34,7 @@ Users only get new skills and a new CLI with a new version and GitHub release. [
 2. Merge that PR when you want to release. Release Please tags `vX.Y.Z` and creates the GitHub release, then the Release workflow builds the CLI for macOS and Linux and attaches it.
 3. Claude Code users run `/plugin marketplace update overview-me` (or turn on auto-update for the marketplace); their next session downloads the new CLI. pi users run `pi update --extensions`; the next skill run downloads the new CLI.
 
-The Release workflow also runs when you push a `v*` tag by hand; the tag must match both versions.
+The Release workflow also runs when you push a `v*` tag by hand; the tag must match the versions in `Cargo.toml`, `.claude-plugin/plugin.json` and `package.json`.
 
 ## CLI
 
