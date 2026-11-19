@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/CaoKha/overview-me/compare/v0.13.0...v0.13.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **pi:** update the CLI on every skill run and tidy pi docs ([#60](https://github.com/CaoKha/overview-me/issues/60)) ([e766c44](https://github.com/CaoKha/overview-me/commit/e766c44b8ed42f53abb5abc6bec0f3cbac4d511a))
+
 ## [0.13.0](https://github.com/CaoKha/overview-me/compare/v0.12.1...v0.13.0) (2026-11-19)
 
 
