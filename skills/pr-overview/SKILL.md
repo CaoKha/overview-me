@@ -9,7 +9,7 @@ Two parts. The change map says *what changed*: every changed line belongs to one
 
 The CLI does the mechanical work. It finds the base, drafts the map, draws the Before and After flows from the code, and writes the page with every section that the map and the code can give. You write only what needs judgement: the labels in the map, and the text in the page's `<!-- fill: … -->` slots.
 
-`<root>` is `${CLAUDE_SKILL_DIR}/../..`, the overview-me plugin root. The steps run its CLI, `overview-me`. Read `<root>/references/cli.md` first: it says where the CLI is, what to do if it is missing, and what each command does.
+`<root>` is the overview-me plugin root: `${CLAUDE_SKILL_DIR}/../..` in Claude Code, and in other agents the folder two levels above the folder holding this SKILL.md. The steps run its CLI, `overview-me`. Read `<root>/references/cli.md` first: it says where the CLI is, what to do if it is missing, and what each command does.
 
 ## Terms
 

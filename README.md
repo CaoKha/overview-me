@@ -2,7 +2,7 @@
 
 Review a PR with the code and its flow side by side.
 
-overview-me is a Claude Code plugin. Ask Claude about a PR, your uncommitted changes or a whole codebase, and it writes a one-page overview you can click through.
+overview-me is a set of agent skills for [Claude Code](https://claude.com/claude-code) and [pi](https://pi.dev). Ask your agent about a PR, your uncommitted changes or a whole codebase, and it writes a one-page overview you can click through.
 
 ![Click a box in the flow to read its code; click an eye icon to find that code in the flow](docs/images/demo.gif)
 
@@ -27,21 +27,29 @@ In Claude Code:
 /plugin install overview-me@overview-me
 ```
 
+In pi, in a terminal:
+
+```sh
+pi install git:github.com/CaoKha/overview-me
+```
+
+The first time a skill runs in pi, it downloads the CLI for your machine.
+
 ## Use
 
 Ask in plain words, or run the command:
 
-| Ask | Command | You get |
-| --- | --- | --- |
-| "PR overview", "explain PR 3389" | `/overview-me:pr-overview` | the overview of the PR checked out |
-| "overview of my changes" | `/overview-me:change-overview` | the same, for your uncommitted files |
-| "explain this codebase" | `/overview-me:codebase-overview` | a map of the repo; PR overviews use it to place a change |
+| Ask | Claude Code | pi | You get |
+| --- | --- | --- | --- |
+| "PR overview", "explain PR 3389" | `/overview-me:pr-overview` | `/skill:pr-overview` | the overview of the PR checked out |
+| "overview of my changes" | `/overview-me:change-overview` | `/skill:change-overview` | the same, for your uncommitted files |
+| "explain this codebase" | `/overview-me:codebase-overview` | `/skill:codebase-overview` | a map of the repo; PR overviews use it to place a change |
 
-In Claude Code the overview opens as a private Claude artifact; elsewhere it opens as an HTML file in your browser.
+In Claude Code the overview opens as a private Claude artifact; in pi and other agents it opens as an HTML file in your browser.
 
 ## Update
 
-In a terminal:
+In Claude Code, in a terminal:
 
 ```sh
 claude plugin marketplace update overview-me
@@ -51,6 +59,8 @@ claude plugin update overview-me@overview-me
 The first command fetches the latest list of versions; the second installs the newest one. Then start a new Claude Code session: the new skills load, and the session downloads the CLI for the new version.
 
 To update automatically, run `/plugin` in Claude Code, open the overview-me marketplace, and turn on auto-update.
+
+In pi, run `pi update --extensions`. The next skill run downloads the CLI for the new version.
 
 ## Contribute
 
