@@ -287,6 +287,8 @@ pre.mermaid svg { max-width: none; }
   .fact + .fact { border-left: 0; }
   .fact.wide { grid-column: 1 / -1; }
   .panel-resize { display: none; }
+  /* "In the flow" scrolls a box to the top: keep it below the sticky section bar. */
+  .box { scroll-margin-top: calc(var(--bar) + 16px + env(safe-area-inset-top, 0px)); }
   .detail, .detail:has(pre.code) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
 }
 @media (prefers-reduced-motion: reduce) { .box, .edges path.line, .edge-label { transition: none; } }
