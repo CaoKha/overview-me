@@ -2,7 +2,7 @@
 
 The skills call the plugin root `<root>`. The CLI is `<root>/bin/overview-me`, written `overview-me` in the skills. In Claude Code the plugin installs it when a session starts; in other agents it is installed the first time a skill runs, as below.
 
-- If it is missing, run `bash "<root>/scripts/ensure-cli.sh"` once. It downloads the release for this machine or builds it from source.
+- Before the first CLI call of a run, run `bash "<root>/scripts/ensure-cli.sh"`. It returns at once when the binary matches the plugin version; otherwise it downloads the release for this machine or builds it from source.
 - If it is still missing, tell the user what the script printed and stop.
 - Run it from the root of the repo under review.
 

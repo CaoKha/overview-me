@@ -5,7 +5,7 @@ description: Write a one-page overview of uncommitted work, meaning the staged, 
 
 # Change overview
 
-`/pr-overview` for work that is not committed yet. The change is `<base>...<head>`, where `<base>` is HEAD and `<head>` is a snapshot of the files `git status` shows: staged, unstaged and untracked (not ignored). Commits are not part of it; use `/pr-overview` for those.
+The pr-overview skill for work that is not committed yet. The change is `<base>...<head>`, where `<base>` is HEAD and `<head>` is a snapshot of the files `git status` shows: staged, unstaged and untracked (not ignored). Commits are not part of it; use the pr-overview skill for those.
 
 `<root>` is the overview-me plugin root: `${CLAUDE_SKILL_DIR}/../..` in Claude Code, and in other agents the folder two levels above the folder holding this SKILL.md. The steps run its CLI, `overview-me`. Read `<root>/references/cli.md` first: it says where the CLI is, what to do if it is missing, and what each command does.
 
@@ -16,7 +16,7 @@ The steps are those of pr-overview. Read `<root>/skills/pr-overview/SKILL.md` fi
 1. **Find the base.** This replaces pr-overview step 1.
    - By default the base is `git rev-parse HEAD`, so the page shows only uncommitted work. If there is no commit yet, say so and stop.
    - If the user asks to include the branch's commits too ("everything on this branch", "my commits and my changes"), take the `base` that `overview-me base` prints instead.
-   - Run `git status --porcelain --untracked-files=all`. If it is empty, nothing is uncommitted: say so, suggest `/pr-overview` for the branch's commits, and stop.
+   - Run `git status --porcelain --untracked-files=all`. If it is empty, nothing is uncommitted: say so, suggest the pr-overview skill for the branch's commits, and stop.
 2. **Snapshot the working tree.** Run `overview-me snapshot`. It prints `<head>`, a commit that holds HEAD plus every uncommitted and untracked file. It does not touch the branch, the index or the files. The same files always give the same sha, so a second run with no new edits reuses the map.
 3. **Do pr-overview steps 2 to 8**, with these changes:
    - **No PR.** Skip `gh pr view`. Uncommitted work has no message: take the criteria from a spec if the user names one, from what the user said they are working on, and from the diff.

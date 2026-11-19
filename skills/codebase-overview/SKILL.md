@@ -1,6 +1,6 @@
 ---
 name: codebase-overview
-description: Write a map of the whole codebase at the default branch, covering what the system is, its modules and lanes, entry points, core concepts, main flows, conventions and where to find things. /pr-overview uses it so a reviewer can place a PR in the system. Use when the user asks for a "codebase overview", an "architecture overview", to "map the repo", or "explain this codebase".
+description: Write a map of the whole codebase at the default branch, covering what the system is, its modules and lanes, entry points, core concepts, main flows, conventions and where to find things. The pr-overview skill uses it so a reviewer can place a PR in the system. Use when the user asks for a "codebase overview", an "architecture overview", to "map the repo", or "explain this codebase".
 ---
 
 # Codebase overview
@@ -42,7 +42,7 @@ The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(ov
    - Fix any `path:line` that does not point at the code the entry is about.
    - Keep an entry only when the repo at `$REF` cannot answer it, for example a value set outside the repo or behaviour that only a run would show. If no entry is left, write "None."
 7. **Show the page** as `<root>/references/show-page.md` says, for `<store>/codebase.md`.
-8. **Hand off.** Give the artifact link (or the HTML path), the markdown path and the one-paragraph summary. Tell the user that clicking a module in the architecture diagram lists its files to copy into their editor, and that `/pr-overview` now uses it.
+8. **Hand off.** Give the artifact link (or the HTML path), the markdown path and the one-paragraph summary. Tell the user that clicking a module in the architecture diagram lists its files to copy into their editor, and that the pr-overview skill now uses it.
 
 ## Format
 
