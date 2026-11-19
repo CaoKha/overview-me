@@ -116,7 +116,10 @@ pub struct Node {
     pub id: String,
     #[schemars(length(min = 1))]
     pub symbol: String,
-    pub lane: Lane,
+    /// The flow section this node is drawn in: a short name for its part of the system, such as
+    /// `api`, `db` or `billing`. The draft names it from `rules.json` or the path.
+    #[schemars(length(min = 1, max = 24))]
+    pub lane: String,
     pub risk: Risk,
     /// One line: what changed and why.
     #[schemars(length(min = 1))]
@@ -179,35 +182,6 @@ pub enum EdgeKind {
     Calls,
     Implements,
     Uses,
-}
-
-/// Architecture lane, in display order.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
-)]
-#[serde(rename_all = "lowercase")]
-pub enum Lane {
-    Ui,
-    Api,
-    Services,
-    Db,
-    Engine,
-    Jobs,
-    Other,
-}
-
-impl Lane {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Ui => "ui",
-            Self::Api => "api",
-            Self::Services => "services",
-            Self::Db => "db",
-            Self::Engine => "engine",
-            Self::Jobs => "jobs",
-            Self::Other => "other",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

@@ -14,7 +14,7 @@ use serde::Serialize;
 use crate::facts::{self, Changes, Skipped, Unit};
 use crate::git::Git;
 use crate::map::{ChangeMap, Deletion, Edge, EdgeKind, Node, Risk, Site, TestRef};
-use crate::rules::Rules;
+use crate::rules::{Rules, lane_rank};
 use crate::scope::Scope;
 use crate::symbols::{self, Symbol};
 
@@ -53,7 +53,14 @@ fn draft_nodes(units: &[Unit]) -> Vec<Draft<'_>> {
         });
         groups[i].push(u);
     }
-    groups.sort_by_key(|us| (us[0].lane, us[0].file.clone(), us[0].start));
+    groups.sort_by_key(|us| {
+        (
+            lane_rank(&us[0].lane),
+            us[0].lane.clone(),
+            us[0].file.clone(),
+            us[0].start,
+        )
+    });
     groups
         .into_iter()
         .map(|us| {
@@ -69,7 +76,7 @@ fn draft_nodes(units: &[Unit]) -> Vec<Draft<'_>> {
             let node = Node {
                 id: String::new(),
                 symbol,
-                lane: first.lane,
+                lane: first.lane.clone(),
                 risk: if us.iter().any(|u| u.risk == Risk::Read) {
                     Risk::Read
                 } else {
@@ -490,7 +497,7 @@ pub fn run(
         println!(
             "\n{} {} {} [{}] {}:{}-{}",
             n.id,
-            n.lane.as_str(),
+            n.lane,
             n.symbol,
             flags.join(","),
             site.file,
@@ -528,7 +535,7 @@ pub fn run(
         println!(
             "\n{} {} {} [{}]",
             n.id,
-            n.lane.as_str(),
+            n.lane,
             what.join(", "),
             n.risk.as_str()
         );

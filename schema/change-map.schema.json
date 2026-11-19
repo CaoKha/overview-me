@@ -226,19 +226,6 @@
         "uses"
       ]
     },
-    "Lane": {
-      "description": "Architecture lane, in display order.",
-      "type": "string",
-      "enum": [
-        "ui",
-        "api",
-        "services",
-        "db",
-        "engine",
-        "jobs",
-        "other"
-      ]
-    },
     "Node": {
       "description": "A group of changed code that reads as one stop: one symbol, or the same edit at several sites.",
       "type": "object",
@@ -267,7 +254,10 @@
           "pattern": "^N[0-9]+$"
         },
         "lane": {
-          "$ref": "#/$defs/Lane"
+          "description": "The flow section this node is drawn in: a short name for its part of the system, such as\n`api`, `db` or `billing`. The draft names it from `rules.json` or the path.",
+          "type": "string",
+          "maxLength": 24,
+          "minLength": 1
         },
         "renames": {
           "description": "Pure moves (no content change) this node explains; each listed move is in exactly one node.",

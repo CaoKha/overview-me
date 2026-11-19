@@ -32,7 +32,7 @@ The CLI does the mechanical work. It finds the base, drafts the map, draws the B
    - every draft node with its diff, and the tests in the changed test files.
    
    The draft already folds import-only hunks into their function, groups the same edit at several places, and sets the tour. If it says it kept a map for this base, go to step 4, unless the user asked to rebuild it (`--fresh`).
-3. **Label the map** as `<root>/references/change-map.md` says: criteria and their tests, a caption for every node, callouts, and any grouping the draft missed. Take the criteria from the PR description (`gh pr view <pr> --json body`) and the spec. Run `overview-me validate <map>` until it prints `ok`.
+3. **Label the map** as `<root>/references/change-map.md` says: criteria and their tests, a caption for every node, lane names, callouts, and any grouping the draft missed. Take the criteria from the PR description (`gh pr view <pr> --json body`) and the spec. Run `overview-me validate <map>` until it prints `ok`.
 4. **Render.** Run `overview-me render <map>`. It validates the map, draws the flows into `<store>/<head>.flow.json`, and writes `<store>/<head>.review.md`. It prints the entry points, the unchanged code that calls or is called by the change, and what it could not draw.
 5. **Fill the slots** in `<store>/<head>.review.md`. Read code only where a slot needs it:
    - **Entry points:** search for each symbol's registration to find what reaches it: a route, command, job, event or UI action.
