@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/CaoKha/overview-me/compare/v0.12.0...v0.12.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **page:** keep the flow box below the section bar on phones ([#56](https://github.com/CaoKha/overview-me/issues/56)) ([3eddc3b](https://github.com/CaoKha/overview-me/commit/3eddc3b8d6fdb4e3f601e907646487d226455271))
+
 ## [0.12.0](https://github.com/CaoKha/overview-me/compare/v0.11.3...v0.12.0) (2026-11-19)
 
 
