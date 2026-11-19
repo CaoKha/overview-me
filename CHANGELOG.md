@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/CaoKha/overview-me/compare/v0.11.3...v0.12.0) (2026-11-19)
+
+
+### Features
+
+* **flow:** name flow lanes from rules or the path instead of "other" ([#54](https://github.com/CaoKha/overview-me/issues/54)) ([0ef2664](https://github.com/CaoKha/overview-me/commit/0ef2664d3984a641ee649c5633efd0a4c5f206c0))
+
 ## [0.11.3](https://github.com/CaoKha/overview-me/compare/v0.11.2...v0.11.3) (2026-11-18)
 
 
