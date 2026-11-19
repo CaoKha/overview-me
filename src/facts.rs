@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::git::Git;
-use crate::map::{Lane, Rename, Risk, TestRef};
+use crate::map::{Rename, Risk, TestRef};
 use crate::rules::Rules;
 use crate::symbols::{self, Parsed, Symbol};
 
@@ -26,7 +26,7 @@ pub struct Unit {
     #[serde(skip)]
     pub exported: bool,
     #[serde(skip)]
-    pub lane: Lane,
+    pub lane: String,
     pub risk: Risk,
     pub risk_why: String,
     pub comment_only: bool,
@@ -506,7 +506,7 @@ pub fn changes(git: &Git, rules: &Rules, base: &str, head: &str) -> Result<Chang
                 ident: p.sym.map(|s| s.ident.clone()),
                 span: p.sym.map(|s| (to_u32(s.start), to_u32(s.end))),
                 exported: p.sym.is_some_and(|s| s.exported),
-                lane,
+                lane: lane.clone(),
                 risk,
                 risk_why,
                 comment_only,

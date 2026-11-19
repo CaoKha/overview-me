@@ -1,6 +1,6 @@
 //! `overview-me validate`: the map must agree with git.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use crate::facts::{self, Changes, Unit};
 use crate::git::Git;
 use crate::map::{ChangeMap, Status};
-use crate::rules::Rules;
+use crate::rules::{LANE_MAX, MAX_LANES, Rules};
 
 /// Reads, deserializes and checks a map. Prints every problem; returns whether it is valid.
 ///
@@ -172,12 +172,26 @@ pub fn check(
             .iter()
             .any(|u| u.file == file && u.contains(line))
     };
+    let lanes: BTreeSet<&str> = map.nodes.iter().map(|n| n.lane.as_str()).collect();
+    if lanes.len() > MAX_LANES {
+        problems.push(format!(
+            "{} lanes ({}): merge them into at most {MAX_LANES}",
+            lanes.len(),
+            lanes.into_iter().collect::<Vec<_>>().join(", ")
+        ));
+    }
     for n in &map.nodes {
         if !is_numbered(&n.id, "N") {
             problems.push(format!("node id {:?} must look like N1", n.id));
         }
         if n.caption.trim().is_empty() {
             problems.push(format!("{}: caption is empty", n.id));
+        }
+        if n.lane.trim().is_empty() || n.lane.chars().count() > LANE_MAX {
+            problems.push(format!(
+                "{}: lane must be 1 to {LANE_MAX} characters, got {:?}",
+                n.id, n.lane
+            ));
         }
         if n.sites.is_empty() && n.deletions.is_empty() && n.renames.is_empty() {
             problems.push(format!(
@@ -485,9 +499,7 @@ pub fn check(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{
-        Callout, CalloutTag, Criterion, Deletion, Lane, Node, Rename, Risk, Site, TestRef,
-    };
+    use crate::map::{Callout, CalloutTag, Criterion, Deletion, Node, Rename, Risk, Site, TestRef};
 
     const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
     const SPEC: &str = "# Spec\n\n## 01 The offer\n\ntext\n";
@@ -502,7 +514,7 @@ mod tests {
             ident: Some(ident.into()),
             span: Some((start, end)),
             exported: true,
-            lane: Lane::Services,
+            lane: "services".into(),
             risk: Risk::Read,
             risk_why: String::new(),
             comment_only,
@@ -520,7 +532,7 @@ mod tests {
         Node {
             id: id.into(),
             symbol: id.into(),
-            lane: Lane::Services,
+            lane: "services".into(),
             risk: Risk::Read,
             caption: "does a thing".into(),
             criteria: criteria.iter().map(|&c| c.into()).collect(),
@@ -680,6 +692,39 @@ mod tests {
             vec![
                 "N1: unknown criterion REF-7",
                 "edge N1->N5: unknown node N5"
+            ]
+        );
+    }
+
+    #[test]
+    fn lanes_must_be_short_and_few() {
+        let (mut map, changes, tested) = fixture();
+        map.nodes[0].lane = " ".into();
+        assert_eq!(
+            problems(&map, &changes, &tested),
+            vec!["N1: lane must be 1 to 24 characters, got \" \""]
+        );
+        map.nodes[0].lane = "the billing and invoicing part".into();
+        assert_eq!(
+            problems(&map, &changes, &tested),
+            vec!["N1: lane must be 1 to 24 characters, got \"the billing and invoicing part\""]
+        );
+        map.nodes[0].lane = "services".into();
+        map.nodes[1].lane = "notes".into();
+        let mut changes = changes;
+        for k in 3..=6 {
+            let line = k * 10;
+            changes.units.push(unit("c.ts", line, line, "c", false));
+            let id = format!("N{k}");
+            let mut n = node(&id, &[], false, &[("c.ts", line, line)]);
+            n.lane = format!("lane{k}");
+            map.nodes.push(n);
+            map.tour.push(id);
+        }
+        assert_eq!(
+            problems(&map, &changes, &tested),
+            vec![
+                "6 lanes (lane3, lane4, lane5, lane6, notes, services): merge them into at most 5"
             ]
         );
     }

@@ -15,8 +15,8 @@ use serde_json::{Map, Value, json};
 
 use crate::facts;
 use crate::git::Git;
-use crate::map::{ChangeMap, Lane};
-use crate::rules::Rules;
+use crate::map::ChangeMap;
+use crate::rules::{LANE_MAX, MAX_LANES, Rules, lane_rank};
 use crate::scope::Scope;
 use crate::symbols::{self, Ident, Parsed, Symbol};
 
@@ -86,7 +86,9 @@ struct Item {
     label: String,
     n: Option<String>,
     note: Option<String>,
-    lane: Lane,
+    lane: String,
+    /// A table, cache or queue: drawn rounded.
+    store: bool,
     /// Layout order inside a lane: group (node, removed, existing), tour position, key.
     order: (u8, usize),
     kind: Kind,
@@ -509,7 +511,12 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     // Symbols the change removes, with the head path their callers would import them from.
     let mut removed: Vec<(String, Symbol)> = Vec::new();
     for node in &map.nodes {
-        let db = node.lane == Lane::Db;
+        let db = node
+            .sites
+            .iter()
+            .map(|s| &s.file)
+            .chain(node.deletions.iter().map(|d| &d.file))
+            .any(|f| rules.is_store(f));
         let mut head = Code::default();
         let mut base = Code::default();
         let (mut head_paths, mut base_paths) = (Vec::new(), Vec::new());
@@ -587,7 +594,8 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
             label: label(&node.symbol),
             n: Some(node.id.clone()),
             note: Some(node.caption.clone()).filter(|c| !c.trim().is_empty()),
-            lane: node.lane,
+            lane: node.lane.clone(),
+            store: db,
             order: (0, tour.get(node.id.as_str()).copied().unwrap_or(usize::MAX)),
             kind,
             head: on_head.then_some(head),
@@ -596,6 +604,20 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
             base_paths,
         });
     }
+
+    // Code around the map's nodes sits in the lane of the node in its file, so a lane the
+    // reviewer renamed stays one lane.
+    let mut file_lane: HashMap<&str, &str> = HashMap::new();
+    for node in &map.nodes {
+        for f in node.sites.iter().map(|s| &s.file) {
+            file_lane.entry(f).or_insert(&node.lane);
+        }
+    }
+    let lane_of = |f: &str| {
+        file_lane
+            .get(f)
+            .map_or_else(|| rules.lane(f), |l| (*l).to_owned())
+    };
 
     // Symbols the change removes from files it keeps: outermost ones only.
     for (path, p) in &head_files {
@@ -629,7 +651,8 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
                     .then(|| owners.iter().next().map(|s| (*s).to_owned()))
                     .flatten(),
                 note: None,
-                lane: rules.lane(&old_file),
+                lane: lane_of(path),
+                store: rules.is_store(&old_file),
                 order: (1, s.start),
                 kind: Kind::Removed,
                 head: None,
@@ -740,7 +763,8 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
             label: label(&sym.name),
             n: None,
             note: None,
-            lane: rules.lane(&file),
+            lane: lane_of(&file),
+            store: rules.is_store(&file),
             order: (2, 0),
             kind: Kind::Existing,
             head: on_head.then(Code::default),
@@ -750,7 +774,10 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         });
     }
 
-    items.sort_by(|a, b| (a.lane, a.order, &a.key).cmp(&(b.lane, b.order, &b.key)));
+    let lane_index = arrange_lanes(&mut items, [&head_graph, &base_graph]);
+    items.sort_by(|a, b| {
+        (lane_index[&a.lane], a.order, &a.key).cmp(&(lane_index[&b.lane], b.order, &b.key))
+    });
     // Short keys: node ids stay, removed symbols are r1…, unchanged code x1….
     let mut short: HashMap<String, String> = HashMap::new();
     let (mut r, mut x) = (0, 0);
@@ -832,6 +859,91 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     })
 }
 
+/// Merges lanes past [`MAX_LANES`] and orders them top to bottom, returning each lane's
+/// position. A lane sits above the lanes it calls; where calls do not decide (none, or a
+/// cycle), rule lanes keep their usual order, then the lane met first in the tour goes first.
+/// The smallest lane merges into the lane it calls or is called by most, else the biggest.
+fn arrange_lanes(items: &mut [Item], graphs: [&Graph; 2]) -> HashMap<String, usize> {
+    let at: HashMap<&str, usize> = items
+        .iter()
+        .enumerate()
+        .map(|(n, i)| (i.key.as_str(), n))
+        .collect();
+    let calls: Vec<(usize, usize)> = graphs
+        .iter()
+        .flat_map(|g| &g.edges)
+        .filter_map(|(a, b)| Some((*at.get(a.as_str())?, *at.get(b.as_str())?)))
+        .collect();
+    // Lanes in their usual order, with their box count.
+    let usual = |items: &[Item]| -> Vec<(String, usize)> {
+        // Per lane: its first box in the tour, and its box count.
+        let mut lanes: BTreeMap<&str, ((u8, usize), usize)> = BTreeMap::new();
+        for i in items {
+            let e = lanes.entry(&i.lane).or_insert((i.order, 0));
+            e.0 = e.0.min(i.order);
+            e.1 += 1;
+        }
+        let mut v: Vec<_> = lanes.into_iter().collect();
+        v.sort_by_key(|(l, (first, _))| (lane_rank(l), *first, *l));
+        v.into_iter().map(|(l, (_, n))| (l.to_owned(), n)).collect()
+    };
+    let between = |items: &[Item], x: &str, y: &str| {
+        calls
+            .iter()
+            .filter(|(a, b)| {
+                let (la, lb) = (items[*a].lane.as_str(), items[*b].lane.as_str());
+                (la == x && lb == y) || (la == y && lb == x)
+            })
+            .count()
+    };
+    loop {
+        let lanes = usual(items);
+        if lanes.len() <= MAX_LANES {
+            break;
+        }
+        // The smallest lane, the last in order on a tie.
+        let Some((small, _)) = lanes.iter().rev().min_by_key(|(_, n)| *n) else {
+            break;
+        };
+        let Some((into, _)) = lanes
+            .iter()
+            .filter(|(l, _)| l != small)
+            .rev()
+            .max_by_key(|(l, n)| (between(items, small, l), *n))
+        else {
+            break;
+        };
+        let joined = format!("{into} · {small}");
+        let name = if joined.chars().count() <= LANE_MAX {
+            joined
+        } else {
+            into.clone()
+        };
+        for i in items.iter_mut() {
+            if &i.lane == small || &i.lane == into {
+                i.lane.clone_from(&name);
+            }
+        }
+    }
+    let mut left: Vec<String> = usual(items).into_iter().map(|(l, _)| l).collect();
+    let mut ordered: Vec<String> = Vec::new();
+    while !left.is_empty() {
+        let called = |lane: &str| {
+            calls.iter().any(|(a, b)| {
+                let caller = items[*a].lane.as_str();
+                items[*b].lane == lane && caller != lane && left.iter().any(|l| l == caller)
+            })
+        };
+        let next = left.iter().position(|l| !called(l)).unwrap_or(0);
+        ordered.push(left.remove(next));
+    }
+    ordered
+        .into_iter()
+        .enumerate()
+        .map(|(n, l)| (l, n))
+        .collect()
+}
+
 /// One `flow` block: the boxes present at this side, in lanes of rows of `PER_ROW`, and the
 /// arrows between them, styled against the other side's arrows.
 fn diagram(
@@ -860,7 +972,7 @@ fn diagram(
             Kind::Existing => kind.push("existing"),
             _ => {}
         }
-        if i.lane == Lane::Db {
+        if i.store {
             kind.push("store");
         }
         let mut box_ = Map::new();
@@ -880,11 +992,11 @@ fn diagram(
     }
     let mut tiers: Vec<Value> = Vec::new();
     let mut row_of: HashMap<&str, usize> = HashMap::new();
-    let mut lanes: Vec<(Lane, Vec<&Item>)> = Vec::new();
+    let mut lanes: Vec<(&str, Vec<&Item>)> = Vec::new();
     for i in &present {
         match lanes.last_mut() {
             Some((l, v)) if *l == i.lane => v.push(i),
-            _ => lanes.push((i.lane, vec![i])),
+            _ => lanes.push((&i.lane, vec![i])),
         }
     }
     for (lane, members) in lanes {
@@ -893,7 +1005,7 @@ fn diagram(
                 row_of.insert(i.key.as_str(), tiers.len());
             }
             let ids: Vec<&str> = chunk.iter().map(|i| short[&i.key].as_str()).collect();
-            tiers.push(json!([{ "name": lane.as_str(), "ids": ids }]));
+            tiers.push(json!([{ "name": lane, "ids": ids }]));
         }
     }
     let mut edges: Vec<(usize, &str, &str, Option<&str>)> = graph
@@ -954,6 +1066,43 @@ mod tests {
             .find(|n| n.symbol == symbol)
             .map(|n| n.id.clone())
             .unwrap_or_else(|| panic!("no node {symbol}: {:?}", map.nodes))
+    }
+
+    #[test]
+    fn lanes_merge_to_the_limit_and_callers_sit_above() {
+        let lanes = ["api", "billing", "db", "x1", "x2", "x3", "x4"];
+        let mut items: Vec<Item> = lanes
+            .iter()
+            .enumerate()
+            .map(|(n, lane)| Item {
+                key: (*lane).to_owned(),
+                label: (*lane).to_owned(),
+                n: None,
+                note: None,
+                lane: (*lane).to_owned(),
+                store: false,
+                order: (0, n),
+                kind: Kind::Changed,
+                head: None,
+                base: None,
+                head_paths: Vec::new(),
+                base_paths: Vec::new(),
+            })
+            .collect();
+        let graph = Graph {
+            edges: [("api", "billing"), ("billing", "db"), ("api", "x4")]
+                .into_iter()
+                .map(|(a, b)| (a.to_owned(), b.to_owned()))
+                .collect(),
+            existing: BTreeMap::new(),
+        };
+        let index = arrange_lanes(&mut items, [&graph, &Graph::default()]);
+        let mut got: Vec<(&String, &usize)> = index.iter().collect();
+        got.sort_by_key(|(_, n)| **n);
+        let got: Vec<&str> = got.into_iter().map(|(l, _)| l.as_str()).collect();
+        // x4 joins the lane that calls it; x3 calls nothing and joins the biggest lane.
+        assert_eq!(got, ["api · x4 · x3", "billing", "db", "x1", "x2"]);
+        assert_eq!(items[6].lane, "api · x4 · x3");
     }
 
     fn edges(spec: &Value) -> Vec<String> {

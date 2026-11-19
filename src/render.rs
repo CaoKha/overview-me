@@ -489,7 +489,7 @@ pub fn fact_questions(map: &ChangeMap, flow: &FlowFile, changes: &Changes) -> Ve
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Callout, Criterion, Lane, Site, TestRef};
+    use crate::map::{Callout, Criterion, Site, TestRef};
     use serde_json::json;
 
     const BASE: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -499,7 +499,7 @@ mod tests {
         Node {
             id: id.into(),
             symbol: id.to_lowercase(),
-            lane: Lane::Services,
+            lane: "services".into(),
             risk,
             caption: "does it".into(),
             criteria: criteria.iter().map(|c| (*c).into()).collect(),

@@ -24,7 +24,7 @@ On a wide screen, **On this page** on the left lists every section and marks the
 
 ## 3. Read the flow
 
-The Flow section draws how the code ran before the change and how it runs now, side by side on a wide screen. Each box is a piece of code, in a lane (ui, api, services, db and so on). Its `N1`-style chip is the stop's id, used everywhere on the page.
+The Flow section draws how the code ran before the change and how it runs now, side by side on a wide screen. Each box is a piece of code, in a lane: ui, api, services or db when a rule in `rules.json` matches, else the module's own name, such as `billing`. Its `N1`-style chip is the stop's id, used everywhere on the page.
 
 - A box with a solid border is changed by the branch, a green one is new, a red dashed one is removed, and a grey dashed one is unchanged code the change calls or is called by.
 - Hover a box (or tab to it) to trace its links: its arrows and the boxes at their other end light up, and the rest fades.
