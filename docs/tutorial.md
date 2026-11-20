@@ -50,7 +50,7 @@ Drag the panel by its title to move it, and drag any edge or corner to resize it
 
 Every `path:line` in the text has an eye button next to it. Click it to open the whole file in a code panel, scrolled to the cited lines.
 
-The preview also finds that code in the flow. The boxes that hold those lines get a yellow ring, and the panel lists them under **In the flow**. Click one to scroll to its box. Click the eye again, or the × icon, to close the preview and clear the rings. The title bar also has the wrap icon and an arrow icon that opens the lines on GitHub.
+The preview also finds that code in the flow. The boxes that hold those lines get a yellow ring, and the panel lists them under **In the flow**. Click one to scroll to its box. Click the eye again, or the × icon, to close the preview and clear the rings. The title bar also has a copy icon for the `path:line`, the wrap icon and an arrow icon that opens the lines on GitHub.
 
 If the panel covers the box you are looking for, drag the panel aside or make it narrower.
 
