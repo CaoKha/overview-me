@@ -63,8 +63,10 @@ pub fn container<'n>(name: &'n str, ident: &str) -> Option<&'n str> {
 }
 
 /// Whether `path` is in the folder `dir` (`""` is the repo root).
-fn under(path: &str, dir: &str) -> bool {
+pub(crate) fn under(path: &str, dir: &str) -> bool {
+    let dir = dir.trim_end_matches('/');
     dir.is_empty()
+        || path == dir
         || path
             .strip_prefix(dir)
             .is_some_and(|rest| rest.starts_with('/'))
@@ -420,6 +422,8 @@ mod tests {
         assert!(under("packages/db/a.ts", "packages/db"));
         assert!(!under("packages/dbx/a.ts", "packages/db"));
         assert!(under("a.ts", ""));
+        assert!(under("packages/db", "packages/db/"));
+        assert!(under("packages/db/a.ts", "packages/db/"));
     }
 
     #[test]

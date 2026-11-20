@@ -222,7 +222,7 @@
           "type": "string"
         },
         "weight": {
-          "description": "Number of symbol-to-symbol calls aggregated into a module edge.",
+          "description": "Number of reference sites reaching declarations in the target module.",
           "type": [
             "integer",
             "null"

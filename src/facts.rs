@@ -630,7 +630,7 @@ pub fn tested_names(
                 lines.push('\n');
             }
         }
-        let word = |c: char| c.is_alphanumeric() || c == '_';
+        let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
         for name in names {
             if lines.match_indices(name).any(|(i, _)| {
                 !lines[..i].chars().next_back().is_some_and(word)
@@ -685,19 +685,38 @@ mod tests {
         let repo = crate::testutil::TempRepo::new("large-tested-names");
         repo.write(
             "a.test.ts",
-            "test('names', () => { fee(); fee$(); $fee(); fee_extra(); });\n",
+            "test('names', () => { fee(); fee$(); $fee(); fee_extra(); éascii(); asciié(); });\n",
         );
         let head = repo.commit("test");
         let git = Git::new(repo.path());
         let mut names: HashSet<String> = (0..=crate::extract::LARGE_THRESHOLD)
             .map(|i| format!("unused{i}"))
             .collect();
-        names.extend(["fee", "fee$", "$fee", "fee_extra", "extra", "unused"].map(String::from));
+        names.extend(
+            [
+                "fee",
+                "fee$",
+                "$fee",
+                "fee_extra",
+                "extra",
+                "unused",
+                "ascii",
+            ]
+            .map(String::from),
+        );
         let refs: HashSet<&str> = names.iter().map(String::as_str).collect();
         let files = vec!["a.test.ts".to_owned()];
         let batched = tested_names(&git, &head, &files, &refs).expect("batched");
         let mut individual = HashSet::new();
-        for name in ["fee", "fee$", "$fee", "fee_extra", "extra", "unused"] {
+        for name in [
+            "fee",
+            "fee$",
+            "$fee",
+            "fee_extra",
+            "extra",
+            "unused",
+            "ascii",
+        ] {
             individual.extend(
                 tested_names(&git, &head, &files, &HashSet::from([name])).expect("individual"),
             );

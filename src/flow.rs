@@ -4,7 +4,7 @@
 //! A box is a map node (changed code), a symbol the change removes, or unchanged code one call
 //! away from changed code. An arrow is a call found as `extract` finds `calls` edges: a reference
 //! to a symbol's identifier whose binding can be that symbol (see [`crate::scope`]). Between two
-//! map nodes, the map's `edges` have the last word: an arrow the map leaves out is not drawn.
+//! map nodes in After, the map's `edges` have the last word. Grouped Before keeps base-side calls.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -438,10 +438,10 @@ fn dangling(
         }
         for &(path, p, r) in refs.get(sym.ident.as_str()).into_iter().flatten() {
             if !p.in_tests(r.line)
-                && !p
-                    .locals
-                    .iter()
-                    .any(|(name, a, b)| name == &r.name && *a <= r.line && r.line <= *b)
+                && !(r.role == crate::symbols::Role::Name
+                    && p.locals
+                        .iter()
+                        .any(|(name, a, b)| name == &r.name && *a <= r.byte && r.byte < *b))
                 && !is_declaration(p, &r.name, r.line)
                 && scope.reaches(path, p, r, file, sym)
             {
@@ -653,13 +653,40 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
             }
             removed.push((path.clone(), (*s).clone()));
             if map.grouped {
+                if !items.iter().any(|i| owners.contains(i.key.as_str()))
+                    && let Some(node) = map.nodes.iter().find(|n| owners.contains(n.id.as_str()))
+                {
+                    not_drawn.retain(|entry| !entry.starts_with(&format!("{} (", node.id)));
+                    items.push(Item {
+                        key: node.id.clone(),
+                        label: label(&node.symbol),
+                        n: Some(node.id.clone()),
+                        note: Some(node.caption.clone()).filter(|c| !c.trim().is_empty()),
+                        lane: node.lane.clone(),
+                        store: rules.is_store(&old_file),
+                        order: (0, tour.get(node.id.as_str()).copied().unwrap_or(usize::MAX)),
+                        kind: Kind::Removed,
+                        head: None,
+                        base: None,
+                        head_paths: Vec::new(),
+                        base_paths: Vec::new(),
+                    });
+                }
                 if let Some(item) = items.iter_mut().find(|i| owners.contains(i.key.as_str())) {
                     let code = item.base.get_or_insert_with(Code::default);
                     code.spans.push((old_file.clone(), s.start, s.end));
                     code.decls.push((old_file.clone(), (*s).clone()));
-                    if item.base_paths.is_empty() {
-                        item.base_paths.push(span_path(&old_file, s.start, s.end));
-                    }
+                    item.base_paths.push(span_path(&old_file, s.start, s.end));
+                    item.kind = if item.head.is_some() {
+                        Kind::Changed
+                    } else {
+                        Kind::Removed
+                    };
+                } else {
+                    not_drawn.push(format!(
+                        "{}#{} (removed symbol has no module)",
+                        old_file, s.name
+                    ));
                 }
                 continue;
             }
@@ -729,7 +756,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         &boxes_at(false),
         &mut base_files,
     )?;
-    // Between two map nodes, an arrow needs an edge in the map: a reviewer who deletes a wrong
+    // In After, an arrow between two map nodes needs an edge in the map: deleting a wrong
     // edge from the map removes its arrow for good.
     let node_ids: HashSet<&str> = map.nodes.iter().map(|n| n.id.as_str()).collect();
     let mapped: HashSet<(&str, &str)> = map
@@ -745,7 +772,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     if map.grouped {
         base_graph
             .edges
-            .retain(|(a, b)| mapped.contains(&(a.as_str(), b.as_str())));
+            .retain(|(a, b)| !a.starts_with("ex:") && !b.starts_with("ex:"));
         head_graph
             .edges
             .retain(|(a, b)| mapped.contains(&(a.as_str(), b.as_str())));
@@ -1328,6 +1355,122 @@ mod tests {
                 .keys()
                 .all(|key| key.starts_with('N'))
         );
+    }
+
+    #[test]
+    fn dangling_defaults_loops_same_line_and_members() {
+        for (i, body) in [
+            "export function f({ r = RATE }) { return r }",
+            "export function f({ key: r = RATE }) { return r }",
+            "export function f([r = RATE]) { return r }",
+            "export function f() { for (let RATE = 0; RATE < 2; RATE++) {} return RATE }",
+            "export function f() { for (let RATE of [1]) {} return RATE }",
+            "export function f() { for (let RATE in {}) {} return RATE }",
+            "export function f(RATE) { return RATE } export function g() { return RATE }",
+            "export function f() { let RATE = 1; return RATE } export function g() { return RATE }",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let repo = TempRepo::new(&format!("dangling-regression-{i}"));
+            repo.write("a.ts", "export const RATE = 1\n");
+            let base = repo.commit("base");
+            repo.write("a.ts", &format!("{body}\n"));
+            let head = repo.commit("head");
+            let flow = flow_of(&repo, &draft(&repo, &base, &head));
+            assert!(!flow.still_referenced.is_empty(), "missing RATE: {body}");
+        }
+        let repo = TempRepo::new("dangling-member-regression");
+        repo.write("a.ts", "export function removed() { return 1 }\n");
+        repo.write(
+            "b.ts",
+            "import * as ns from './a'\nexport function f(removed) { return ns.removed() }\n",
+        );
+        let base = repo.commit("base");
+        repo.write("a.ts", "export function replacement() { return 2 }\n");
+        let head = repo.commit("head");
+        let flow = flow_of(&repo, &draft(&repo, &base, &head));
+        assert!(
+            flow.still_referenced
+                .iter()
+                .any(|link| link.symbol == "removed" && link.at == "b.ts:2")
+        );
+    }
+
+    #[test]
+    fn dangling_keeps_local_patterns_and_loop_bindings() {
+        for (i, body) in [
+            "export function f({ key: RATE }, ...rest) { return RATE + rest.length }",
+            "export function f([RATE, ...rest]) { return RATE + rest.length }",
+            "export function f() { for (let RATE of [1]) { console.log(RATE) } }",
+            "export function f() { for (var RATE of [1]) {} return RATE }",
+            "export function f() { for (var RATE = 0; RATE < 1; RATE++) {} return RATE }",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let repo = TempRepo::new(&format!("dangling-local-pattern-{i}"));
+            repo.write("a.ts", "export const RATE = 1\nexport const rest = 2\n");
+            let base = repo.commit("base");
+            repo.write("a.ts", &format!("{body}\n"));
+            let head = repo.commit("head");
+            let flow = flow_of(&repo, &draft(&repo, &base, &head));
+            assert!(
+                flow.still_referenced.is_empty(),
+                "{body}: {:?}",
+                flow.still_referenced
+            );
+        }
+    }
+
+    #[test]
+    fn grouped_removals_survive_skipped_and_added_owners() {
+        for (i, body, expected) in [
+            (0, "console.log('new')\n", "removed"),
+            (1, "export function replacement() { return 2 }\n", "changed"),
+        ] {
+            let repo = TempRepo::new(&format!("grouped-removal-{i}"));
+            repo.write("src/a.ts", "export function gone() { return 1 }\n");
+            let base = repo.commit("base");
+            repo.write("src/a.ts", body);
+            let head = repo.commit("head");
+            let mut map = draft(&repo, &base, &head);
+            map.grouped = true;
+            let flow = flow_of(&repo, &map);
+            let before = flow.before.expect("removed module has Before");
+            assert_eq!(
+                before["nodes"][&map.nodes[0].id]["kind"].as_str(),
+                (expected == "removed").then_some("removed")
+            );
+            if expected == "changed" {
+                assert!(flow.after["nodes"][&map.nodes[0].id]["kind"].is_null());
+            }
+        }
+    }
+
+    #[test]
+    fn grouped_before_keeps_removed_calls() {
+        let repo = TempRepo::new("grouped-before-calls");
+        repo.write("src/a.ts", "export function a() { return 1 }\n");
+        repo.write(
+            "src/b.ts",
+            "import { a } from './a'\nexport function b() { return a() }\n",
+        );
+        let base = repo.commit("base");
+        repo.write("src/a.ts", "export function a() { return 2 }\n");
+        repo.write(
+            "src/b.ts",
+            "import { a } from './a'\nexport function b() { return 3 }\n",
+        );
+        let head = repo.commit("head");
+        let mut map = draft(&repo, &base, &head);
+        map.grouped = true;
+        assert!(map.edges.is_empty());
+        let flow = flow_of(&repo, &map);
+        let before = flow.before.expect("before");
+        assert_eq!(before["edges"].as_array().expect("edges").len(), 1);
+        assert_eq!(before["edges"][0][3], "removed");
+        assert!(flow.after["edges"].as_array().expect("edges").is_empty());
     }
 
     fn flow_of(repo: &TempRepo, map: &ChangeMap) -> FlowFile {

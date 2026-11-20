@@ -180,7 +180,7 @@ pub struct Edge {
     pub from: String,
     pub to: String,
     pub kind: EdgeKind,
-    /// Number of symbol-to-symbol calls aggregated into a module edge.
+    /// Number of reference sites reaching declarations in the target module.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weight: Option<usize>,
 }

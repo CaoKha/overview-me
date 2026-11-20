@@ -15,25 +15,31 @@ use crate::facts::{self, Changes, Skipped, Unit};
 use crate::git::Git;
 use crate::map::{ChangeMap, Deletion, Edge, EdgeKind, Node, Risk, Site, TestRef};
 use crate::rules::{Rules, lane_rank};
-use crate::scope::Scope;
+use crate::scope::{Scope, under};
 use crate::symbols::{self, Symbol};
 
 /// Folder drafts start above this many symbol, deletion and move nodes.
 pub const LARGE_THRESHOLD: usize = 300;
 
-#[derive(Debug, Default, clap::Args)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum GroupBy {
+    Dir,
+    Symbol,
+}
+
+#[derive(Debug, clap::Args)]
 pub struct Options {
     /// Draft folders explicitly, or keep symbols even for a large change.
-    #[arg(long, value_parser = ["dir", "symbol"])]
-    pub group_by: Option<String>,
+    #[arg(long, value_enum)]
+    pub group_by: Option<GroupBy>,
     /// Folder depth (default: 2, e.g. apps/api or packages/core).
     #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u32).range(1..))]
     pub depth: u32,
     /// Group this prefix separately; repeat in priority order, first match wins.
     #[arg(long)]
     pub split: Vec<String>,
-    /// Cover only this repo-relative file or folder.
-    #[arg(long)]
+    /// Cover only this repo-relative file or folder; requires --map.
+    #[arg(long, requires = "map")]
     pub path: Option<String>,
     /// Draft map path instead of the shared store.
     #[arg(long)]
@@ -43,14 +49,17 @@ pub struct Options {
     pub fresh: bool,
 }
 
-/// Path-component match: packages/a does not include packages/ab.
-pub fn under(file: &str, prefix: &str) -> bool {
-    let prefix = prefix.trim_end_matches('/');
-    prefix.is_empty()
-        || file == prefix
-        || file
-            .strip_prefix(prefix)
-            .is_some_and(|s| s.starts_with('/'))
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            group_by: None,
+            depth: 2,
+            split: Vec::new(),
+            path: None,
+            map: None,
+            fresh: false,
+        }
+    }
 }
 
 fn folder(file: &str, options: &Options) -> String {
@@ -58,11 +67,7 @@ fn folder(file: &str, options: &Options) -> String {
         return prefix.trim_end_matches('/').to_owned();
     }
     let dir = file.rsplit_once('/').map_or("", |(dir, _)| dir);
-    let depth = if options.depth == 0 {
-        2
-    } else {
-        options.depth as usize
-    };
+    let depth = options.depth as usize;
     let name = dir.split('/').take(depth).collect::<Vec<_>>().join("/");
     if name.is_empty() {
         "(root)".into()
@@ -277,7 +282,12 @@ fn group_same_edits<'a>(drafts: Vec<Draft<'a>>) -> Vec<Draft<'a>> {
 
 /// `calls` edges: a changed symbol names another changed symbol, and the name's binding can be
 /// that symbol (see [`crate::scope`]): the same file, its Go package, or an import of it.
-fn call_edges(changes: &Changes, drafts: &[Draft<'_>], scope: &Scope<'_>) -> Vec<Edge> {
+fn call_edges(
+    changes: &Changes,
+    drafts: &[Draft<'_>],
+    scope: &Scope<'_>,
+    folders: Option<&Options>,
+) -> Vec<Edge> {
     let mut edges: Vec<Edge> = Vec::new();
     let mut spans: HashMap<&str, Vec<(u32, u32, &Draft<'_>)>> = HashMap::new();
     for d in drafts {
@@ -336,12 +346,15 @@ fn call_edges(changes: &Changes, drafts: &[Draft<'_>], scope: &Scope<'_>) -> Vec
                 else {
                     continue;
                 };
-                if caller.node.id != callee.node.id
-                    && seen.insert((&caller.node.id, &callee.node.id))
-                {
+                let (from, to) = if let Some(options) = folders {
+                    (folder(path, options), folder(def_file, options))
+                } else {
+                    (caller.node.id.clone(), callee.node.id.clone())
+                };
+                if from != to && (folders.is_some() || seen.insert((from.clone(), to.clone()))) {
                     edges.push(Edge {
-                        from: caller.node.id.clone(),
-                        to: callee.node.id.clone(),
+                        from,
+                        to,
                         kind: EdgeKind::Calls,
                         weight: None,
                     });
@@ -360,7 +373,6 @@ fn group_folders(
     rules: &Rules,
 ) -> (Vec<Node>, Vec<Edge>) {
     let mut groups: BTreeMap<String, Node> = BTreeMap::new();
-    let mut membership: HashMap<String, HashSet<String>> = HashMap::new();
     for node in nodes {
         let paths = node
             .sites
@@ -403,9 +415,7 @@ fn group_folders(
             if node.risk == Risk::Read {
                 group.risk = Risk::Read;
             }
-            group.touched_by_test |= node.touched_by_test;
         }
-        membership.insert(node.id, names);
     }
     let mut nodes: Vec<Node> = groups.into_values().collect();
     for (i, n) in nodes.iter_mut().enumerate() {
@@ -450,15 +460,9 @@ fn group_folders(
         .collect();
     let mut weights: BTreeMap<(String, String), usize> = BTreeMap::new();
     for e in edges {
-        for a in &membership[&e.from] {
-            for b in &membership[&e.to] {
-                if a != b {
-                    *weights
-                        .entry((ids[a.as_str()].into(), ids[b.as_str()].into()))
-                        .or_default() += e.weight.unwrap_or(1);
-                }
-            }
-        }
+        *weights
+            .entry((ids[e.from.as_str()].into(), ids[e.to.as_str()].into()))
+            .or_default() += 1;
     }
     let mut edges: Vec<Edge> = weights
         .into_iter()
@@ -492,16 +496,17 @@ fn prune_edges(edges: &mut Vec<Edge>) {
 }
 
 /// Largest body hunk first; import-only and error-definition sites are fallback choices.
-fn main_first(node: &mut Node, changes: &Changes) {
+fn main_first(node: &mut Node, changes: &Changes, units: &HashMap<&str, Vec<&Unit>>) {
     let best = node
         .sites
         .iter()
         .enumerate()
         .min_by_key(|(i, site)| {
-            let imports = changes
-                .units
-                .iter()
-                .filter(|u| u.file == site.file && site.start <= u.end && u.start <= site.end)
+            let imports = units
+                .get(site.file.as_str())
+                .into_iter()
+                .flatten()
+                .filter(|u| site.start <= u.end && u.start <= site.end)
                 .all(|u| import_only(u, changes));
             let stem = Path::new(&site.file)
                 .file_stem()
@@ -642,7 +647,6 @@ pub fn run(
             .iter()
             .any(|u| u.exported && u.ident.as_ref().is_some_and(|i| tested.contains(i)));
     }
-    let edges = call_edges(&changes, &drafts, &Scope::load(git, &head)?);
 
     let spec = spec
         .map(|p| std::fs::canonicalize(p).with_context(|| format!("spec {}", p.display())))
@@ -681,8 +685,14 @@ pub fn run(
             renames: vec![rename.clone()],
         });
     }
-    let grouped = options.group_by.as_deref() == Some("dir")
+    let grouped = options.group_by == Some(GroupBy::Dir)
         || (options.group_by.is_none() && nodes.len() > LARGE_THRESHOLD);
+    let edges = call_edges(
+        &changes,
+        &drafts,
+        &Scope::load(git, &head)?,
+        grouped.then_some(options),
+    );
     let (nodes, edges) = if grouped {
         group_folders(nodes, edges, options, rules)
     } else {
@@ -712,11 +722,15 @@ pub fn run(
     } else {
         HashSet::new()
     };
+    let mut units: HashMap<&str, Vec<&Unit>> = HashMap::new();
+    for unit in &changes.units {
+        units.entry(&unit.file).or_default().push(unit);
+    }
     for n in &mut draft.nodes {
         if grouped {
             n.touched_by_test = tested_folders.contains(&n.symbol);
         }
-        main_first(n, &changes);
+        main_first(n, &changes, &units);
     }
     let test_declarations = facts::test_declarations(git, &head, &changes)?;
     let owner: HashMap<&str, &str> = draft
@@ -747,7 +761,12 @@ pub fn run(
         skipped: &changes.skipped,
     };
     let store = git.store()?;
-    let out = out.unwrap_or_else(|| store.join(format!("{head}.facts.json")));
+    let out = out.unwrap_or_else(|| {
+        options.map.as_ref().map_or_else(
+            || store.join(format!("{head}.facts.json")),
+            |map| map.with_extension("facts.json"),
+        )
+    });
     for dir in [out.parent(), Some(store.as_path())].into_iter().flatten() {
         std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     }
@@ -761,10 +780,18 @@ pub fn run(
         std::fs::create_dir_all(parent)?;
     }
     let kept = !options.fresh
+        && options.group_by.is_none()
+        && options.split.is_empty()
+        && options.depth == Options::default().depth
         && std::fs::read_to_string(&map_path)
             .ok()
             .and_then(|t| serde_json::from_str::<ChangeMap>(&t).ok())
-            .is_some_and(|m| m.base == base && m.path == draft.path);
+            .is_some_and(|m| {
+                m.base == base
+                    && m.head == head
+                    && m.path == draft.path
+                    && m.grouped == draft.grouped
+            });
     if !kept {
         std::fs::write(&map_path, serde_json::to_string_pretty(&draft)? + "\n")
             .with_context(|| format!("writing {}", map_path.display()))?;
@@ -808,7 +835,7 @@ pub fn run(
     if grouped {
         println!(
             "grouping: --group-by dir --depth {}{}; --split <prefix> (repeat, first match wins); --group-by symbol to disable",
-            if options.depth == 0 { 2 } else { options.depth },
+            options.depth,
             options
                 .split
                 .iter()
@@ -945,7 +972,7 @@ mod tests {
         let git = Git::new(repo.path());
         let rules = Rules::load(None).expect("rules");
         let options = Options {
-            group_by: Some("dir".into()),
+            group_by: Some(GroupBy::Dir),
             depth: 2,
             fresh: true,
             ..Default::default()
@@ -964,6 +991,7 @@ mod tests {
         assert!(crate::validate::run(&git, &rules, &path).expect("validate"));
         let options = Options {
             path: Some("packages/a".into()),
+            map: Some(repo.path().join("scoped.json")),
             ..options
         };
         let path = run(&git, &rules, &base, &head, None, None, &options).expect("scoped extract");
@@ -975,6 +1003,147 @@ mod tests {
                 .sites
                 .iter()
                 .all(|s| under(&s.file, "packages/a"))
+        );
+    }
+
+    #[test]
+    fn kept_map_requires_matching_revision_and_draft_shape() {
+        let repo = crate::testutil::TempRepo::new("kept-map");
+        let base = repo.commit("base");
+        repo.write("packages/a/a.ts", "export function a() { return 1 }\n");
+        let head = repo.commit("head");
+        let git = Git::new(repo.path());
+        let rules = Rules::load(None).expect("rules");
+        let options = Options {
+            map: Some(repo.path().join("map.json")),
+            ..Default::default()
+        };
+        let path = run(&git, &rules, &base, &head, None, None, &options).expect("extract");
+        let original: ChangeMap =
+            serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("map");
+        for field in [
+            "head", "path", "grouped", "matching", "depth", "split", "group_by",
+        ] {
+            let mut old = original.clone();
+            old.nodes[0].caption = "retained label".into();
+            let mut tuned = Options {
+                map: options.map.clone(),
+                ..Default::default()
+            };
+            match field {
+                "head" => old.head = base.clone(),
+                "path" => old.path = Some("other".into()),
+                "grouped" => old.grouped = true,
+                "depth" => tuned.depth = 1,
+                "split" => tuned.split.push("packages/a".into()),
+                "group_by" => tuned.group_by = Some(GroupBy::Symbol),
+                _ => {}
+            }
+            std::fs::write(&path, serde_json::to_string(&old).expect("json")).expect("write");
+            run(&git, &rules, &base, &head, None, None, &tuned).expect("extract");
+            let new: ChangeMap =
+                serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("map");
+            assert_eq!(
+                new.nodes[0].caption == "retained label",
+                field == "matching",
+                "{field}"
+            );
+        }
+    }
+
+    #[test]
+    fn scoped_extract_preserves_shared_map_and_facts() {
+        let repo = crate::testutil::TempRepo::new("scoped-isolation");
+        let base = repo.commit("base");
+        repo.write("a/a.ts", "export const a = 1\n");
+        repo.write("b/b.ts", "export const b = 2\n");
+        let head = repo.commit("head");
+        let git = Git::new(repo.path());
+        let rules = Rules::load(None).expect("rules");
+        let shared =
+            run(&git, &rules, &base, &head, None, None, &Options::default()).expect("extract");
+        let shared_facts = shared.with_extension("facts.json");
+        let map_before = std::fs::read(&shared).expect("map");
+        let facts_before = std::fs::read(&shared_facts).expect("facts");
+        let scoped = repo.path().join("scoped/map.json");
+        let options = Options {
+            path: Some("a".into()),
+            map: Some(scoped.clone()),
+            ..Default::default()
+        };
+        run(&git, &rules, &base, &head, None, None, &options).expect("scoped");
+        assert_eq!(std::fs::read(&shared).expect("map"), map_before);
+        assert_eq!(std::fs::read(&shared_facts).expect("facts"), facts_before);
+        let facts: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(scoped.with_extension("facts.json")).expect("scoped facts"),
+        )
+        .expect("facts");
+        assert!(
+            facts["units"]
+                .as_array()
+                .expect("units")
+                .iter()
+                .all(|u| u["file"] == "a/a.ts")
+        );
+    }
+
+    #[test]
+    fn module_calls_follow_reference_files_and_count_each_reference() {
+        let repo = crate::testutil::TempRepo::new("module-calls");
+        repo.write("packages/a/a.ts", "export function target() { return 1 }\n");
+        repo.write("packages/b/b.ts", "export function target() { return 1 }\n");
+        let base = repo.commit("base");
+        repo.write("packages/a/a.ts", "export function target() { return 2 }\n");
+        repo.write("packages/b/b.ts", "export function target() { return 2 }\n");
+        repo.write(
+            "apps/x/x.ts",
+            "import { target } from '../../packages/a/a'\nexport function x() { return target() + target() }\n",
+        );
+        repo.write(
+            "apps/y/y.ts",
+            "import { target } from '../../packages/b/b'\nexport function y() { return target() }\n",
+        );
+        let head = repo.commit("head");
+        let path = run(
+            &Git::new(repo.path()),
+            &Rules::load(None).expect("rules"),
+            &base,
+            &head,
+            None,
+            None,
+            &Options {
+                group_by: Some(GroupBy::Dir),
+                ..Default::default()
+            },
+        )
+        .expect("extract");
+        let map: ChangeMap =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("read")).expect("map");
+        let names: HashMap<_, _> = map
+            .nodes
+            .iter()
+            .map(|n| (n.id.as_str(), n.symbol.as_str()))
+            .collect();
+        let edges: BTreeMap<_, _> = map
+            .edges
+            .iter()
+            .map(|e| ((names[e.from.as_str()], names[e.to.as_str()]), e.weight))
+            .collect();
+        assert_eq!(
+            edges,
+            BTreeMap::from([
+                (("apps/x", "packages/a"), Some(2)),
+                (("apps/y", "packages/b"), Some(1))
+            ])
+        );
+    }
+
+    #[test]
+    fn default_folder_depth_is_two() {
+        assert_eq!(Options::default().depth, 2);
+        assert_eq!(
+            folder("packages/a/src/a.ts", &Options::default()),
+            "packages/a"
         );
     }
 
@@ -1010,7 +1179,7 @@ mod tests {
         let rules = Rules::load(None).expect("rules");
         let changes = facts::changes(&git, &rules, &base, &head).expect("changes");
         let options = Options {
-            group_by: Some("dir".into()),
+            group_by: Some(GroupBy::Dir),
             ..Default::default()
         };
         let path = run(&git, &rules, &base, &head, None, None, &options).expect("extract");

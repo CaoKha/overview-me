@@ -27,7 +27,7 @@ pub struct Parsed {
     pub imports: HashSet<String>,
     /// Every identifier with its line and role.
     pub identifiers: Vec<Ident>,
-    /// Local variable and parameter bindings with their lexical scope.
+    /// Local variable and parameter bindings with end-exclusive byte ranges for their scope.
     pub locals: Vec<(String, usize, usize)>,
     /// Where each imported name comes from, by local name (TypeScript and JavaScript).
     pub import_from: HashMap<String, Import>,
@@ -44,6 +44,7 @@ pub struct Parsed {
 pub struct Ident {
     pub name: String,
     pub line: usize,
+    pub byte: usize,
     pub role: Role,
 }
 
@@ -608,56 +609,75 @@ fn collect_tests(lang: Lang, node: Node<'_>, src: &[u8], out: &mut Vec<TestDecl>
     }
 }
 
-fn collect_identifiers(lang: Lang, node: Node<'_>, src: &[u8], in_import: bool, out: &mut Parsed) {
-    if matches!(lang, Lang::TypeScript | Lang::Tsx)
-        && node.kind() == "variable_declarator"
-        && let Some(name) = node
-            .child_by_field_name("name")
-            .filter(|n| n.kind() == "identifier")
-    {
-        let mut block = node.parent();
-        while let Some(b) = block {
-            if b.kind() == "statement_block" {
-                out.locals.push((
-                    text(name, src),
-                    line(b.start_position().row),
-                    line(b.end_position().row),
-                ));
-                break;
-            }
-            block = b.parent();
+/// Only binding positions in a destructuring pattern; default expressions are references.
+fn collect_bindings(pattern: Node<'_>, scope: Node<'_>, src: &[u8], out: &mut Parsed) {
+    match pattern.kind() {
+        "identifier" | "shorthand_property_identifier_pattern" => {
+            out.locals
+                .push((text(pattern, src), scope.start_byte(), scope.end_byte()))
         }
-    }
-    if matches!(lang, Lang::TypeScript | Lang::Tsx)
-        && matches!(node.kind(), "required_parameter" | "optional_parameter")
-        && let Some(pattern) = node.child_by_field_name("pattern")
-    {
-        let mut function = node.parent();
-        while let Some(f) = function {
-            if matches!(
-                f.kind(),
-                "function_declaration"
-                    | "function_expression"
-                    | "generator_function"
-                    | "generator_function_declaration"
-                    | "arrow_function"
-                    | "method_definition"
-            ) {
-                walk(pattern, &mut |binding| {
-                    if matches!(
-                        binding.kind(),
-                        "identifier" | "shorthand_property_identifier_pattern"
-                    ) {
-                        out.locals.push((
-                            text(binding, src),
-                            line(f.start_position().row),
-                            line(f.end_position().row),
-                        ));
-                    }
-                });
-                break;
+        "assignment_pattern" | "object_assignment_pattern" => {
+            if let Some(left) = pattern.child_by_field_name("left") {
+                collect_bindings(left, scope, src, out);
             }
-            function = f.parent();
+        }
+        "pair_pattern" => {
+            if let Some(value) = pattern.child_by_field_name("value") {
+                collect_bindings(value, scope, src, out);
+            }
+        }
+        "object_pattern" | "array_pattern" | "rest_pattern" => {
+            let mut cursor = pattern.walk();
+            for child in pattern.named_children(&mut cursor) {
+                collect_bindings(child, scope, src, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_identifiers(lang: Lang, node: Node<'_>, src: &[u8], in_import: bool, out: &mut Parsed) {
+    if matches!(lang, Lang::TypeScript | Lang::Tsx) {
+        let parameter = matches!(node.kind(), "required_parameter" | "optional_parameter");
+        let binding = match node.kind() {
+            "variable_declarator" => node.child_by_field_name("name"),
+            "required_parameter" | "optional_parameter" => node.child_by_field_name("pattern"),
+            "for_in_statement" => node
+                .child_by_field_name("left")
+                .filter(|_| node.child_by_field_name("kind").is_some()),
+            "arrow_function" => node.child_by_field_name("parameter"),
+            _ => None,
+        };
+        if let Some(pattern) = binding {
+            let lexical = if node.kind() == "for_in_statement" {
+                node.child_by_field_name("kind")
+                    .is_none_or(|kind| text(kind, src) != "var")
+            } else {
+                node.parent()
+                    .is_none_or(|parent| parent.kind() != "variable_declaration")
+            };
+            let mut ancestor = Some(node);
+            while let Some(scope) = ancestor {
+                let function = matches!(
+                    scope.kind(),
+                    "function_declaration"
+                        | "function_expression"
+                        | "generator_function"
+                        | "generator_function_declaration"
+                        | "arrow_function"
+                        | "method_definition"
+                );
+                if function
+                    || (!parameter
+                        && (scope.kind() == "statement_block"
+                            || (lexical
+                                && matches!(scope.kind(), "for_statement" | "for_in_statement"))))
+                {
+                    collect_bindings(pattern, scope, src, out);
+                    break;
+                }
+                ancestor = scope.parent();
+            }
         }
     }
     let in_import = in_import
@@ -673,6 +693,7 @@ fn collect_identifiers(lang: Lang, node: Node<'_>, src: &[u8], in_import: bool, 
         out.identifiers.push(Ident {
             name,
             line: line(node.start_position().row),
+            byte: node.start_byte(),
             role: role(lang, node, src),
         });
         return;

@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 
 use crate::git::Git;
 use crate::rules::Rules;
@@ -115,8 +115,18 @@ enum Command {
     },
 }
 
+fn cli_from_matches(matches: &clap::ArgMatches) -> Result<Cli> {
+    let mut cli = Cli::from_arg_matches(matches)?;
+    if let Command::Extract { options, .. } = &mut cli.command {
+        options.fresh |= matches.subcommand_matches("extract").is_some_and(|args| {
+            args.value_source("depth") == Some(clap::parser::ValueSource::CommandLine)
+        });
+    }
+    Ok(cli)
+}
+
 fn main() -> Result<ExitCode> {
-    let cli = Cli::parse();
+    let cli = cli_from_matches(&Cli::command().get_matches())?;
     let git = Git::new(&cli.repo);
     match cli.command {
         Command::Base { pr } => base::run(&git, pr.as_deref())?,
@@ -169,4 +179,52 @@ fn main() -> Result<ExitCode> {
         Command::Path { head } => println!("{}", git.map_path(&head)?.display()),
     }
     Ok(ExitCode::SUCCESS)
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    #[test]
+    fn scoped_extract_requires_map_and_tuning_flags_parse() {
+        assert!(
+            Cli::try_parse_from(["overview-me", "extract", "--base", "HEAD", "--path", "src"])
+                .is_err()
+        );
+        for value in ["dir", "symbol"] {
+            assert!(
+                Cli::try_parse_from([
+                    "overview-me",
+                    "extract",
+                    "--base",
+                    "HEAD",
+                    "--group-by",
+                    value
+                ])
+                .is_ok()
+            );
+        }
+        assert!(
+            Cli::try_parse_from([
+                "overview-me",
+                "extract",
+                "--base",
+                "HEAD",
+                "--group-by",
+                "other"
+            ])
+            .is_err()
+        );
+        for extra in [vec![], vec!["--depth", "2"]] {
+            let mut args = vec!["overview-me", "extract", "--base", "HEAD"];
+            args.extend(&extra);
+            let matches = Cli::command().try_get_matches_from(args).expect("args");
+            let Command::Extract { options, .. } = cli_from_matches(&matches).expect("cli").command
+            else {
+                panic!("extract")
+            };
+            assert_eq!(options.depth, 2);
+            assert_eq!(options.fresh, !extra.is_empty());
+        }
+    }
 }
