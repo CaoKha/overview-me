@@ -11,7 +11,7 @@
   `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
   one section per `##` with a sticky section bar, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded code previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
-  traces its edges, clicking it pins it and lists its files in a draggable fixed side panel resizable from every edge and corner (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline code previews. Code previews open in the same panel; it has a word-wrap toggle, remembered per reader.
+  traces its edges, clicking it pins it and lists its files in a draggable fixed side panel resizable from every edge and corner (a height-adjustable bottom sheet on phones) with copy buttons and inline code previews that resize from a bar under them. Code previews open in the same panel; it has a word-wrap toggle, remembered per reader.
   Previewing a `path:line` elsewhere highlights the boxes that hold it and links to them from the preview. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
   and as a local file in the browser.
 -->
@@ -233,13 +233,6 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   .detail-body { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; }
   :root.panel-sized .detail pre.code { resize: none; }
   :root.panel-sized .detail > pre.code { flex: 1; min-height: 0; max-height: none; }
-  :root.panel-sized .detail.single-preview .detail-body { flex: 1; min-height: 0; }
-  /* The open preview fills the space the other rows leave, but keeps 240px when a long list leaves none; the list then scrolls. */
-  :root.panel-sized .detail.single-preview ul.paths { flex: 1 0 auto; }
-  :root.panel-sized .detail.single-preview li:has(pre.code) { flex: 1 0 0; min-height: 240px; }
-  :root.panel-sized .detail.single-preview ul.paths > li:not(:has(pre.code)) { flex-shrink: 0; }
-  :root.panel-sized .detail.single-preview li:has(pre.code) { display: grid; grid-template-columns: auto auto auto 1fr; grid-template-rows: auto minmax(0, 1fr); }
-  :root.panel-sized .detail.single-preview ul.paths pre.code { grid-column: 1 / -1; align-self: stretch; width: auto; height: auto; min-height: 0; }
 }
 .detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; cursor: grab; touch-action: none; }
 .detail.dragging { user-select: none; }
@@ -249,7 +242,12 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .detail-note { color: var(--accent); font-size: 14px; }
 .detail ul.paths { list-style: none; padding: 0; gap: 6px; }
 .detail ul.paths li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
-.detail ul.paths pre.code { flex-basis: 100%; width: 0; height: 320px; max-height: none; resize: vertical; }
+.detail ul.paths pre.code { flex-basis: 100%; width: 0; height: 320px; max-height: none; }
+/* The bar under a file preview: drag it (or arrow keys) to set the height; double-click restores the default. */
+.preview-resize { flex-basis: 100%; position: relative; height: 12px; margin-top: -8px; cursor: ns-resize; touch-action: none; user-select: none; border-radius: var(--r); }
+.preview-resize::after { content: ''; position: absolute; top: 4px; left: calc(50% - 16px); width: 32px; height: 3px; border-radius: var(--r); background: var(--edge); }
+.preview-resize:hover::after, .preview-resize:focus-visible::after { background: var(--accent); }
+.preview-resize:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
 .detail ul.paths code { flex: 0 1 auto; min-width: 0; user-select: all; }
 .detail code { background: var(--card); }
 .detail .none { color: var(--muted); font-size: 14px; }
@@ -776,7 +774,6 @@ function showPanel({ label, title, href, wrap, live, body, onClose }) {
   head.append(close);
   sidePanel.setAttribute('aria-label', label);
   sidePanel.setAttribute('aria-live', live ? 'polite' : 'off');
-  sidePanel.classList.remove('single-preview');
   sidePanel.replaceChildren(...panelGrips, head, ...body);
   sidePanel.hidden = false;
   closePanel = () => {
@@ -828,6 +825,61 @@ function scrollCode(pre) {
   const first = pre.querySelector('.cited');
   if (first) pre.scrollTop += first.getBoundingClientRect().top - pre.getBoundingClientRect().top
     - 3 * parseFloat(getComputedStyle(pre).lineHeight);
+}
+// A preview in a box's file list opens at its default height. The bar under it sets the height, up to
+// the panel's scroll area however long the list; double-click restores the default.
+function filePreview(li, preview) {
+  const min = 120;
+  const pre = codePre(preview);
+  const grip = el('div', 'preview-resize');
+  grip.tabIndex = 0;
+  grip.setAttribute('role', 'separator');
+  grip.setAttribute('aria-orientation', 'horizontal');
+  grip.setAttribute('aria-label', 'Resize preview height');
+  grip.setAttribute('aria-valuemin', min);
+  li.append(pre, grip);
+  // On phones the body has no box and the sheet itself scrolls.
+  const body = li.closest('.detail-body');
+  const scroller = getComputedStyle(body).display === 'contents' ? sidePanel : body;
+  // Grows the preview past the panel first, so a panel without a set height reaches its tallest.
+  const tallest = () => {
+    const height = pre.style.height;
+    pre.style.height = '100vh';
+    const style = getComputedStyle(scroller);
+    const room = scroller.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    const max = Math.max(min, room - (li.offsetHeight - pre.offsetHeight));
+    pre.style.height = height;
+    return max;
+  };
+  const setHeight = (height, max = tallest()) => {
+    if (height !== null) pre.style.height = `${Math.round(Math.min(Math.max(min, height), max))}px`;
+    grip.setAttribute('aria-valuemax', max);
+    grip.setAttribute('aria-valuenow', pre.offsetHeight);
+  };
+  let drag = null;
+  grip.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    grip.focus({ preventScroll: true });
+    grip.setPointerCapture(ev.pointerId);
+    drag = { id: ev.pointerId, y: ev.clientY, height: pre.offsetHeight, max: tallest() };
+  });
+  grip.addEventListener('pointermove', (ev) => {
+    if (drag?.id === ev.pointerId) setHeight(drag.height + ev.clientY - drag.y, drag.max);
+  });
+  grip.addEventListener('lostpointercapture', () => { drag = null; });
+  grip.addEventListener('keydown', (ev) => {
+    const step = { ArrowUp: -32, ArrowDown: 32 }[ev.key];
+    if (!step) return;
+    ev.preventDefault();
+    setHeight(pre.offsetHeight + step);
+  });
+  grip.addEventListener('dblclick', () => {
+    pre.style.height = '';
+    setHeight(null);
+  });
+  setHeight(null);
+  scrollCode(pre);
 }
 for (const code of out.querySelectorAll(':not(pre) > code')) {
   if (!/:\d+(-\d+)?$/.test(code.textContent)) continue;
@@ -1064,13 +1116,10 @@ function drawFlow(arch, spec) {
           button.setAttribute('aria-expanded', 'false');
           button.addEventListener('click', () => {
             const pre = li.querySelector('pre.code');
-            if (pre) pre.remove();
-            else {
-              const pre = codePre(preview);
-              li.append(pre);
-              scrollCode(pre);
-            }
-            sidePanel.classList.toggle('single-preview', sidePanel.querySelectorAll('pre.code').length === 1);
+            if (pre) {
+              pre.remove();
+              li.querySelector('.preview-resize').remove();
+            } else filePreview(li, preview);
             button.title = pre ? 'Preview' : 'Hide preview';
             button.setAttribute('aria-expanded', String(!pre));
           });
