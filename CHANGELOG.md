@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.1](https://github.com/CaoKha/overview-me/compare/v0.15.0...v0.15.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **page:** open file previews at 480px instead of 320px ([#69](https://github.com/CaoKha/overview-me/issues/69)) ([888abdd](https://github.com/CaoKha/overview-me/commit/888abdd53694e3f14852622f3e8d8c64d9a5ab43))
+
+
+### Documentation
+
+* describe the panel's icon buttons and preview resize bar in the tutorial ([#68](https://github.com/CaoKha/overview-me/issues/68)) ([867e229](https://github.com/CaoKha/overview-me/commit/867e229455e856793fc5825b14699bde3c1760ce))
+
 ## [0.15.0](https://github.com/CaoKha/overview-me/compare/v0.14.0...v0.15.0) (2026-11-20)
 
 
