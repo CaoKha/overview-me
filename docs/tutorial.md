@@ -34,13 +34,15 @@ The Flow section draws how the code ran before the change and how it runs now, s
 
 ## 4. Open a box
 
-Click a box to open its panel on the right. It shows the box's note and its files as `path:line`:
+Click a box to open its panel on the right. It shows the box's note and its files as `path:line`, each with three icon buttons:
 
-- **Copy** puts the path on your clipboard, ready for your editor's file search. **Copy all** copies every path.
-- **Preview** shows the file inside the panel, scrolled to the cited lines, which are highlighted. **Hide** closes it.
-- **open ↗** opens the lines on GitHub at the commit the page describes.
+- The copy icon puts the path on your clipboard, ready for your editor's file search. **Copy all** under the list copies every path.
+- The eye icon shows the file under its row, scrolled to the cited lines, which are highlighted. Click it again to hide the file. Drag the bar under the preview to make it taller or shorter, or focus the bar and use the arrow keys. Double-click the bar to go back to the default height.
+- The arrow icon opens the lines on GitHub at the commit the page describes.
 
-Drag the panel by its title to move it, and drag any edge or corner to resize it. Double-click the title or an edge to reset it. Press Escape or click the box again to close it.
+The wrap icon in the panel's title bar wraps long lines in every preview. The page remembers this choice.
+
+Drag the panel by its title to move it, and drag any edge or corner to resize it. Double-click the title or an edge to reset it. Press Escape, click the × icon or click the box again to close it.
 
 ![The panel of the new pathScore box, with its file previewed and the cited lines highlighted](images/box-panel.png)
 
@@ -48,7 +50,7 @@ Drag the panel by its title to move it, and drag any edge or corner to resize it
 
 Every `path:line` in the text has an eye button next to it. Click it to open the whole file in a code panel, scrolled to the cited lines.
 
-The preview also finds that code in the flow. The boxes that hold those lines get a yellow ring, and the panel lists them under **In the flow**. Click one to scroll to its box. Click the eye again, or **Close**, to close the preview and clear the rings.
+The preview also finds that code in the flow. The boxes that hold those lines get a yellow ring, and the panel lists them under **In the flow**. Click one to scroll to its box. Click the eye again, or the × icon, to close the preview and clear the rings. The title bar also has the wrap icon and an arrow icon that opens the lines on GitHub.
 
 If the panel covers the box you are looking for, drag the panel aside or make it narrower.
 
