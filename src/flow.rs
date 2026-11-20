@@ -84,6 +84,8 @@ struct Item {
     /// Internal key: a node id, `rm:<file>#<name>` or `ex:<file>#<name>`.
     key: String,
     label: String,
+    /// The Before label when the base side lacks `label`'s symbol: its own code's names.
+    base_label: Option<String>,
     n: Option<String>,
     note: Option<String>,
     lane: String,
@@ -207,6 +209,37 @@ fn label(name: &str) -> String {
     }
     let tail: String = chars[chars.len() - (LABEL_MAX - 1)..].iter().collect();
     format!("…{tail}")
+}
+
+/// What a node's Before box is called when its symbol is not at base: the base symbols it
+/// edits (whole names that fit, then `+N` for the rest), else the stem of its first base
+/// file. `None` keeps the node's symbol.
+fn base_label(symbol: &str, base: Option<&Code>, base_paths: &[String]) -> Option<String> {
+    let mut names: Vec<&str> = Vec::new();
+    for (_, s) in base.map(|c| c.decls.as_slice()).unwrap_or_default() {
+        if !names.contains(&s.name.as_str()) {
+            names.push(&s.name);
+        }
+    }
+    if names.contains(&symbol) {
+        return None;
+    }
+    if !names.is_empty() {
+        let with_rest = |k: usize| match names.len() - k {
+            0 => names[..k].join(", "),
+            more => format!("{} +{more}", names[..k].join(", ")),
+        };
+        let fits = (1..=names.len())
+            .rev()
+            .map(with_rest)
+            .find(|t| t.chars().count() <= LABEL_MAX);
+        return Some(fits.unwrap_or_else(|| label(&with_rest(1))));
+    }
+    let first = base_paths.first()?;
+    let file = first.split_once(':').map_or(first.as_str(), |(f, _)| f);
+    let name = Path::new(file).file_name()?.to_str()?;
+    let stem = name.rsplit_once('.').map_or(name, |(s, _)| s);
+    Some(label(if stem.is_empty() { name } else { stem }))
 }
 
 fn parse_at(git: &Git, rev: &str, path: &str) -> Result<Option<Parsed>> {
@@ -603,6 +636,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         items.push(Item {
             key: node.id.clone(),
             label: label(&node.symbol),
+            base_label: None,
             n: Some(node.id.clone()),
             note: Some(node.caption.clone()).filter(|c| !c.trim().is_empty()),
             lane: node.lane.clone(),
@@ -662,6 +696,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
                     items.push(Item {
                         key: node.id.clone(),
                         label: label(&node.symbol),
+                        base_label: None,
                         n: Some(node.id.clone()),
                         note: Some(node.caption.clone()).filter(|c| !c.trim().is_empty()),
                         lane: node.lane.clone(),
@@ -691,6 +726,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
             items.push(Item {
                 key: format!("rm:{old_file}#{}", s.name),
                 label: label(&s.name),
+                base_label: None,
                 n: (owners.len() == 1)
                     .then(|| owners.iter().next().map(|s| (*s).to_owned()))
                     .flatten(),
@@ -711,6 +747,10 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     }
 
     for item in &mut items {
+        // Before sorting, so the names keep the map's site order, as the box's paths do.
+        if let Some(node) = map.nodes.iter().find(|n| n.id == item.key) {
+            item.base_label = base_label(&node.symbol, item.base.as_ref(), &item.base_paths);
+        }
         for code in [&mut item.head, &mut item.base].into_iter().flatten() {
             code.spans.sort();
             code.spans.dedup();
@@ -828,6 +868,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         items.push(Item {
             key: (*k).to_owned(),
             label: label(&sym.name),
+            base_label: None,
             n: None,
             note: None,
             lane: lane_of(&file),
@@ -1049,14 +1090,16 @@ fn diagram(
             kind.push("store");
         }
         let mut box_ = Map::new();
-        box_.insert("label".into(), json!(i.label));
+        let label = if after { None } else { i.base_label.as_ref() };
+        box_.insert("label".into(), json!(label.unwrap_or(&i.label)));
         if let Some(n) = &i.n {
             box_.insert("n".into(), json!(n));
         }
         if !kind.is_empty() {
             box_.insert("kind".into(), json!(kind.join(" ")));
         }
-        if let Some(note) = &i.note {
+        // The caption says what the change does: Before shows it only when no After box does.
+        if let Some(note) = i.note.as_ref().filter(|_| after || i.head.is_none()) {
             box_.insert("note".into(), json!(note));
         }
         let paths = if after { &i.head_paths } else { &i.base_paths };
@@ -1161,6 +1204,7 @@ mod tests {
             .map(|(n, lane)| Item {
                 key: (*lane).to_owned(),
                 label: (*lane).to_owned(),
+                base_label: None,
                 n: None,
                 note: None,
                 lane: (*lane).to_owned(),
@@ -1567,6 +1611,126 @@ mod tests {
             map,
         )
         .expect("flow")
+    }
+
+    /// Moves the sites of the node at `file` into the node `into`, as an agent grouping them would.
+    fn group_into(map: &mut ChangeMap, into: &str, file: &str) {
+        let at = map
+            .nodes
+            .iter()
+            .position(|n| n.id != into && n.sites.iter().any(|s| s.file == file))
+            .unwrap_or_else(|| panic!("no node at {file}: {:?}", map.nodes));
+        let from = map.nodes.remove(at);
+        map.edges.retain(|e| e.from != from.id && e.to != from.id);
+        map.tour.retain(|id| id != &from.id);
+        let node = map.nodes.iter_mut().find(|n| n.id == into).expect("into");
+        node.sites.extend(from.sites);
+        node.caption = "Adds newFn and calls it".to_owned();
+    }
+
+    #[test]
+    fn before_label_names_base_code_not_new_symbol() {
+        let repo = TempRepo::new("before-label-base");
+        repo.write("src/old.ts", "export function oldFn() {\n  return 1\n}\n");
+        let base = repo.commit("base");
+        repo.write("src/old.ts", "export function oldFn() {\n  return 2\n}\n");
+        repo.write("src/fresh.ts", "export function newFn() {\n  return 3\n}\n");
+        let head = repo.commit("head");
+        let mut map = draft(&repo, &base, &head);
+        let id = node_id(&map, "newFn");
+        group_into(&mut map, &id, "src/old.ts");
+        let flow = flow_of(&repo, &map);
+        let before = flow.before.expect("before");
+        assert_eq!(before["nodes"][&id]["label"], "oldFn", "{before}");
+        assert!(before["nodes"][&id].get("note").is_none(), "{before}");
+        assert_eq!(flow.after["nodes"][&id]["label"], "newFn");
+        assert_eq!(flow.after["nodes"][&id]["note"], "Adds newFn and calls it");
+    }
+
+    #[test]
+    fn before_label_falls_back_to_the_file_stem() {
+        let repo = TempRepo::new("before-label-stem");
+        repo.write("src/router.ts", "console.log(1)\n");
+        let base = repo.commit("base");
+        repo.write("src/router.ts", "console.log(2)\n");
+        repo.write("src/fresh.ts", "export function newFn() {\n  return 3\n}\n");
+        let head = repo.commit("head");
+        let mut map = draft(&repo, &base, &head);
+        let id = node_id(&map, "newFn");
+        group_into(&mut map, &id, "src/router.ts");
+        let flow = flow_of(&repo, &map);
+        let before = flow.before.expect("before");
+        assert_eq!(before["nodes"][&id]["label"], "router", "{before}");
+        assert_eq!(flow.after["nodes"][&id]["label"], "newFn");
+    }
+
+    #[test]
+    fn before_label_keeps_a_symbol_changed_in_place() {
+        let repo = TempRepo::new("before-label-same");
+        repo.write("src/services/fee.ts", FEE_BASE);
+        let base = repo.commit("base");
+        repo.write("src/services/fee.ts", FEE_HEAD);
+        let head = repo.commit("head");
+        let map = draft(&repo, &base, &head);
+        let fee = node_id(&map, "fee");
+        let flow = flow_of(&repo, &map);
+        assert_eq!(flow.before.expect("before")["nodes"][&fee]["label"], "fee");
+        assert_eq!(flow.after["nodes"][&fee]["label"], "fee");
+    }
+
+    #[test]
+    fn base_label_cuts_a_name_list_at_whole_names() {
+        let code = |names: &[&str]| Code {
+            spans: Vec::new(),
+            decls: names
+                .iter()
+                .map(|n| {
+                    let sym = Symbol {
+                        name: (*n).to_owned(),
+                        ..Symbol::default()
+                    };
+                    ("a.ts".to_owned(), sym)
+                })
+                .collect(),
+        };
+        let got = |names: &[&str]| base_label("newFn", Some(&code(names)), &[]);
+        assert_eq!(
+            got(&["Route", "Route", "useKyc"]).as_deref(),
+            Some("Route, useKyc")
+        );
+        assert_eq!(
+            got(&["Route", "RouteComponent", "useSubscribeToKyc"]).as_deref(),
+            Some("Route, RouteComponent +1")
+        );
+        assert_eq!(
+            got(&["aVeryLongSymbolNameIndeed", "b"]).as_deref(),
+            Some("…yLongSymbolNameIndeed +1")
+        );
+        assert_eq!(got(&["Route", "newFn"]), None);
+        let paths = ["src/drizzle.config.ts".to_owned()];
+        assert_eq!(
+            base_label("x", None, &paths).as_deref(),
+            Some("drizzle.config")
+        );
+    }
+
+    #[test]
+    fn grouped_removal_box_gets_the_base_label() {
+        let repo = TempRepo::new("before-label-grouped");
+        repo.write("src/a.ts", "export function gone() { return 1 }\n");
+        let base = repo.commit("base");
+        repo.write("src/a.ts", "console.log('new')\n");
+        let head = repo.commit("head");
+        let mut map = draft(&repo, &base, &head);
+        map.grouped = true;
+        map.nodes[0].symbol = "newThing".to_owned();
+        map.nodes[0].caption = "Replaces gone with a log".to_owned();
+        let id = map.nodes[0].id.clone();
+        let flow = flow_of(&repo, &map);
+        let before = flow.before.expect("before");
+        assert_eq!(before["nodes"][&id]["label"], "gone", "{before}");
+        // No After box shows the caption, so Before keeps it.
+        assert_eq!(before["nodes"][&id]["note"], "Replaces gone with a log");
     }
 
     #[test]
