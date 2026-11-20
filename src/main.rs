@@ -59,9 +59,14 @@ enum Command {
         /// Facts file to write instead of the default.
         #[arg(long)]
         out: Option<PathBuf>,
-        /// Overwrite the map even when one for this base exists.
+        #[command(flatten)]
+        options: extract::Options,
+    },
+    /// Print the changed hunks owned by one node.
+    Node {
+        id: String,
         #[arg(long)]
-        fresh: bool,
+        map: Option<PathBuf>,
     },
     /// Check a map against the schema and git; exits 1 on problems.
     Validate { map: PathBuf },
@@ -120,10 +125,14 @@ fn main() -> Result<ExitCode> {
             head,
             spec,
             out,
-            fresh,
+            options,
         } => {
             let rules = Rules::load(cli.rules.as_deref())?;
-            extract::run(&git, &rules, &base, &head, spec.as_deref(), out, fresh)?;
+            extract::run(&git, &rules, &base, &head, spec.as_deref(), out, &options)?;
+        }
+        Command::Node { id, map } => {
+            let rules = Rules::load(cli.rules.as_deref())?;
+            extract::node(&git, &rules, &id, map)?;
         }
         Command::Validate { map } => {
             let rules = Rules::load(cli.rules.as_deref())?;

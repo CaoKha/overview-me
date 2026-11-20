@@ -23,6 +23,8 @@ use crate::rules::Rules;
 const MAX_BEFORE_STEPS: usize = 4;
 /// Stops under Read first.
 const MAX_READ_FIRST: usize = 5;
+/// Module pages explain a bounded set of steps; every group remains in the map.
+const MAX_MODULE_STEPS: usize = 20;
 
 /// The marker `overview-me page` looks for.
 pub const SLOT: &str = "<!-- fill:";
@@ -63,10 +65,15 @@ pub fn run(
             out.display()
         );
     }
-    let changes = facts::changes(git, rules, &map.base, &map.head)?;
+    let changes = facts::changes_in(git, rules, &map.base, &map.head, map.path.as_deref())?;
     let md = page(&map, &flow, &changes, kind);
     std::fs::write(&out, &md).with_context(|| format!("writing {}", out.display()))?;
     println!("page:  {}", out.display());
+    if map.grouped {
+        println!(
+            "module steps: at most {MAX_MODULE_STEPS} prose slots; remaining groups stay in the map and flows"
+        );
+    }
     println!(
         "slots: {} to fill (search for \"{SLOT}\")",
         md.matches(SLOT).count()
@@ -182,12 +189,16 @@ pub fn page(map: &ChangeMap, flow: &FlowFile, changes: &Changes, kind: &Kind<'_>
     for e in &flow.entry_points {
         let (id, label) = e.symbol.split_once(' ').unwrap_or((&e.symbol, ""));
         entries.push(id.to_owned());
-        let _ = writeln!(
-            w,
-            "- {} → `{label}` `{}` ({id})",
-            slot("the route, command, job, event or UI action that reaches it"),
-            e.at
-        );
+        if map.grouped {
+            let _ = writeln!(w, "- `{label}` `{}` ({id})", e.at);
+        } else {
+            let _ = writeln!(
+                w,
+                "- {} → `{label}` `{}` ({id})",
+                slot("the route, command, job, event or UI action that reaches it"),
+                e.at
+            );
+        }
     }
     if flow.entry_points.is_empty() {
         let _ = writeln!(w, "None.");
@@ -245,7 +256,12 @@ pub fn page(map: &ChangeMap, flow: &FlowFile, changes: &Changes, kind: &Kind<'_>
     }
     let _ = writeln!(w, "### After: {}", slot("how it works now, in one line"));
     let _ = writeln!(w, "```flow\n@after\n```\n");
-    for (i, k) in after_order.iter().enumerate() {
+    let step_limit = if map.grouped {
+        MAX_MODULE_STEPS
+    } else {
+        usize::MAX
+    };
+    for (i, k) in after_order.iter().take(step_limit).enumerate() {
         let _ = writeln!(
             w,
             "{}. {} `{}` ({k})",
@@ -256,6 +272,13 @@ pub fn page(map: &ChangeMap, flow: &FlowFile, changes: &Changes, kind: &Kind<'_>
     }
     let _ = writeln!(w);
 
+    if after_order.len() > step_limit {
+        let _ = writeln!(
+            w,
+            "{} more module steps are listed in the map; prose capped at {step_limit}.\n",
+            after_order.len() - step_limit
+        );
+    }
     let _ = writeln!(w, "## Data and state");
     let _ = writeln!(
         w,
@@ -517,6 +540,8 @@ mod tests {
     fn fixture() -> (ChangeMap, FlowFile) {
         let map = ChangeMap {
             version: 1,
+            grouped: false,
+            path: None,
             base: BASE.into(),
             head: HEAD.into(),
             spec: None,
@@ -607,6 +632,41 @@ mod tests {
             not_drawn: Vec::new(),
         };
         (map, flow)
+    }
+
+    #[test]
+    fn large_slots_are_capped_per_module() {
+        let (mut map, mut flow) = fixture();
+        let changes = Changes::default();
+        map.grouped = true;
+        let template = map.nodes[0].clone();
+        map.nodes = (1..=55)
+            .map(|i| {
+                let mut n = template.clone();
+                n.id = format!("N{i}");
+                n
+            })
+            .collect();
+        map.tour = map.nodes.iter().map(|n| n.id.clone()).collect();
+        flow.after["nodes"] = serde_json::json!({});
+        for n in &map.nodes {
+            flow.after["nodes"][&n.id] = serde_json::json!({ "n": n.id, "paths": ["src/a.ts:1"] });
+        }
+        let md = page(
+            &map,
+            &flow,
+            &changes,
+            &Kind {
+                title: "PR overview",
+                scope: None,
+            },
+        );
+        assert_eq!(
+            md.matches("fill: what this step does").count(),
+            MAX_MODULE_STEPS
+        );
+        assert!(md.contains("35 more module steps"));
+        assert!(md.matches(SLOT).count() < 45);
     }
 
     /// The whole page, so a change to the layout shows up as a diff here.

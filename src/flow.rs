@@ -286,26 +286,27 @@ fn side(
     }
     let files = &*files;
 
+    let mut spans: HashMap<&str, Vec<(usize, usize, &str)>> = HashMap::new();
+    for (key, code) in boxes {
+        for (file, a, b) in &code.spans {
+            spans.entry(file).or_default().push((*a, *b, key));
+        }
+    }
     let in_box = |file: &str, a: usize, b: usize| {
-        boxes.iter().any(|(_, c)| {
-            c.spans
-                .iter()
-                .any(|(f, sa, sb)| f == file && *sa <= b && a <= *sb)
-        })
+        spans
+            .get(file)
+            .is_some_and(|spans| spans.iter().any(|(sa, sb, _)| *sa <= b && a <= *sb))
     };
     let owner = |file: &str, line: usize| -> Option<Owner> {
-        let smallest = boxes
-            .iter()
-            .filter_map(|(k, c)| {
-                c.spans
-                    .iter()
-                    .filter(|(f, a, b)| f == file && *a <= line && line <= *b)
-                    .map(|(_, a, b)| (b - a, k))
-                    .min()
-            })
+        let smallest = spans
+            .get(file)
+            .into_iter()
+            .flatten()
+            .filter(|(a, b, _)| *a <= line && line <= *b)
+            .map(|(a, b, key)| (b - a, *key))
             .min();
         if let Some((_, k)) = smallest {
-            return Some(Owner::Box(k.clone()));
+            return Some(Owner::Box(k.to_owned()));
         }
         let p = files.get(file)?;
         if p.in_tests(line) {
@@ -424,24 +425,31 @@ fn dangling(
         .values()
         .flat_map(|p| p.symbols.iter().map(|s| s.ident.as_str()))
         .collect();
+    let mut refs: HashMap<&str, Vec<(&str, &Parsed, &Ident)>> = HashMap::new();
+    for (path, p) in files.iter() {
+        for r in &p.identifiers {
+            refs.entry(&r.name).or_default().push((path, p, r));
+        }
+    }
     let mut out: Vec<Link> = Vec::new();
     for (file, sym) in removed {
         if declared.contains(sym.ident.as_str()) {
             continue;
         }
-        for (path, p) in files.iter() {
-            for r in &p.identifiers {
-                if r.name == sym.ident
-                    && !p.in_tests(r.line)
-                    && !is_declaration(p, &r.name, r.line)
-                    && scope.reaches(path, p, r, file, sym)
-                {
-                    out.push(Link {
-                        symbol: sym.name.clone(),
-                        at: format!("{path}:{}", r.line),
-                        nodes: Vec::new(),
-                    });
-                }
+        for &(path, p, r) in refs.get(sym.ident.as_str()).into_iter().flatten() {
+            if !p.in_tests(r.line)
+                && !p
+                    .locals
+                    .iter()
+                    .any(|(name, a, b)| name == &r.name && *a <= r.line && r.line <= *b)
+                && !is_declaration(p, &r.name, r.line)
+                && scope.reaches(path, p, r, file, sym)
+            {
+                out.push(Link {
+                    symbol: sym.name.clone(),
+                    at: format!("{path}:{}", r.line),
+                    nodes: Vec::new(),
+                });
             }
         }
     }
@@ -456,7 +464,7 @@ fn dangling(
 /// # Errors
 /// When git fails.
 pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
-    let changes = facts::changes(git, rules, &map.base, &map.head)?;
+    let changes = facts::changes_in(git, rules, &map.base, &map.head, map.path.as_deref())?;
     let merge_base = git
         .run(&["merge-base", "--end-of-options", &map.base, &map.head])?
         .trim()
@@ -644,6 +652,17 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
                 continue;
             }
             removed.push((path.clone(), (*s).clone()));
+            if map.grouped {
+                if let Some(item) = items.iter_mut().find(|i| owners.contains(i.key.as_str())) {
+                    let code = item.base.get_or_insert_with(Code::default);
+                    code.spans.push((old_file.clone(), s.start, s.end));
+                    code.decls.push((old_file.clone(), (*s).clone()));
+                    if item.base_paths.is_empty() {
+                        item.base_paths.push(span_path(&old_file, s.start, s.end));
+                    }
+                }
+                continue;
+            }
             items.push(Item {
                 key: format!("rm:{old_file}#{}", s.name),
                 label: label(&s.name),
@@ -666,6 +685,15 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         }
     }
 
+    for item in &mut items {
+        for code in [&mut item.head, &mut item.base].into_iter().flatten() {
+            code.spans.sort();
+            code.spans.dedup();
+            code.decls
+                .sort_by(|a, b| (&a.0, a.1.start, &a.1.name).cmp(&(&b.0, b.1.start, &b.1.name)));
+            code.decls.dedup();
+        }
+    }
     let boxes_at = |head_side: bool| -> Vec<(String, Code)> {
         items
             .iter()
@@ -693,7 +721,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         &removed,
         &mut head_files,
     )?;
-    let base_graph = side(
+    let mut base_graph = side(
         git,
         rules,
         &merge_base,
@@ -713,6 +741,15 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         !(node_ids.contains(a.as_str()) && node_ids.contains(b.as_str()))
             || mapped.contains(&(a.as_str(), b.as_str()))
     });
+
+    if map.grouped {
+        base_graph
+            .edges
+            .retain(|(a, b)| mapped.contains(&(a.as_str(), b.as_str())));
+        head_graph
+            .edges
+            .retain(|(a, b)| mapped.contains(&(a.as_str(), b.as_str())));
+    }
 
     // Unchanged boxes: the most connected ones, while both diagrams stay traceable.
     let mut score: BTreeMap<&str, usize> = BTreeMap::new();
@@ -1055,8 +1092,19 @@ mod tests {
         let git = Git::new(repo.path());
         let rules = Rules::load(None).expect("rules");
         let out = repo.path().join("facts.json");
-        let path =
-            crate::extract::run(&git, &rules, base, head, None, Some(out), true).expect("extract");
+        let path = crate::extract::run(
+            &git,
+            &rules,
+            base,
+            head,
+            None,
+            Some(out),
+            &crate::extract::Options {
+                fresh: true,
+                ..Default::default()
+            },
+        )
+        .expect("extract");
         serde_json::from_str(&std::fs::read_to_string(path).expect("map")).expect("json")
     }
 
@@ -1254,6 +1302,32 @@ mod tests {
             .collect();
         assert_eq!(at, ["src/api/handler.ts:1", "src/api/handler.ts:6"]);
         assert!(flow.still_referenced.iter().all(|l| l.symbol == "oldFee"));
+    }
+
+    #[test]
+    fn large_dangling_ignores_local_bindings() {
+        let repo = TempRepo::new("large-dangling-local");
+        repo.write("src/a.ts", "export const description = 'old'\nexport const generator = 1\nexport const ipConnectionCount = new Map()\n");
+        let base = repo.commit("base");
+        repo.write("src/a.ts", "export function run() {\n const description = 'new'\n const generator = 2\n const ipConnectionCount = new Map()\n return [description, generator, ipConnectionCount]\n}\nexport function parameter({ description }: { description: string }) { return description }\n");
+        let head = repo.commit("head");
+        let map = draft(&repo, &base, &head);
+        let flow = flow_of(&repo, &map);
+        assert!(
+            flow.still_referenced.is_empty(),
+            "{:?}",
+            flow.still_referenced
+        );
+        let mut modules = map;
+        modules.grouped = true;
+        let flow = flow_of(&repo, &modules);
+        assert!(
+            flow.before.as_ref().expect("before")["nodes"]
+                .as_object()
+                .expect("nodes")
+                .keys()
+                .all(|key| key.starts_with('N'))
+        );
     }
 
     fn flow_of(repo: &TempRepo, map: &ChangeMap) -> FlowFile {

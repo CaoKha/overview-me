@@ -13,6 +13,12 @@ pub struct ChangeMap {
     /// Always 1.
     #[schemars(range(min = 1, max = 1))]
     pub version: u32,
+    /// Folder-level draft: flows and page slots stay at module granularity.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub grouped: bool,
+    /// Only this repo-relative path is covered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     /// Full sha of the base commit; the change is `base...head`.
     #[schemars(pattern(r"^[0-9a-f]{40}$"))]
     pub base: String,
@@ -174,6 +180,9 @@ pub struct Edge {
     pub from: String,
     pub to: String,
     pub kind: EdgeKind,
+    /// Number of symbol-to-symbol calls aggregated into a module edge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

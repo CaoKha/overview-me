@@ -27,6 +27,8 @@ pub struct Parsed {
     pub imports: HashSet<String>,
     /// Every identifier with its line and role.
     pub identifiers: Vec<Ident>,
+    /// Local variable and parameter bindings with their lexical scope.
+    pub locals: Vec<(String, usize, usize)>,
     /// Where each imported name comes from, by local name (TypeScript and JavaScript).
     pub import_from: HashMap<String, Import>,
     /// `export … from` statements (TypeScript and JavaScript).
@@ -607,6 +609,57 @@ fn collect_tests(lang: Lang, node: Node<'_>, src: &[u8], out: &mut Vec<TestDecl>
 }
 
 fn collect_identifiers(lang: Lang, node: Node<'_>, src: &[u8], in_import: bool, out: &mut Parsed) {
+    if matches!(lang, Lang::TypeScript | Lang::Tsx)
+        && node.kind() == "variable_declarator"
+        && let Some(name) = node
+            .child_by_field_name("name")
+            .filter(|n| n.kind() == "identifier")
+    {
+        let mut block = node.parent();
+        while let Some(b) = block {
+            if b.kind() == "statement_block" {
+                out.locals.push((
+                    text(name, src),
+                    line(b.start_position().row),
+                    line(b.end_position().row),
+                ));
+                break;
+            }
+            block = b.parent();
+        }
+    }
+    if matches!(lang, Lang::TypeScript | Lang::Tsx)
+        && matches!(node.kind(), "required_parameter" | "optional_parameter")
+        && let Some(pattern) = node.child_by_field_name("pattern")
+    {
+        let mut function = node.parent();
+        while let Some(f) = function {
+            if matches!(
+                f.kind(),
+                "function_declaration"
+                    | "function_expression"
+                    | "generator_function"
+                    | "generator_function_declaration"
+                    | "arrow_function"
+                    | "method_definition"
+            ) {
+                walk(pattern, &mut |binding| {
+                    if matches!(
+                        binding.kind(),
+                        "identifier" | "shorthand_property_identifier_pattern"
+                    ) {
+                        out.locals.push((
+                            text(binding, src),
+                            line(f.start_position().row),
+                            line(f.end_position().row),
+                        ));
+                    }
+                });
+                break;
+            }
+            function = f.parent();
+        }
+    }
     let in_import = in_import
         || matches!(
             node.kind(),

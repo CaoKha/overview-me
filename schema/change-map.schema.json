@@ -30,6 +30,10 @@
         "$ref": "#/$defs/Edge"
       }
     },
+    "grouped": {
+      "description": "Folder-level draft: flows and page slots stay at module granularity.",
+      "type": "boolean"
+    },
     "head": {
       "description": "Full sha of the head commit.",
       "type": "string",
@@ -41,6 +45,13 @@
         "$ref": "#/$defs/Node"
       },
       "minItems": 1
+    },
+    "path": {
+      "description": "Only this repo-relative path is covered.",
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "spec": {
       "description": "Path of the spec the criteria come from.",
@@ -209,6 +220,15 @@
         },
         "to": {
           "type": "string"
+        },
+        "weight": {
+          "description": "Number of symbol-to-symbol calls aggregated into a module edge.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
         }
       },
       "additionalProperties": false,
