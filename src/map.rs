@@ -16,7 +16,7 @@ pub struct ChangeMap {
     /// Folder-level draft: flows and page slots stay at module granularity.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub grouped: bool,
-    /// Non-default draft grouping settings, used to preserve labels on identical reruns.
+    /// The folder grouping a grouped draft used, so a rerun with other settings writes a new draft.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grouping: Option<Grouping>,
     /// Only this repo-relative path is covered.
@@ -46,7 +46,6 @@ pub struct ChangeMap {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Grouping {
-    pub by: Option<String>,
     pub depth: u32,
     pub split: Vec<String>,
 }

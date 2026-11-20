@@ -35,7 +35,7 @@
       "type": "boolean"
     },
     "grouping": {
-      "description": "Non-default draft grouping settings, used to preserve labels on identical reruns.",
+      "description": "The folder grouping a grouped draft used, so a rerun with other settings writes a new draft.",
       "anyOf": [
         {
           "$ref": "#/$defs/Grouping"
@@ -260,12 +260,6 @@
     "Grouping": {
       "type": "object",
       "properties": {
-        "by": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "depth": {
           "type": "integer",
           "format": "uint32",

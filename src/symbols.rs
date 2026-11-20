@@ -670,6 +670,7 @@ fn collect_identifiers(lang: Lang, node: Node<'_>, src: &[u8], in_import: bool, 
                         | "generator_function_declaration"
                         | "arrow_function"
                         | "method_definition"
+                        | "class_static_block"
                 );
                 if (function && (!parameter || function_parameter == Some(scope)))
                     || (!parameter
@@ -684,6 +685,12 @@ fn collect_identifiers(lang: Lang, node: Node<'_>, src: &[u8], in_import: bool, 
                                         | "for_in_statement"
                                 ))))
                 {
+                    // A body `var` does not cover the parameters: `f(x = RATE) { var RATE }`.
+                    let scope = if function && !parameter && node.kind() != "arrow_function" {
+                        scope.child_by_field_name("body").unwrap_or(scope)
+                    } else {
+                        scope
+                    };
                     collect_bindings(pattern, scope, src, out);
                     break;
                 }
@@ -933,6 +940,12 @@ mod tests {
         }
         let src = "function g() { if (true) { var fee = 0 } } function h() { return fee }";
         assert!(!local_at(src, "fee", src.rfind("fee").expect("ref")));
+        let src = "function f(x = fee) { var fee = 0; return x }";
+        assert!(!local_at(src, "fee", src.find("fee").expect("default")));
+        let src = "class C { static { var fee = 0 } } function f() { return fee }";
+        assert!(!local_at(src, "fee", src.rfind("fee").expect("ref")));
+        let src = "class C { static { if (true) { var fee = 0 } return fee } }";
+        assert!(local_at(src, "fee", src.rfind("fee").expect("in block")));
     }
 
     #[test]

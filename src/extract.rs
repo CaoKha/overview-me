@@ -27,7 +27,7 @@ pub enum GroupBy {
     Symbol,
 }
 
-#[derive(Debug, clap::Args)]
+#[derive(Debug, Clone, clap::Args)]
 pub struct Options {
     /// Draft folders explicitly, or keep symbols even for a large change.
     #[arg(long, value_enum)]
@@ -709,17 +709,7 @@ pub fn run(
     let mut draft = ChangeMap {
         version: 1,
         grouped,
-        grouping: (options.group_by.is_some()
-            || options.depth != Options::default().depth
-            || !options.split.is_empty())
-        .then(|| Grouping {
-            by: options.group_by.map(|by| {
-                match by {
-                    GroupBy::Dir => "dir",
-                    GroupBy::Symbol => "symbol",
-                }
-                .to_owned()
-            }),
+        grouping: grouped.then(|| Grouping {
             depth: options.depth,
             split: options.split.clone(),
         }),
@@ -1034,6 +1024,7 @@ mod tests {
         let git = Git::new(repo.path());
         let rules = Rules::load(None).expect("rules");
         let options = Options {
+            group_by: Some(GroupBy::Dir),
             map: Some(repo.path().join("map.json")),
             ..Default::default()
         };
@@ -1045,15 +1036,12 @@ mod tests {
         ] {
             let mut old = original.clone();
             old.nodes[0].caption = "retained label".into();
-            let mut tuned = Options {
-                map: options.map.clone(),
-                ..Default::default()
-            };
+            let mut tuned = options.clone();
             match field {
                 "base" => old.base = head.clone(),
                 "head" => old.head = base.clone(),
                 "path" => old.path = Some("other".into()),
-                "grouped" => old.grouped = true,
+                "grouped" => old.grouped = false,
                 "depth" => tuned.depth = 1,
                 "split" => tuned.split.push("packages/a".into()),
                 "group_by" => tuned.group_by = Some(GroupBy::Symbol),
@@ -1225,6 +1213,15 @@ mod tests {
             std::fs::write(&path, &labelled).expect("write");
             run(&git, &rules, &base, &head, None, None, &options).expect("rerun");
             assert_eq!(std::fs::read_to_string(&path).expect("read"), labelled);
+            // Flags that give the same draft as a plain run keep the labels too.
+            if !matches!(by, Some(GroupBy::Dir)) {
+                let plain = Options {
+                    map: options.map.clone(),
+                    ..Default::default()
+                };
+                run(&git, &rules, &base, &head, None, None, &plain).expect("plain rerun");
+                assert_eq!(std::fs::read_to_string(&path).expect("read"), labelled);
+            }
         }
     }
 
