@@ -59,9 +59,14 @@ enum Command {
         /// Facts file to write instead of the default.
         #[arg(long)]
         out: Option<PathBuf>,
-        /// Overwrite the map even when one for this base exists.
+        #[command(flatten)]
+        options: extract::Options,
+    },
+    /// Print the changed hunks owned by one node.
+    Node {
+        id: String,
         #[arg(long)]
-        fresh: bool,
+        map: Option<PathBuf>,
     },
     /// Check a map against the schema and git; exits 1 on problems.
     Validate { map: PathBuf },
@@ -120,10 +125,14 @@ fn main() -> Result<ExitCode> {
             head,
             spec,
             out,
-            fresh,
+            options,
         } => {
             let rules = Rules::load(cli.rules.as_deref())?;
-            extract::run(&git, &rules, &base, &head, spec.as_deref(), out, fresh)?;
+            extract::run(&git, &rules, &base, &head, spec.as_deref(), out, &options)?;
+        }
+        Command::Node { id, map } => {
+            let rules = Rules::load(cli.rules.as_deref())?;
+            extract::node(&git, &rules, &id, map)?;
         }
         Command::Validate { map } => {
             let rules = Rules::load(cli.rules.as_deref())?;
@@ -160,4 +169,41 @@ fn main() -> Result<ExitCode> {
         Command::Path { head } => println!("{}", git.map_path(&head)?.display()),
     }
     Ok(ExitCode::SUCCESS)
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    #[test]
+    fn scoped_extract_requires_map_and_tuning_flags_parse() {
+        assert!(
+            Cli::try_parse_from(["overview-me", "extract", "--base", "HEAD", "--path", "src"])
+                .is_err()
+        );
+        for value in ["dir", "symbol"] {
+            assert!(
+                Cli::try_parse_from([
+                    "overview-me",
+                    "extract",
+                    "--base",
+                    "HEAD",
+                    "--group-by",
+                    value
+                ])
+                .is_ok()
+            );
+        }
+        assert!(
+            Cli::try_parse_from([
+                "overview-me",
+                "extract",
+                "--base",
+                "HEAD",
+                "--group-by",
+                "other"
+            ])
+            .is_err()
+        );
+    }
 }

@@ -34,7 +34,7 @@ pub fn run(git: &Git, rules: &Rules, path: &Path) -> Result<bool> {
             return Ok(false);
         }
     }
-    let changes = facts::changes(git, rules, &map.base, &map.head)?;
+    let changes = facts::changes_in(git, rules, &map.base, &map.head, map.path.as_deref())?;
     let exported: HashSet<&str> = changes
         .units
         .iter()
@@ -166,12 +166,24 @@ pub fn check(
     let criterion_ids: HashSet<&str> = map.criteria.iter().map(|c| c.id.as_str()).collect();
 
     // Sites: start and end are changed lines of one file.
+    let mut units_by_file: HashMap<&str, Vec<&Unit>> = HashMap::new();
+    for u in &changes.units {
+        units_by_file.entry(&u.file).or_default().push(u);
+    }
     let in_unit = |file: &str, line: u32| {
-        changes
-            .units
-            .iter()
-            .any(|u| u.file == file && u.contains(line))
+        units_by_file
+            .get(file)
+            .is_some_and(|units| units.iter().any(|u| u.contains(line)))
     };
+    let mut sites_by_file: HashMap<&str, Vec<(&str, u32, u32)>> = HashMap::new();
+    for n in &map.nodes {
+        for s in &n.sites {
+            sites_by_file
+                .entry(&s.file)
+                .or_default()
+                .push((&n.id, s.start, s.end));
+        }
+    }
     let lanes: BTreeSet<&str> = map.nodes.iter().map(|n| n.lane.as_str()).collect();
     if lanes.len() > MAX_LANES {
         problems.push(format!(
@@ -219,7 +231,7 @@ pub fn check(
             let at = format!("{} site {}:{}-{}", n.id, s.file, s.start, s.end);
             if s.start > s.end {
                 problems.push(format!("{at}: start is after end"));
-            } else if !changes.units.iter().any(|u| u.file == s.file) {
+            } else if !units_by_file.contains_key(s.file.as_str()) {
                 problems.push(format!(
                     "{at}: file has no changed non-test hunk in base...head"
                 ));
@@ -242,23 +254,22 @@ pub fn check(
         };
         let mut uncovered: Vec<u32> = Vec::new();
         let mut twice: Vec<(u32, Vec<&str>)> = Vec::new();
+        let mut unit_owners = HashSet::new();
         for line in lines {
-            let owners: Vec<&str> = map
-                .nodes
-                .iter()
-                .filter(|n| {
-                    n.sites
-                        .iter()
-                        .any(|s| s.file == u.file && s.start <= line && line <= s.end)
-                })
-                .map(|n| n.id.as_str())
+            let mut seen = HashSet::new();
+            let owners: Vec<&str> = sites_by_file
+                .get(u.file.as_str())
+                .into_iter()
+                .flatten()
+                .filter(|(_, a, b)| *a <= line && line <= *b)
+                .map(|(id, _, _)| *id)
+                .filter(|id| seen.insert(*id))
                 .collect();
             match owners.as_slice() {
                 [] => uncovered.push(line),
                 [one] => {
-                    let entry = owned.entry(one).or_default();
-                    if !entry.iter().any(|o| std::ptr::eq(*o, u)) {
-                        entry.push(u);
+                    if unit_owners.insert(*one) {
+                        owned.entry(one).or_default().push(u);
                     }
                 }
                 _ => twice.push((line, owners)),
@@ -562,6 +573,9 @@ mod tests {
         };
         let map = ChangeMap {
             version: 1,
+            grouped: false,
+            grouping: None,
+            path: None,
             base: SHA.into(),
             head: SHA.into(),
             spec: Some("/spec.md".into()),
@@ -685,6 +699,7 @@ mod tests {
             from: "N1".into(),
             to: "N5".into(),
             kind: crate::map::EdgeKind::Calls,
+            weight: None,
         });
         let got = problems(&map, &changes, &tested);
         assert_eq!(

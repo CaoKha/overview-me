@@ -13,6 +13,15 @@ pub struct ChangeMap {
     /// Always 1.
     #[schemars(range(min = 1, max = 1))]
     pub version: u32,
+    /// Folder-level draft: flows and page slots stay at module granularity.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub grouped: bool,
+    /// The folder grouping a grouped draft used, so a rerun with other settings writes a new draft.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grouping: Option<Grouping>,
+    /// Only this repo-relative path is covered.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
     /// Full sha of the base commit; the change is `base...head`.
     #[schemars(pattern(r"^[0-9a-f]{40}$"))]
     pub base: String,
@@ -32,6 +41,13 @@ pub struct ChangeMap {
     #[serde(default)]
     #[schemars(length(max = 5))]
     pub callouts: Vec<Callout>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Grouping {
+    pub depth: u32,
+    pub split: Vec<String>,
 }
 
 /// One thing a careful reader could miss, at a place inside one node's sites.
@@ -174,6 +190,9 @@ pub struct Edge {
     pub from: String,
     pub to: String,
     pub kind: EdgeKind,
+    /// Number of reference sites reaching declarations in the target module.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

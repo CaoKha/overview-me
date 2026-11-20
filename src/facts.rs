@@ -371,8 +371,20 @@ fn comment_only(
 ///
 /// # Errors
 /// When a git command fails or a file cannot be parsed.
+#[cfg(test)]
 pub fn changes(git: &Git, rules: &Rules, base: &str, head: &str) -> Result<Changes> {
-    let diff = git.run_bytes(&[
+    changes_in(git, rules, base, head, None)
+}
+
+pub fn changes_in(
+    git: &Git,
+    rules: &Rules,
+    base: &str,
+    head: &str,
+    path: Option<&str>,
+) -> Result<Changes> {
+    let range = format!("{base}...{head}");
+    let mut args = vec![
         "diff",
         "-U0",
         "--no-color",
@@ -382,8 +394,14 @@ pub fn changes(git: &Git, rules: &Rules, base: &str, head: &str) -> Result<Chang
         "--src-prefix=a/",
         "--dst-prefix=b/",
         "--end-of-options",
-        &format!("{base}...{head}"),
-    ])?;
+        &range,
+        "--",
+    ];
+    let literal = path.map(|p| format!(":(literal){p}"));
+    if let Some(p) = &literal {
+        args.push(p);
+    }
+    let diff = git.run_bytes(&args)?;
     let merge_base = git
         .run(&["merge-base", "--end-of-options", base, head])?
         .trim()
@@ -602,6 +620,27 @@ pub fn tested_names(
     if test_files.is_empty() {
         return Ok(found);
     }
+    // Thousands of individual greps spend minutes starting git and rescanning the same tests.
+    // Read their blobs once, then use the same literal whole-word boundaries.
+    if names.len() > crate::extract::LARGE_THRESHOLD {
+        let mut lines = String::new();
+        for file in test_files {
+            if let Some(source) = git.show(head, file) {
+                lines.push_str(&source);
+                lines.push('\n');
+            }
+        }
+        let word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+        for name in names {
+            if lines.match_indices(name).any(|(i, _)| {
+                !lines[..i].chars().next_back().is_some_and(word)
+                    && !lines[i + name.len()..].chars().next().is_some_and(word)
+            }) {
+                found.insert((*name).to_owned());
+            }
+        }
+        return Ok(found);
+    }
     for name in names {
         let mut args = vec![
             "grep",
@@ -639,6 +678,50 @@ mod tests {
         ps.iter()
             .map(|p| (p.start, p.end, p.added.clone()))
             .collect()
+    }
+
+    #[test]
+    fn large_test_name_search_matches_individual_git_greps() {
+        let repo = crate::testutil::TempRepo::new("large-tested-names");
+        repo.write(
+            "a.test.ts",
+            "test('names', () => { fee(); fee$(); $fee(); fee_extra(); éascii(); asciié(); });\n",
+        );
+        let head = repo.commit("test");
+        let git = Git::new(repo.path());
+        let mut names: HashSet<String> = (0..=crate::extract::LARGE_THRESHOLD)
+            .map(|i| format!("unused{i}"))
+            .collect();
+        names.extend(
+            [
+                "fee",
+                "fee$",
+                "$fee",
+                "fee_extra",
+                "extra",
+                "unused",
+                "ascii",
+            ]
+            .map(String::from),
+        );
+        let refs: HashSet<&str> = names.iter().map(String::as_str).collect();
+        let files = vec!["a.test.ts".to_owned()];
+        let batched = tested_names(&git, &head, &files, &refs).expect("batched");
+        let mut individual = HashSet::new();
+        for name in [
+            "fee",
+            "fee$",
+            "$fee",
+            "fee_extra",
+            "extra",
+            "unused",
+            "ascii",
+        ] {
+            individual.extend(
+                tested_names(&git, &head, &files, &HashSet::from([name])).expect("individual"),
+            );
+        }
+        assert_eq!(batched, individual);
     }
 
     #[test]
