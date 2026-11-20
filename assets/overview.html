@@ -150,6 +150,9 @@ tr:last-child td { border-bottom: 0; }
 .edges path.line.dashed { stroke-dasharray: 5 4; }
 .edges path.line.on { stroke: var(--hl); stroke-width: 2; }
 .arch.focus .edges path.line:not(.on) { opacity: 0.12; }
+/* Above the lanes: an arrow that names its references shows them on hover. */
+.edge-hits { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 2; }
+.edge-hits path { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: help; }
 .tier { display: flex; gap: 14px; position: relative; z-index: 1; }
 .lane { flex: 1 1 0; min-width: 0; border: 1px dashed var(--border); border-radius: 10px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; background: color-mix(in srgb, var(--bg) 55%, transparent); }
 .lane-name { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
@@ -934,8 +937,8 @@ async function copy(text, button, done = 'Copied') {
 }
 
 // ```flow blocks: {"nodes": {id: {label, n?, kind?, note?, paths?}}, "tiers": [[{name, ids, note?, flex?}]],
-// "edges": [[from, to, label?, style?]]}. kind: existing | added | removed, plus store; style:
-// dashed | added | removed.
+// "edges": [[from, to, label?, style?, at?]]}. kind: existing | added | removed, plus store; style:
+// dashed | added | removed; at: the references behind the arrow, as path:line.
 const NS = 'http://www.w3.org/2000/svg';
 let uid = 0;
 const nodeKind = (n) => ['removed', 'added', 'existing'].find((k) => (n.kind || '').split(/\s+/).includes(k)) || 'changed';
@@ -992,8 +995,14 @@ function drawFlow(arch, spec) {
 
   const edges = spec.edges.filter((e) => boxes[e[0]] && boxes[e[1]] && e[0] !== e[1]);
   const restMarker = (e) => (e[3] === 'added' ? 'g' : e[3] === 'removed' ? 'r' : 'a');
+  const sites = (e) => (Array.isArray(e[4]) ? e[4].filter((a) => typeof a === 'string') : []);
+  const arrowName = (e) => `${spec.nodes[e[0]].label} → ${spec.nodes[e[1]].label}`;
   const paths = [];
   const labels = [];
+  const hits = [];
+  const hitSvg = document.createElementNS(NS, 'svg');
+  hitSvg.setAttribute('class', 'edge-hits');
+  hitSvg.setAttribute('aria-hidden', 'true');
   edges.forEach((e, i) => {
     const p = document.createElementNS(NS, 'path');
     p.setAttribute('class', `line ${e[3] || ''}`.trim());
@@ -1005,7 +1014,18 @@ function drawFlow(arch, spec) {
       arch.append(lb);
       labels[i] = lb;
     }
+    if (sites(e).length) {
+      const h = document.createElementNS(NS, 'path');
+      const t = document.createElementNS(NS, 'title');
+      t.textContent = `${arrowName(e)}\n${sites(e).join('\n')}`;
+      h.append(t);
+      h.addEventListener('mouseenter', () => { if (!pinned) focusOn(e[0], i); });
+      h.addEventListener('mouseleave', () => { if (!pinned) clear(); });
+      hitSvg.append(h);
+      hits[i] = h;
+    }
   });
+  if (hits.length) arch.append(hitSvg);
 
   function draw() {
     const base = arch.getBoundingClientRect();
@@ -1055,6 +1075,7 @@ function drawFlow(arch, spec) {
         d = `M${s.x},${s.y} C${s.x + sx * dx},${s.y} ${ex - sx * dx},${ey} ${ex},${ey}`;
       }
       paths[i].setAttribute('d', d);
+      hits[i]?.setAttribute('d', d);
       if (labels[i]) {
         const m = paths[i].getPointAtLength(paths[i].getTotalLength() / 2);
         // Centred on the edge, but shifted inward when that would cut it off at the diagram's side.
@@ -1065,11 +1086,12 @@ function drawFlow(arch, spec) {
     });
   }
 
-  function focusOn(nid) {
+  // A box traces all its arrows; with `only`, just that arrow.
+  function focusOn(nid, only) {
     arch.classList.add('focus');
     boxes[nid].classList.add('near');
     edges.forEach((e, i) => {
-      const on = e[0] === nid || e[1] === nid;
+      const on = only === undefined ? e[0] === nid || e[1] === nid : i === only;
       paths[i].classList.toggle('on', on);
       paths[i].setAttribute('marker-end', `url(#${on ? 'h' : restMarker(e)}${id})`);
       if (labels[i]) labels[i].classList.toggle('on', on);
@@ -1137,6 +1159,18 @@ function drawFlow(arch, spec) {
         all.addEventListener('click', () => copy(paths.join('\n'), all));
         body.append(all);
       }
+    }
+    // The references behind this box's arrows, for readers who cannot hover.
+    const linked = edges.filter((e) => (e[0] === k || e[1] === k) && sites(e).length);
+    if (linked.length) {
+      body.append(el('p', 'detail-note', 'Arrows come from these references:'));
+      const list = el('ul', 'paths');
+      for (const e of linked) {
+        const li = el('li');
+        li.append(el('span', null, arrowName(e)), el('code', null, sites(e).join(', ')));
+        list.append(li);
+      }
+      body.append(list);
     }
     // Opening the panel first closes whatever it showed, including this flow's previous pin.
     return showPanel({ label: `${n.label} files`, title, wrap: previews, live: true, body: [body], onClose: unpinned });

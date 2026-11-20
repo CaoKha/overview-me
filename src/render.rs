@@ -6,14 +6,14 @@
 //! first, the callouts and the open questions that facts raise. `overview-me page` refuses a
 //! page with a slot left.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
-use crate::facts::{self, Changes};
+use crate::facts::{self, Changes, Unit};
 use crate::flow::{self, FlowFile};
 use crate::git::Git;
 use crate::map::{CalloutTag, ChangeMap, Node, Risk, Status};
@@ -464,16 +464,12 @@ pub fn fact_questions(map: &ChangeMap, flow: &FlowFile, changes: &Changes) -> Ve
             _ => {}
         }
     }
-    let proven: HashSet<&str> = map
-        .criteria
-        .iter()
-        .filter(|c| !c.tests.is_empty())
-        .map(|c| c.id.as_str())
-        .collect();
     for n in &map.nodes {
+        // A callout or a criterion already tells the reader what to check in it.
         if n.risk != Risk::Read
             || n.touched_by_test
-            || n.criteria.iter().any(|c| proven.contains(c.as_str()))
+            || !n.criteria.is_empty()
+            || map.callouts.iter().any(|c| c.node == n.id)
         {
             continue;
         }
@@ -486,7 +482,10 @@ pub fn fact_questions(map: &ChangeMap, flow: &FlowFile, changes: &Changes) -> Ve
                     .any(|s| s.file == u.file && s.start <= u.start && u.end <= s.end)
                     && u.risk == Risk::Read
             })
-            .map(|u| format!(" ({})", u.risk_why))
+            .map(|u| match keyword_line(u) {
+                Some(line) => format!(" ({} at `{}:{line}`)", u.risk_why, u.file),
+                None => format!(" ({})", u.risk_why),
+            })
             .unwrap_or_default();
         out.push(format!(
             "{} `{}` is marked read{why}, and no changed test references it.",
@@ -500,13 +499,55 @@ pub fn fact_questions(map: &ChangeMap, flow: &FlowFile, changes: &Changes) -> Ve
             l.symbol, l.at
         ));
     }
-    for s in &changes.skipped {
+    if !changes.skipped.is_empty() {
+        let mut by_reason: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for s in &changes.skipped {
+            by_reason.entry(s.reason).or_default().push(&s.file);
+        }
+        let groups: Vec<String> = by_reason
+            .into_iter()
+            .map(|(reason, files)| {
+                let shown: Vec<String> = files
+                    .iter()
+                    .take(MAX_SKIPPED_SHOWN)
+                    .map(|f| format!("`{f}`"))
+                    .collect();
+                let more = files.len().saturating_sub(MAX_SKIPPED_SHOWN);
+                let more = if more > 0 {
+                    format!(" and {more} more")
+                } else {
+                    String::new()
+                };
+                format!("{reason}: {}{more}", shown.join(", "))
+            })
+            .collect();
+        let n = changes.skipped.len();
         out.push(format!(
-            "`{}` was skipped ({}), so this overview does not cover it.",
-            s.file, s.reason
+            "Not covered: {n} skipped file{} ({}).",
+            if n == 1 { "" } else { "s" },
+            groups.join("; ")
         ));
     }
     out
+}
+
+/// Skipped files named per reason in Open questions; the rest are counted.
+const MAX_SKIPPED_SHOWN: usize = 4;
+
+/// The first added line of `u` holding the keyword its risk names (`mentions "<keyword>"`).
+fn keyword_line(u: &Unit) -> Option<u32> {
+    let keyword = u
+        .risk_why
+        .strip_prefix("mentions \"")?
+        .strip_suffix('"')?
+        .to_lowercase();
+    u.diff.iter().find_map(|l| {
+        let (head, code) = l.strip_prefix('+')?.split_once("| ")?;
+        code.to_lowercase()
+            .contains(&keyword)
+            .then(|| head.trim().parse().ok())
+            .flatten()
+    })
 }
 
 #[cfg(test)]
@@ -601,6 +642,7 @@ mod tests {
             "edges": []
         });
         let flow = FlowFile {
+            generated: Value::Null,
             before: Some(before),
             after,
             entry_points: vec![flow::Link {
@@ -668,6 +710,60 @@ mod tests {
         );
         assert!(md.contains("35 more module steps"));
         assert!(md.matches(SLOT).count() < 45);
+    }
+
+    #[test]
+    fn fact_questions_cite_the_keyword_and_group_skipped_files() {
+        let (mut map, flow) = fixture();
+        map.nodes.push(node("N9", Risk::Read, &[], "seed.ts", 1));
+        let mut changes = Changes::default();
+        changes.units.push(Unit {
+            file: "seed.ts".into(),
+            start: 1,
+            end: 3,
+            symbol: "seed".into(),
+            ident: None,
+            span: None,
+            exported: false,
+            lane: "db".into(),
+            risk: Risk::Read,
+            risk_why: "mentions \"password\"".into(),
+            comment_only: false,
+            added: vec![1, 2],
+            diff: vec![
+                "+    1 | const user = 'a'".into(),
+                "+    2 | const Password = 'x'".into(),
+            ],
+        });
+        for (file, reason) in [
+            ("env.d.ts", "generated or binary"),
+            ("tree.gen.ts", "generated or binary"),
+            ("a.webp", "generated or binary"),
+            ("b.webp", "generated or binary"),
+            ("c.webp", "generated or binary"),
+            ("vendor/x", "submodule"),
+        ] {
+            changes.skipped.push(facts::Skipped {
+                file: file.into(),
+                reason,
+            });
+        }
+        let qs = fact_questions(&map, &flow, &changes);
+        let read: Vec<_> = qs.iter().filter(|q| q.contains("marked read")).collect();
+        // N2 has a criterion and a callout: they already say what to check.
+        assert_eq!(
+            read,
+            [
+                "N9 `seed.ts:1-3` is marked read (mentions \"password\" at `seed.ts:2`), and no changed test references it."
+            ]
+        );
+        let skipped: Vec<_> = qs.iter().filter(|q| q.contains("skipped")).collect();
+        assert_eq!(
+            skipped,
+            [
+                "Not covered: 6 skipped files (generated or binary: `env.d.ts`, `tree.gen.ts`, `a.webp`, `b.webp` and 1 more; submodule: `vendor/x`)."
+            ]
+        );
     }
 
     /// The whole page, so a change to the layout shows up as a diff here.
@@ -743,7 +839,6 @@ Skim: N3.
 
 ## Open questions
 - REF-2 (gives a discount) has no test that checks it. Its code: N2 `src/services/d.ts:5-7`.
-- N2 `src/services/d.ts:5-7` is marked read, and no changed test references it.
 - `oldFee` is removed, but `src/jobs/run.ts:9` still references it and no symbol of that name is left.
 - <!-- fill: a question the code cannot answer (a value set outside the repo, intent the PR does not state, behaviour only a run shows), citing `path:line`; one line each; delete this line if there is none -->
 "#;

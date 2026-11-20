@@ -1,6 +1,6 @@
 # Flow blocks
 
-Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR or change overview, `overview-me flow` draws both diagrams from the code and the page holds only `@before` and `@after`: do not write them by hand. To label an arrow or add a note to a box there, edit `<store>/<head>.flow.json` with the fields below. In a codebase overview, you write the block. The page draws it as lanes stacked top to bottom, boxes in each lane, and curved arrows. Hovering or tabbing to a box highlights its arrows and the boxes at their other ends, so keep the graph honest and small enough to trace. `overview-me page` checks every block and lists what is wrong.
+Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR or change overview, `overview-me flow` draws both diagrams from the code and the page holds only `@before` and `@after`: do not write them by hand. To label an arrow or add a note to a box there, edit `<store>/<head>.flow.json` with the fields below. Running `overview-me flow` or `render` again keeps those edits on boxes of map nodes and on arrows that are still drawn. In a codebase overview, you write the block. The page draws it as lanes stacked top to bottom, boxes in each lane, and curved arrows. Hovering or tabbing to a box highlights its arrows and the boxes at their other ends, so keep the graph honest and small enough to trace. `overview-me page` checks every block and lists what is wrong.
 
 ```json
 {
@@ -28,7 +28,7 @@ Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR 
   - `paths`: the files a reader opens for the box, as repo-relative `path:line`, `path:start-end` or `folder/` strings, main one first. Clicking the box lists them with copy buttons, so a developer can paste them into their editor's file search. Give every box its paths.
   - `note`: an optional one-line summary shown with the paths.
 - **`tiers`**: rows, top to bottom, callers above the code they call. A lane `name` is a short name for a part of the system: the lanes in `<root>/rules.json` (ui, api, services, db, engine, jobs) or a module name. A row is a list of lanes `{ "name", "ids", "note"?, "flex"? }` side by side. `flex` is an optional CSS flex value, such as `"2"`, that makes one lane of a shared row wider. Put two lanes in a row only when two separate surfaces sit at the same level, such as two pages that start the flow. Every box sits in exactly one lane.
-- **`edges`**: `[from, to, label?, style?]`. The label says in a few words what passes, what decides, or which transport carries it. `style` is `added` (new arrow, green), `removed` (arrow that goes away, red dashed) or `dashed` (async, fallback, cache or optional).
+- **`edges`**: `[from, to, label?, style?, at?]`. The label says in a few words what passes, what decides, or which transport carries it. `style` is `added` (new arrow, green), `removed` (arrow that goes away, red dashed) or `dashed` (async, fallback, cache or optional). `at` lists the references behind the arrow as `path:line`; `overview-me flow` writes it. Hovering the arrow shows them, and a clicked box lists them for its arrows.
 
 ## By overview
 

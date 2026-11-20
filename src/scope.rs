@@ -219,9 +219,9 @@ impl<'a> Scope<'a> {
             Binding::Local
         } else if let Some(import) = p.import_from.get(name) {
             self.follow(file, &import.module, import.name.as_deref(), 0)
-        } else if p.imports.contains(name) {
-            Binding::Unresolved
         } else {
+            // `imports` also holds names read through an import (`referral` in
+            // `api.referral`); those bind nothing in this file.
             Binding::Free
         };
         self.bindings.borrow_mut().insert(key, b.clone());
@@ -307,12 +307,23 @@ impl<'a> Scope<'a> {
             // `x.m()` on a value: the type check decides, as for any method.
             Role::Member(_) if method.is_some() => by_name(),
             // `q.name` reaches a top-level symbol only through a namespace import of its module.
-            Role::Member(q) => in_module(self.binding(caller, p, q)),
+            // `api.referral`, with `api` a named import from a path alias, is a property.
+            Role::Member(q) => match self.binding(caller, p, q) {
+                Binding::Unresolved => {
+                    p.import_from.get(q).is_some_and(|i| i.name.is_none()) && by_name()
+                }
+                b => in_module(b),
+            },
             Role::Name => {
+                if p.shadowed(r) {
+                    return false;
+                }
                 if caller == callee || symbols::same_go_package(caller, callee) {
                     return true;
                 }
                 match self.binding(caller, p, &r.name) {
+                    // Every TypeScript import is known: a free name is a global.
+                    Binding::Free if symbols::tracks_imports(caller) => false,
                     Binding::Free => by_name(),
                     b => in_module(b),
                 }

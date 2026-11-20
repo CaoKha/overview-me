@@ -28,6 +28,7 @@ pub struct Parsed {
     /// Every identifier with its line and role.
     pub identifiers: Vec<Ident>,
     /// Local variable and parameter bindings with end-exclusive byte ranges for their scope.
+    /// Top-level bindings are not locals.
     pub locals: Vec<(String, usize, usize)>,
     /// Where each imported name comes from, by local name (TypeScript and JavaScript).
     pub import_from: HashMap<String, Import>,
@@ -109,6 +110,15 @@ impl Parsed {
         text.char_indices()
             .filter(|(_, c)| !c.is_whitespace())
             .all(|(i, _)| covered(i))
+    }
+
+    /// Whether `r` names a local variable or parameter, not a top-level or imported name.
+    pub fn shadowed(&self, r: &Ident) -> bool {
+        r.role == Role::Name
+            && self
+                .locals
+                .iter()
+                .any(|(name, a, b)| *name == r.name && *a <= r.byte && r.byte < *b)
     }
 
     pub fn in_tests(&self, line: usize) -> bool {
@@ -685,6 +695,10 @@ fn collect_identifiers(lang: Lang, node: Node<'_>, src: &[u8], in_import: bool, 
                                         | "for_in_statement"
                                 ))))
                 {
+                    // A top-level binding is the file's own name, not one that shadows it.
+                    if scope.kind() == "program" {
+                        break;
+                    }
                     // A body `var` does not cover the parameters: `f(x = RATE) { var RATE }`.
                     let scope = if function && !parameter && node.kind() != "arrow_function" {
                         scope.child_by_field_name("body").unwrap_or(scope)
@@ -927,9 +941,11 @@ mod tests {
 
     #[test]
     fn var_bindings_hoist_to_function_or_program() {
+        // Hoisted to the program, it is a top-level name: not a local.
+        let src = "if (true) { var fee = 0 } console.log(fee)";
+        assert!(!local_at(src, "fee", src.rfind("fee").expect("ref")));
         for src in [
             "function g() { if (true) { var fee = 0 } return fee }",
-            "if (true) { var fee = 0 } console.log(fee)",
             "function g() { switch (1) { case 1: var fee = 0 } return fee }",
             "function g() { try {} catch (err) { var fee = 0 } return fee }",
         ] {

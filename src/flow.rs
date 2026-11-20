@@ -15,7 +15,7 @@ use serde_json::{Map, Value, json};
 
 use crate::facts;
 use crate::git::Git;
-use crate::map::ChangeMap;
+use crate::map::{ChangeMap, MAX_AT};
 use crate::rules::{LANE_MAX, MAX_LANES, Rules, lane_rank};
 use crate::scope::Scope;
 use crate::symbols::{self, Ident, Parsed, Symbol};
@@ -51,6 +51,9 @@ pub struct FlowFile {
     pub still_referenced: Vec<Link>,
     /// Map nodes left out of the diagrams, with the reason.
     pub not_drawn: Vec<String>,
+    /// The label and note `flow` wrote for each map node's box, by side: a later run keeps a
+    /// box's text when it differs from these, since a reviewer edited it.
+    pub generated: Value,
 }
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -104,8 +107,21 @@ struct Item {
 #[derive(Debug, Default)]
 struct Graph {
     edges: BTreeSet<(String, String)>,
+    /// The first references behind each edge, as `path:line`.
+    at: BTreeMap<(String, String), Vec<String>>,
     /// Unchanged symbols on the other end of an edge, by internal key.
     existing: BTreeMap<String, (String, Symbol)>,
+}
+
+impl Graph {
+    fn add(&mut self, from: String, to: String, path: &str, line: usize) {
+        let at = self.at.entry((from.clone(), to.clone())).or_default();
+        let site = format!("{path}:{line}");
+        if at.len() < MAX_AT && !at.contains(&site) {
+            at.push(site);
+        }
+        self.edges.insert((from, to));
+    }
 }
 
 enum Owner {
@@ -140,12 +156,93 @@ pub fn run_flow(
             bail!("{name} must be the full sha of a commit, got {sha:?}");
         }
     }
-    let flow = build(git, rules, &map)?;
+    let mut flow = build(git, rules, &map)?;
     let out = out.unwrap_or_else(|| map_path.with_file_name(format!("{}.flow.json", map.head)));
+    let previous: Option<Value> = std::fs::read_to_string(&out)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok());
+    let kept = previous.map_or(0, |p| keep_edits(&mut flow, &p));
     std::fs::write(&out, serde_json::to_string_pretty(&flow)? + "\n")
         .with_context(|| format!("writing {}", out.display()))?;
     print_summary(&out, &flow);
+    if kept > 0 {
+        println!("kept {kept} hand edits from the previous flow file");
+    }
     Ok((out, map, flow))
+}
+
+/// Each map node box's label and note, by side.
+fn generated(before: Option<&Value>, after: &Value) -> Value {
+    let side = |spec: Option<&Value>| -> Value {
+        let mut out = Map::new();
+        for (k, b) in spec
+            .and_then(|s| s["nodes"].as_object())
+            .into_iter()
+            .flatten()
+        {
+            if b.get("n").is_some() {
+                out.insert(k.clone(), json!({ "label": b["label"], "note": b["note"] }));
+            }
+        }
+        Value::Object(out)
+    };
+    json!({ "before": side(before), "after": side(Some(after)) })
+}
+
+/// Carries a reviewer's edits from the previous flow file into `flow`: a map node box's label or
+/// note that differs from what `flow` generated then, when the box is on the same side again,
+/// and arrow labels on arrows that are still drawn. Returns how many it kept.
+fn keep_edits(flow: &mut FlowFile, previous: &Value) -> usize {
+    let mut kept = 0;
+    for (name, spec) in [
+        ("before", flow.before.as_mut()),
+        ("after", Some(&mut flow.after)),
+    ] {
+        let (Some(spec), Some(old)) = (spec, previous.get(name).filter(|v| v.is_object())) else {
+            continue;
+        };
+        let generated = &previous["generated"][name];
+        if let Some(nodes) = spec["nodes"].as_object_mut() {
+            for (k, b) in nodes.iter_mut() {
+                let was = &old["nodes"][k];
+                if b.get("n").is_none() || was["n"] != b["n"] || generated.get(k).is_none() {
+                    continue;
+                }
+                for field in ["label", "note"] {
+                    if was[field] != generated[k][field] && was[field] != b[field] {
+                        if was[field].is_null() {
+                            b.as_object_mut().map(|o| o.remove(field));
+                        } else {
+                            b[field] = was[field].clone();
+                        }
+                        kept += 1;
+                    }
+                }
+            }
+        }
+        let old_edges = old["edges"]
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        for e in spec["edges"].as_array_mut().into_iter().flatten() {
+            let Some(label) = old_edges
+                .iter()
+                .find(|o| o[0] == e[0] && o[1] == e[1])
+                .and_then(|o| o.get(2))
+                .filter(|l| l.is_string())
+            else {
+                continue;
+            };
+            if let Some(arr) = e.as_array_mut() {
+                arr.resize(arr.len().max(3), Value::Null);
+                if &arr[2] != label {
+                    arr[2] = label.clone();
+                    kept += 1;
+                }
+            }
+        }
+    }
+    kept
 }
 
 fn print_summary(out: &Path, flow: &FlowFile) {
@@ -375,11 +472,11 @@ fn side(
                 }
                 match owner(path, r.line) {
                     Some(Owner::Box(k)) if &k != key => {
-                        g.edges.insert((k, key.clone()));
+                        g.add(k, key.clone(), path, r.line);
                     }
                     Some(Owner::Existing(f, s)) => {
                         let ek = format!("ex:{f}#{}", s.name);
-                        g.edges.insert((ek.clone(), key.clone()));
+                        g.add(ek.clone(), key.clone(), path, r.line);
                         g.existing.entry(ek).or_insert((f, s));
                     }
                     _ => {}
@@ -410,7 +507,7 @@ fn side(
                 // Two definitions in scope: the name alone cannot say which one is called.
                 if let [(df, d)] = targets.as_slice() {
                     let ek = format!("ex:{df}#{}", d.name);
-                    g.edges.insert((key.clone(), ek.clone()));
+                    g.add(key.clone(), ek.clone(), file, r.line);
                     g.existing
                         .entry(ek)
                         .or_insert(((*df).to_owned(), (*d).clone()));
@@ -471,10 +568,6 @@ fn dangling(
         }
         for &(path, p, r) in refs.get(sym.ident.as_str()).into_iter().flatten() {
             if !p.in_tests(r.line)
-                && !(r.role == crate::symbols::Role::Name
-                    && p.locals
-                        .iter()
-                        .any(|(name, a, b)| name == &r.name && *a <= r.byte && r.byte < *b))
                 && !is_declaration(p, &r.name, r.line)
                 && scope.reaches(path, p, r, file, sym)
             {
@@ -963,6 +1056,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         out
     };
     Ok(FlowFile {
+        generated: generated(before.as_ref(), &after),
         before,
         after,
         entry_points,
@@ -1124,7 +1218,7 @@ fn diagram(
             tiers.push(json!([{ "name": lane, "ids": ids }]));
         }
     }
-    let mut edges: Vec<(usize, &str, &str, Option<&str>)> = graph
+    let mut edges: Vec<(usize, &String, &String, Option<&str>)> = graph
         .edges
         .iter()
         .filter(|(a, b)| row_of.contains_key(a.as_str()) && row_of.contains_key(b.as_str()))
@@ -1134,7 +1228,7 @@ fn diagram(
             } else {
                 "removed"
             });
-            (row_of[a.as_str()], a.as_str(), b.as_str(), style)
+            (row_of[a.as_str()], a, b, style)
         })
         .collect();
     // New and removed arrows first: they are the change. Then the rest, top to bottom.
@@ -1144,10 +1238,13 @@ fn diagram(
     edges.sort();
     let edges: Vec<Value> = edges
         .into_iter()
-        .map(|(_, a, b, style)| match style {
-            Some(s) => json!([short[a], short[b], null, s]),
-            None => json!([short[a], short[b]]),
-        })
+        .map(
+            |(_, a, b, style)| match (style, graph.at.get(&(a.clone(), b.clone()))) {
+                (style, Some(at)) if !at.is_empty() => json!([short[a], short[b], null, style, at]),
+                (Some(s), _) => json!([short[a], short[b], null, s]),
+                (None, _) => json!([short[a], short[b]]),
+            },
+        )
         .collect();
     (
         json!({ "nodes": nodes, "tiers": tiers, "edges": edges }),
@@ -1222,7 +1319,7 @@ mod tests {
                 .into_iter()
                 .map(|(a, b)| (a.to_owned(), b.to_owned()))
                 .collect(),
-            existing: BTreeMap::new(),
+            ..Graph::default()
         };
         let index = arrange_lanes(&mut items, [&graph, &Graph::default()]);
         let mut got: Vec<(&String, &usize)> = index.iter().collect();
@@ -1564,7 +1661,7 @@ mod tests {
                 .as_array()
                 .expect("edges")
                 .iter()
-                .all(|e| e.get(3).is_none())
+                .all(|e| e.get(3).is_none_or(Value::is_null))
         );
         assert_eq!(flow.after["edges"].as_array().expect("edges").len(), 2);
     }
@@ -1862,6 +1959,75 @@ mod tests {
     }
 
     #[test]
+    fn property_and_parameter_of_the_same_name_are_not_calls() {
+        let repo = TempRepo::new("flow-shadow");
+        repo.write("packages/db/package.json", r#"{"name":"@t/db"}"#);
+        repo.write(
+            "apps/web/package.json",
+            r#"{"name":"@t/web","dependencies":{"@t/db":"workspace:*"}}"#,
+        );
+        let files = |n: u8| {
+            repo.write(
+                "packages/db/src/schema.ts",
+                &format!("export const referral = pgSchema('referral', {n})\n"),
+            );
+            // `api` comes through a path alias, which cannot be followed.
+            repo.write(
+                "apps/web/src/kyc.ts",
+                &format!("import {{ api }} from '~/lib/api'\n\nexport const key = () => api.referral.get.key({n})\n"),
+            );
+            repo.write(
+                "apps/web/src/guard.ts",
+                &format!("import {{ api }} from '~/lib/api'\nimport {{ match }} from 'ts-pattern'\n\nexport const options = () => api.referral.get.queryOptions()\n\nexport const open = (referral: Referral) => match(referral, {n})\n"),
+            );
+            // Real uses: a namespace import through an alias, and a named import.
+            repo.write(
+                "apps/web/src/ns.ts",
+                &format!(
+                    "import * as db from '~/db'\n\nexport const ns = () => db.referral.table({n})\n"
+                ),
+            );
+            repo.write(
+                "apps/web/src/named.ts",
+                &format!("import {{ referral }} from '@t/db/schema'\n\nexport const named = () => referral.table({n})\n"),
+            );
+        };
+        files(1);
+        let base = repo.commit("base");
+        files(2);
+        let head = repo.commit("head");
+        let map = draft(&repo, &base, &head);
+        let schema = node_id(&map, "referral");
+        let mut callers: Vec<_> = map
+            .edges
+            .iter()
+            .filter(|e| e.to == schema)
+            .map(|e| symbol_of(&map, &e.from))
+            .collect();
+        callers.sort_unstable();
+        assert_eq!(callers, ["named", "ns"]);
+        let ns = map
+            .edges
+            .iter()
+            .find(|e| e.to == schema && symbol_of(&map, &e.from) == "ns");
+        assert_eq!(ns.expect("ns edge").at, ["apps/web/src/ns.ts:3"]);
+        // The arrow carries the same reference into the page.
+        let flow = flow_of(&repo, &map);
+        let arrow = flow.after["edges"]
+            .as_array()
+            .expect("edges")
+            .iter()
+            .find(|e| e[0] == ns.expect("ns edge").from.as_str())
+            .cloned()
+            .expect("ns arrow");
+        assert_eq!(arrow[4], json!(["apps/web/src/ns.ts:3"]), "{arrow}");
+    }
+
+    fn symbol_of<'m>(map: &'m ChangeMap, id: &str) -> &'m str {
+        &map.nodes.iter().find(|n| n.id == id).expect("node").symbol
+    }
+
+    #[test]
     fn member_property_is_not_a_call() {
         let repo = TempRepo::new("flow-member");
         let src = |n: u8| {
@@ -1889,6 +2055,63 @@ mod tests {
             "keys are not calls: {:?}",
             flow.callers
         );
+    }
+
+    #[test]
+    fn rerunning_flow_keeps_hand_edits() {
+        let repo = TempRepo::new("flow-keep-edits");
+        repo.write("src/services/fee.ts", FEE_BASE);
+        repo.write("src/api/handler.ts", HANDLER_BASE);
+        repo.write("src/db/store.ts", STORE);
+        let base = repo.commit("base");
+        repo.write("src/services/fee.ts", FEE_HEAD);
+        repo.write("src/api/handler.ts", HANDLER_HEAD);
+        let head = repo.commit("head");
+        let mut map = draft(&repo, &base, &head);
+        let (handle, fee) = (node_id(&map, "handle"), node_id(&map, "fee"));
+        let git = Git::new(repo.path());
+        let rules = Rules::load(None).expect("rules");
+        let map_path = repo.path().join("map.json");
+        let out = repo.path().join("map.flow.json");
+        let run = |map: &ChangeMap| {
+            std::fs::write(&map_path, serde_json::to_string(map).expect("map")).expect("write");
+            run_flow(&git, &rules, &map_path, Some(out.clone())).expect("flow");
+            serde_json::from_str::<Value>(&std::fs::read_to_string(&out).expect("read"))
+                .expect("json")
+        };
+        let mut edited = run(&map);
+        edited["after"]["nodes"][&handle]["label"] = json!("hand label");
+        edited["after"]["nodes"][&handle]
+            .as_object_mut()
+            .expect("box")
+            .remove("note");
+        edited["after"]["edges"][0][2] = json!("reads");
+        let arrow = (
+            edited["after"]["edges"][0][0].clone(),
+            edited["after"]["edges"][0][1].clone(),
+        );
+        std::fs::write(&out, edited.to_string()).expect("edit");
+
+        map.nodes
+            .iter_mut()
+            .find(|n| n.id == fee)
+            .expect("fee")
+            .caption = "new caption".into();
+        let again = run(&map);
+        let b = &again["after"]["nodes"][&handle];
+        assert_eq!(b["label"], "hand label", "{again}");
+        assert!(b.get("note").is_none(), "a removed note stays removed: {b}");
+        assert_eq!(
+            again["after"]["nodes"][&fee]["note"], "new caption",
+            "unedited boxes follow the map"
+        );
+        let e = again["after"]["edges"]
+            .as_array()
+            .expect("edges")
+            .iter()
+            .find(|e| (e[0].clone(), e[1].clone()) == arrow)
+            .expect("arrow");
+        assert_eq!(e[2], "reads");
     }
 
     #[test]

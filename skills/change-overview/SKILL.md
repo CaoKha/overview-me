@@ -18,10 +18,10 @@ The steps are those of pr-overview. Read `<root>/skills/pr-overview/SKILL.md` fi
    - If the user asks to include the branch's commits too ("everything on this branch", "my commits and my changes"), take the `base` that `overview-me base` prints instead.
    - Run `git status --porcelain --untracked-files=all`. If it is empty, nothing is uncommitted: say so, suggest the pr-overview skill for the branch's commits, and stop.
 2. **Snapshot the working tree.** Run `overview-me snapshot`. It prints `<head>`, a commit that holds HEAD plus every uncommitted and untracked file. It does not touch the branch, the index or the files. The same files always give the same sha, so a second run with no new edits reuses the map.
-3. **Do pr-overview steps 2 to 8**, with these changes:
+3. **Do pr-overview steps 2 to 9**, with these changes:
    - **Large changes.** Follow pr-overview’s >300-node branch: give the time estimate and offer a scoped area or modules-only page. `--path <prefix>` requires `--map <scoped.json>`; facts go beside it. Labels are kept for the same base, head, path and grouping; changed grouping settings write a new draft.
    - **No PR.** Skip `gh pr view`. Uncommitted work has no message: take the criteria from a spec if the user names one, from what the user said they are working on, and from the diff.
    - **Render.** Run `overview-me render <map> --change --scope "<scope>"`, where `<scope>` is `uncommitted files`, or `branch and uncommitted files` when the base is the merge-base.
-   - **Code.** Read files at `<head>` with `git show <head>:<path>`; it equals the working tree.
+   - **Code.** Read files at `<head>` with `git show <head>:<path>`; it equals the working tree. This includes step 7: check the diagrams on every run, also when the snapshot sha reused a map or page.
    - **Page.** Run `overview-me page <store>/<head>.review.md --unpushed`. The snapshot is not on the remote, so only `path:line` under Before link to the forge (at HEAD). If `git branch -r --contains HEAD` prints nothing, HEAD is not pushed either and those links will not resolve: say so at hand-off. Clicking a box still lists its files to copy.
    - **Hand off.** Also say how many files were included, and that the snapshot is not a commit on the branch: nothing was committed, staged or changed. If the base is HEAD and the branch has commits that are not on the default branch, say they were left out, and that asking to include the branch's commits puts them on the same page.
