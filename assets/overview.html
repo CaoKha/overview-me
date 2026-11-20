@@ -11,7 +11,7 @@
   `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
   one section per `##` with a sticky section bar, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded code previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
-  traces its edges, clicking it pins it and lists its files in a draggable fixed side panel resizable from every edge and corner (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline code previews.
+  traces its edges, clicking it pins it and lists its files in a draggable fixed side panel resizable from every edge and corner (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline code previews. Code previews open in the same panel; it has a word-wrap toggle, remembered per reader.
   Previewing a `path:line` elsewhere highlights the boxes that hold it and links to them from the preview. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
   and as a local file in the browser.
 -->
@@ -232,7 +232,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   .detail > .detail-head { flex-shrink: 0; }
   .detail-body { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; }
   :root.panel-sized .detail pre.code { resize: none; }
-  :root.panel-sized .code-detail > pre.code { flex: 1; min-height: 0; max-height: none; }
+  :root.panel-sized .detail > pre.code { flex: 1; min-height: 0; max-height: none; }
   :root.panel-sized .detail.single-preview .detail-body,
   :root.panel-sized .detail.single-preview ul.paths,
   :root.panel-sized .detail.single-preview li:has(pre.code) { flex: 1; min-height: 0; }
@@ -254,21 +254,29 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .detail .none { color: var(--muted); font-size: 14px; }
 button.btn { font: 500 12px/1.5 var(--font-sans); padding: 3px 10px; border: 0; border-radius: var(--r); background: var(--secondary); color: var(--fg); cursor: pointer; white-space: nowrap; }
 button.btn:hover { opacity: 0.85; }
-/* Preview of a path:line in the text: an icon button, so long paragraphs and tables stay readable. */
-button.peek { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 2px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--accent); cursor: pointer; vertical-align: -6px; }
-button.peek:hover { color: var(--fg); background: var(--secondary); }
-button.peek[aria-expanded="true"] { color: var(--on-hl); background: var(--hl); }
-button.peek:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
-button.peek svg { width: 15px; height: 15px; }
+/* Quiet icon buttons: the preview eye in the text (so long paragraphs and tables stay readable)
+   and the panel tools. Ghost until hovered, filled while on. */
+.peek, .icon-btn { display: inline-grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--accent); cursor: pointer; transition: color 120ms, background-color 120ms; }
+.peek { width: 22px; height: 22px; margin-left: 2px; vertical-align: -6px; }
+:is(.peek, .icon-btn):hover { color: var(--fg); background: var(--secondary); text-decoration: none; }
+:is(.peek, .icon-btn):is([aria-expanded="true"], [aria-pressed="true"]) { color: var(--on-hl); background: var(--hl); }
+:is(.peek, .icon-btn):focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+.peek svg { width: 15px; height: 15px; }
+.icon-btn svg { width: 16px; height: 16px; }
+.icon-btn svg.check { color: var(--ok); }
+.detail-head .tools { display: flex; align-items: center; gap: 2px; margin-left: auto; padding-right: 8px; border-right: 1px solid var(--border); }
+.detail-head .tools + .close { margin-left: 0; }
 button.btn:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
-.detail a.open { font-size: 12px; white-space: nowrap; }
 .flow-hits { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--muted); }
 .flow-hits .n { margin-right: 5px; padding: 0 4px; }
-.code-detail, .detail:has(pre.code) { width: min(var(--panel-width, 760px), calc(100vw - 32px)); }
+.detail:has(pre.code) { width: min(var(--panel-width, 760px), calc(100vw - 32px)); }
 pre.code { max-height: calc(100vh - 120px); min-height: 0; padding: 8px 0; font: 12px/1.6 var(--font-mono); }
 pre.code .code-line { display: block; min-width: max-content; padding-right: 12px; }
 pre.code .code-line.cited { background: color-mix(in srgb, var(--hl) 14%, transparent); }
 pre.code .line-number { display: inline-block; width: 4.5em; padding-right: 12px; text-align: right; color: var(--muted); user-select: none; }
+/* Word wrap: wrapped rows hang under the code, not the line number. */
+:root.code-wrap pre.code .code-line { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 4.5em; text-indent: -4.5em; }
+:root.code-wrap pre.code .line-number { text-indent: 0; }
 pre.code :is(.hljs-keyword, .hljs-built_in, .hljs-selector-tag) { color: var(--link); }
 pre.code :is(.hljs-string, .hljs-regexp, .hljs-addition) { color: var(--ok); }
 pre.code :is(.hljs-comment, .hljs-quote) { color: var(--muted); font-style: italic; }
@@ -500,6 +508,10 @@ const panelWidthKey = 'overview-me:panel-width';
 const panelPositionKey = 'overview-me:panel-position';
 const panelHeightKey = 'overview-me:panel-height';
 const desktopHeightKey = 'overview-me:panel-desktop-height';
+const codeWrapKey = 'overview-me:code-wrap';
+try {
+  document.documentElement.classList.toggle('code-wrap', localStorage.getItem(codeWrapKey) === '1');
+} catch {}
 try {
   const width = Number(localStorage.getItem(panelWidthKey));
   if (Number.isFinite(width) && width >= 320) document.documentElement.style.setProperty('--panel-width', `${width}px`);
@@ -659,14 +671,14 @@ function panelResize(panel) {
   return grips;
 }
 
-let unpinActive = null;
-document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') unpinActive?.(); });
-const codeDetail = el('div', 'detail code-detail');
-codeDetail.hidden = true;
-codeDetail.setAttribute('role', 'region');
-codeDetail.setAttribute('aria-label', 'Code preview');
-document.body.append(codeDetail);
-const codeResize = panelResize(codeDetail);
+// The one side panel, for a code preview or a pinned box's files; closePanel closes whichever is open.
+let closePanel = null;
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') closePanel?.(); });
+const sidePanel = el('div', 'detail');
+sidePanel.hidden = true;
+sidePanel.setAttribute('role', 'region');
+document.body.append(sidePanel);
+const panelGrips = panelResize(sidePanel);
 // One { before, locate } per flow diagram; `before` when it sits in a Before panel.
 const flows = [];
 // How well a box path holds path:from-to: 3 its lines, 2 its file, 1 its folder, 0 not at all.
@@ -713,35 +725,74 @@ function codePre({ key, file, from, to, path }) {
   return pre;
 }
 const EYE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8S3.8 3.5 8 3.5 14.5 8 14.5 8 12.2 12.5 8 12.5 1.5 8 1.5 8Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>';
+const WRAP = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h8.5a2.25 2.25 0 0 1 0 4.5H8M9.5 11 8 12.5 9.5 14M2.5 12.5h3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const EXTERNAL = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 2.5h4v4M13.5 2.5 8 8M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const COPY = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+const CHECK = '<svg class="check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const CLOSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+function iconButton(svg, label) {
+  const b = el('button', 'icon-btn');
+  b.type = 'button';
+  b.innerHTML = svg;
+  b.title = label;
+  b.setAttribute('aria-label', label);
+  return b;
+}
+function openLink(href) {
+  const a = el('a', 'icon-btn');
+  a.innerHTML = EXTERNAL;
+  a.href = href;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.title = 'Open in a new tab';
+  a.setAttribute('aria-label', 'Open in a new tab');
+  return a;
+}
+// Opens the side panel with `title` and its tools in the head (wrap when it can show code, open
+// when there is a link, close) and `body` below. `onClose` runs while the panel is still open.
+// Returns the close button.
+function showPanel({ label, title, href, wrap, live, body, onClose }) {
+  closePanel?.();
+  const head = el('div', 'detail-head');
+  head.append(...title);
+  const tools = el('div', 'tools');
+  if (wrap) {
+    const b = iconButton(WRAP, 'Wrap long lines');
+    b.setAttribute('aria-pressed', String(document.documentElement.classList.contains('code-wrap')));
+    b.addEventListener('click', () => {
+      const on = document.documentElement.classList.toggle('code-wrap');
+      b.setAttribute('aria-pressed', String(on));
+      try { localStorage.setItem(codeWrapKey, on ? '1' : '0'); } catch {}
+      sidePanel.querySelectorAll('pre.code').forEach(scrollCode);
+    });
+    tools.append(b);
+  }
+  if (href) tools.append(openLink(href));
+  if (tools.children.length) head.append(tools);
+  const close = iconButton(CLOSE, 'Close (Esc)');
+  close.classList.add('close');
+  close.addEventListener('click', () => closePanel());
+  head.append(close);
+  sidePanel.setAttribute('aria-label', label);
+  sidePanel.setAttribute('aria-live', live ? 'polite' : 'off');
+  sidePanel.classList.remove('single-preview');
+  sidePanel.replaceChildren(...panelGrips, head, ...body);
+  sidePanel.hidden = false;
+  closePanel = () => {
+    closePanel = null;
+    onClose();
+    sidePanel.hidden = true;
+    sidePanel.replaceChildren();
+  };
+  return close;
+}
 function showCode(text, preview, href, button, before) {
   // The same button again closes its preview.
   const open = button.getAttribute('aria-expanded') === 'true';
-  unpinActive?.();
+  closePanel?.();
   if (open) return;
-  button.setAttribute('aria-expanded', 'true');
   const located = flows.filter((f) => f.before === before).flatMap((f) => f.locate(preview));
-  const closePanel = () => {
-    codeDetail.hidden = true;
-    button.setAttribute('aria-expanded', 'false');
-    for (const f of flows) f.locate(null);
-    unpinActive = null;
-    button.focus({ preventScroll: true });
-  };
-  unpinActive = closePanel;
-  const head = el('div', 'detail-head');
-  head.append(el('code', null, text));
-  if (href) {
-    const a = el('a', 'open', 'Open ↗');
-    a.href = href;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    head.append(a);
-  }
-  const close = el('button', 'btn close', 'Close');
-  close.type = 'button';
-  close.addEventListener('click', closePanel);
-  head.append(close);
-  const parts = [...codeResize, head];
+  const parts = [];
   if (located.length) {
     const hits = el('div', 'flow-hits', 'In the flow');
     for (const { node, reveal } of located) {
@@ -756,8 +807,19 @@ function showCode(text, preview, href, button, before) {
     parts.push(hits);
   }
   const pre = codePre(preview);
-  codeDetail.replaceChildren(...parts, pre);
-  codeDetail.hidden = false;
+  const close = showPanel({
+    label: 'Code preview',
+    title: [el('code', null, text)],
+    href,
+    wrap: true,
+    body: [...parts, pre],
+    onClose: () => {
+      button.setAttribute('aria-expanded', 'false');
+      for (const f of flows) f.locate(null);
+      button.focus({ preventScroll: true });
+    },
+  });
+  button.setAttribute('aria-expanded', 'true');
   close.focus({ preventScroll: true });
   scrollCode(pre);
 }
@@ -795,7 +857,7 @@ for (const code of out.querySelectorAll(':not(pre) > code')) {
 }
 
 // Copies text; falls back to a selected textarea where the clipboard API is blocked (iframes).
-async function copy(text, button) {
+async function copy(text, button, done = 'Copied') {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
@@ -808,9 +870,14 @@ async function copy(text, button) {
     document.execCommand('copy');
     t.remove();
   }
-  const was = button.textContent;
-  button.textContent = 'Copied';
-  setTimeout(() => { button.textContent = was; }, 1200);
+  // A second click before the reset keeps the original content, not the "done" one.
+  clearTimeout(button.copied);
+  button.dataset.idle ??= button.innerHTML;
+  button.innerHTML = done;
+  button.copied = setTimeout(() => {
+    button.innerHTML = button.dataset.idle;
+    delete button.dataset.idle;
+  }, 1200);
 }
 
 // ```flow blocks: {"nodes": {id: {label, n?, kind?, note?, paths?}}, "tiers": [[{name, ids, note?, flex?}]],
@@ -835,8 +902,7 @@ function legend(spec) {
   return box;
 }
 
-function drawFlow(arch, spec, detail) {
-  const resize = panelResize(detail);
+function drawFlow(arch, spec) {
   uid += 1;
   const id = uid;
   const svg = document.createElementNS(NS, 'svg');
@@ -970,20 +1036,13 @@ function drawFlow(arch, spec, detail) {
   let pinned = null;
   function showDetail(k) {
     const n = spec.nodes[k];
-    detail.replaceChildren(...resize);
-    detail.classList.remove('single-preview');
-    const head = el('div', 'detail-head');
-    if (n.n) head.append(el('span', 'n', n.n));
-    head.append(el('span', null, n.label));
+    const title = [];
+    if (n.n) title.push(el('span', 'n', n.n));
+    title.push(el('span', null, n.label));
     const kind = nodeKind(n);
-    head.append(el('span', 'detail-kind', { changed: n.n ? 'changed' : '', added: 'new', removed: 'removed', existing: 'unchanged' }[kind]));
-    const close = el('button', 'btn close', 'Close');
-    close.type = 'button';
-    close.addEventListener('click', unpin);
-    head.append(close);
-    detail.append(head);
+    title.push(el('span', 'detail-kind', { changed: n.n ? 'changed' : '', added: 'new', removed: 'removed', existing: 'unchanged' }[kind]));
     const body = el('div', 'detail-body');
-    detail.append(body);
+    let previews = false;
     if (n.note) body.append(el('p', 'detail-note', n.note));
     const paths = Array.isArray(n.paths) ? n.paths : [];
     if (!paths.length) body.append(el('p', 'none', 'No file given for this box.'));
@@ -992,15 +1051,14 @@ function drawFlow(arch, spec, detail) {
       for (const p of paths) {
         const li = el('li');
         li.append(el('code', null, p));
-        const b = el('button', 'btn', 'Copy');
-        b.type = 'button';
-        b.addEventListener('click', () => copy(p, b));
+        const b = iconButton(COPY, 'Copy path');
+        b.addEventListener('click', () => copy(p, b, CHECK));
         li.append(b);
         const at = cfg.base && arch.closest('.panel.before') ? cfg.base : cfg.head || sha;
         const preview = codePreview(p, at);
         if (preview) {
-          const button = el('button', 'btn', 'Preview');
-          button.type = 'button';
+          previews = true;
+          const button = iconButton(EYE, 'Preview');
           button.setAttribute('aria-label', `Preview ${p}`);
           button.setAttribute('aria-expanded', 'false');
           button.addEventListener('click', () => {
@@ -1011,20 +1069,14 @@ function drawFlow(arch, spec, detail) {
               li.append(pre);
               scrollCode(pre);
             }
-            detail.classList.toggle('single-preview', detail.querySelectorAll('pre.code').length === 1);
-            button.textContent = pre ? 'Preview' : 'Hide';
+            sidePanel.classList.toggle('single-preview', sidePanel.querySelectorAll('pre.code').length === 1);
+            button.title = pre ? 'Preview' : 'Hide preview';
             button.setAttribute('aria-expanded', String(!pre));
           });
           li.append(button);
         }
         const href = forgeHref(p, arch);
-        if (href) {
-          const a = el('a', 'open', 'open ↗');
-          a.href = href;
-          a.target = '_blank';
-          a.rel = 'noopener';
-          li.append(a);
-        }
+        if (href) li.append(openLink(href));
         list.append(li);
       }
       body.append(list);
@@ -1036,30 +1088,28 @@ function drawFlow(arch, spec, detail) {
         body.append(all);
       }
     }
-    detail.hidden = false;
+    // Opening the panel first closes whatever it showed, including this flow's previous pin.
+    return showPanel({ label: `${n.label} files`, title, wrap: previews, live: true, body: [body], onClose: unpinned });
+  }
+  function unpinned() {
+    const back = sidePanel.contains(document.activeElement) ? boxes[pinned] : null;
+    boxes[pinned].classList.remove('pinned');
+    pinned = null;
+    clear();
+    back?.focus();
   }
   // The card sits at the end of body, so a keyboard pin moves focus into it and closing it from
   // inside returns focus to the box.
   function pin(k, fromKey) {
-    unpinActive?.();
-    unpinActive = unpin;
+    const close = showDetail(k);
     pinned = k;
     clear();
     focusOn(k);
     boxes[k].classList.add('pinned');
-    showDetail(k);
-    if (fromKey) detail.querySelector('.close').focus({ preventScroll: true });
+    if (fromKey) close.focus({ preventScroll: true });
   }
   function unpin() {
-    if (!pinned) return;
-    const back = detail.contains(document.activeElement) ? boxes[pinned] : null;
-    boxes[pinned].classList.remove('pinned');
-    pinned = null;
-    unpinActive = null;
-    clear();
-    detail.hidden = true;
-    detail.replaceChildren();
-    back?.focus();
+    if (pinned) closePanel?.();
   }
   for (const [k, b] of Object.entries(boxes)) {
     b.setAttribute('role', 'button');
@@ -1122,14 +1172,10 @@ for (const code of out.querySelectorAll('pre > code.language-flow')) {
   const scroll = el('div', 'arch-scroll');
   const arch = el('div', 'arch');
   const before = !!pre.closest('.panel.before');
-  const detail = el('div', 'detail');
-  detail.hidden = true;
-  detail.setAttribute('aria-live', 'polite');
   scroll.append(arch);
   flow.append(scroll, legend(spec));
-  document.body.append(detail);
   pre.replaceWith(flow);
-  flows.push({ before, locate: drawFlow(arch, spec, detail) });
+  flows.push({ before, locate: drawFlow(arch, spec) });
 }
 
 // Older overviews may still use mermaid; load it only when one is there.
