@@ -193,7 +193,13 @@ pub struct Edge {
     /// Number of reference sites reaching declarations in the target module.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weight: Option<usize>,
+    /// The first references behind the edge, as `path:line` at head.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub at: Vec<String>,
 }
+
+/// Reference sites kept per edge.
+pub const MAX_AT: usize = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]

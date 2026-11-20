@@ -41,14 +41,20 @@ The CLI does the mechanical work. It finds the base, drafts the map, draws the B
    - **Data and state:** the types, tables, columns, config keys and messages that the nodes add, change or remove.
    - **Where it plugs in:** fill the last cell of each row. Under "Affected by the change", delete a row when nothing changes for that code, for example a caller that only calls new code. Under "Used by the change", delete a row when the change does not use it, for example a sibling the changed lines only list. Delete a table and its heading when you delete its last row. If both go, write "None." under the section heading.
    
-   Leave the rest of the page as rendered. Do not redraw the flows, rewrite the tables, or repeat the map in prose. To label an arrow or add a note to a box, edit `<store>/<head>.flow.json`. To remove a wrong arrow between two stops, delete its edge from the map's `edges` and run `overview-me flow <map>` before you label arrows, since it rewrites the flow file.
+   Leave the rest of the page as rendered. Do not redraw the flows, rewrite the tables, or repeat the map in prose. To label an arrow or add a note to a box, edit `<store>/<head>.flow.json`. To remove a wrong arrow between two stops, delete its edge from the map's `edges` and run `overview-me flow <map>`. It redraws the flow file and keeps your box and arrow label edits.
 6. **Check your open questions.** The questions the page already lists come from facts. Test each question you add against the code before you keep it:
    - Look for the answer: read the code it cites, `git grep -n` its symbols at `<head>` and at `<base>`, and read the tests, the PR description, the spec and the codebase overview.
    - If you find the answer, drop the question. If the answer helps the reader, put it in the section it belongs to.
    - If the question says the code looks wrong, read the cited code again with its callers and callees. Keep it only if the problem is still there, and say exactly what the code does.
    - Keep a question only when the code in this repo cannot answer it: a value set outside the repo, an intent the PR does not state, or behaviour only a run shows. Each one cites the `path:line` it is about.
-7. **Show the page** as `<root>/references/show-page.md` says, for `<store>/<head>.review.md`.
-8. **Hand off.** Give the artifact link (or the HTML path), the markdown and map paths, the stop count, the one-paragraph summary, the Watch out callouts, and the gaps (missing, partial or untested criteria, and open questions). Tell the user that clicking a box in a flow diagram lists its files to copy into their editor.
+7. **Check the diagrams.** Do this on every run, also when step 2 kept an earlier map or the page already exists: a reused page carries the earlier run's mistakes.
+   - Each Before box names code that exists at `<base>`: look for its label in `git show <base>:<path>` for each of its paths.
+   - No Before box shows After text: the name of a symbol the change adds, or the caption of the change.
+   - Each After arrow between two lanes has an import or a call behind it: read the references in the edge's `at` in the map (also on the arrow in the flow file). Treat a `validate` warning about an edge as a wrong arrow until the code says otherwise.
+
+   Fix a box in `<store>/<head>.flow.json`. Remove a wrong arrow as step 5 says.
+8. **Show the page** as `<root>/references/show-page.md` says, for `<store>/<head>.review.md`.
+9. **Hand off.** Give the artifact link (or the HTML path), the markdown and map paths, the stop count, the one-paragraph summary, the Watch out callouts, and the gaps (missing, partial or untested criteria, and open questions). Tell the user that clicking a box in a flow diagram lists its files to copy into their editor.
 
 ## Writing rules
 

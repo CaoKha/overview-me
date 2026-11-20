@@ -9,6 +9,7 @@ use crate::facts::{self, Changes, Unit};
 use crate::git::Git;
 use crate::map::{ChangeMap, Status};
 use crate::rules::{LANE_MAX, MAX_LANES, Rules};
+use crate::symbols::{self, Parsed, Role};
 
 /// Reads, deserializes and checks a map. Prints every problem; returns whether it is valid.
 ///
@@ -54,6 +55,9 @@ pub fn run(git: &Git, rules: &Rules, path: &Path) -> Result<bool> {
         &read_head,
         &is_test_file,
     );
+    for w in weak_edges(&map, &read_head) {
+        eprintln!("warning: {w}");
+    }
     if problems.is_empty() {
         println!(
             "ok: {} nodes, {} tour stops, {} criteria, {} hunks covered",
@@ -133,6 +137,84 @@ fn expand_home(path: &str) -> PathBuf {
         (Some(rest), Some(home)) => Path::new(&home).join(rest),
         _ => PathBuf::from(path),
     }
+}
+
+/// Edges whose every recorded reference (`at`) is a property, a key or a local binding: none
+/// of them can name the target node's code, so the arrow is likely a name match.
+pub fn weak_edges(map: &ChangeMap, read_head: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+    let site = |a: &str| -> Option<(String, usize)> {
+        let (file, line) = a.rsplit_once(':')?;
+        Some((file.to_owned(), line.parse().ok()?))
+    };
+    let edges: Vec<_> = map
+        .edges
+        .iter()
+        .filter(|e| !e.at.is_empty())
+        .filter_map(|e| Some((e, map.nodes.iter().find(|n| n.id == e.to)?)))
+        .collect();
+    let files: BTreeSet<String> = edges
+        .iter()
+        .flat_map(|(e, target)| {
+            e.at.iter()
+                .filter_map(|a| site(a).map(|s| s.0))
+                .chain(target.sites.iter().map(|s| s.file.clone()))
+        })
+        .collect();
+    let parsed: HashMap<String, Parsed> = files
+        .into_iter()
+        .filter_map(|f| {
+            let p = symbols::parse(&f, &read_head(&f)?).ok().flatten()?;
+            Some((f, p))
+        })
+        .collect();
+    let mut out = Vec::new();
+    for (e, target) in edges {
+        let sites: Vec<(String, usize)> = e.at.iter().filter_map(|a| site(a)).collect();
+        // The target's declarations: (name, whether it is a method).
+        let declared: HashMap<&str, bool> = target
+            .sites
+            .iter()
+            .filter_map(|s| Some((s, parsed.get(&s.file)?)))
+            .flat_map(|(s, p)| {
+                p.symbols
+                    .iter()
+                    .filter(|d| d.start <= s.end as usize && s.start as usize <= d.end)
+            })
+            .map(|d| {
+                (
+                    d.ident.as_str(),
+                    crate::scope::container(&d.name, &d.ident).is_some(),
+                )
+            })
+            .collect();
+        if declared.is_empty() {
+            continue;
+        }
+        let names = |p: &Parsed, r: &symbols::Ident| match &r.role {
+            Role::Key => false,
+            Role::Name => !p.shadowed(r),
+            Role::Member(q) => {
+                declared[r.name.as_str()] || p.import_from.get(q).is_some_and(|i| i.name.is_none())
+            }
+        };
+        let strong = sites.iter().any(|(file, line)| {
+            parsed.get(file).is_some_and(|p| {
+                p.identifiers.iter().any(|r| {
+                    r.line == *line && declared.contains_key(r.name.as_str()) && names(p, r)
+                })
+            })
+        });
+        if !strong && sites.len() == e.at.len() {
+            out.push(format!(
+                "edge {}->{}: no reference at {} names {}'s code (a property, key or local of the same name?)",
+                e.from,
+                e.to,
+                e.at.join(", "),
+                e.to
+            ));
+        }
+    }
+    out
 }
 
 /// Semantic checks. `tested` holds the exported names that changed test files reference;
@@ -692,6 +774,35 @@ mod tests {
     }
 
     #[test]
+    fn edges_whose_references_name_nothing_warn() {
+        let (mut map, _, _) = fixture();
+        map.nodes = vec![
+            node("N1", &[], false, &[("web.ts", 3, 7)]),
+            node("N2", &[], false, &[("db.ts", 1, 1)]),
+        ];
+        let web = "import { api } from '~/api'\nimport * as db from '~/db'\nexport const a = () => api.referral.get()\nexport const b = (referral: R) => referral\nexport const c = () => ({ referral: 1 })\nexport const d = () => db.referral\nexport const e = () => referral\n";
+        let read_head = |f: &str| match f {
+            "web.ts" => Some(web.to_owned()),
+            "db.ts" => Some("export const referral = 1\n".to_owned()),
+            _ => None,
+        };
+        let mut warned = |at: &[&str]| {
+            map.edges = vec![crate::map::Edge {
+                from: "N1".into(),
+                to: "N2".into(),
+                kind: crate::map::EdgeKind::Calls,
+                weight: None,
+                at: at.iter().map(|&a| a.to_owned()).collect(),
+            }];
+            !weak_edges(&map, &read_head).is_empty()
+        };
+        assert!(warned(&["web.ts:3", "web.ts:4", "web.ts:5"]));
+        assert!(!warned(&["web.ts:3", "web.ts:6"]), "a namespace member");
+        assert!(!warned(&["web.ts:7"]), "a plain name");
+        assert!(!warned(&[]), "no references recorded");
+    }
+
+    #[test]
     fn unknown_criterion_and_edge_ends_fail() {
         let (mut map, changes, tested) = fixture();
         map.nodes[0].criteria.push("REF-7".into());
@@ -699,6 +810,7 @@ mod tests {
             from: "N1".into(),
             to: "N5".into(),
             kind: crate::map::EdgeKind::Calls,
+            at: Vec::new(),
             weight: None,
         });
         let got = problems(&map, &changes, &tested);

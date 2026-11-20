@@ -223,6 +223,13 @@
     "Edge": {
       "type": "object",
       "properties": {
+        "at": {
+          "description": "The first references behind the edge, as `path:line` at head.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "from": {
           "type": "string"
         },

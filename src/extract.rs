@@ -13,7 +13,9 @@ use serde::Serialize;
 
 use crate::facts::{self, Changes, Skipped, Unit};
 use crate::git::Git;
-use crate::map::{ChangeMap, Deletion, Edge, EdgeKind, Grouping, Node, Risk, Site, TestRef};
+use crate::map::{
+    ChangeMap, Deletion, Edge, EdgeKind, Grouping, MAX_AT, Node, Risk, Site, TestRef,
+};
 use crate::rules::{Rules, lane_rank};
 use crate::scope::{Scope, under};
 use crate::symbols::{self, Symbol};
@@ -319,7 +321,7 @@ fn call_edges(
             }
         }
     }
-    let mut seen = HashSet::new();
+    let mut seen: HashMap<(String, String), usize> = HashMap::new();
     let mut module_refs = HashSet::new();
     for callee in drafts {
         let mut targets: Vec<(&str, &Symbol)> = callee
@@ -352,20 +354,30 @@ fn call_edges(
                 } else {
                     (caller.node.id.clone(), callee.node.id.clone())
                 };
-                if from != to
-                    && if folders.is_some() {
-                        module_refs.insert((path, r.byte, to.clone()))
-                    } else {
-                        seen.insert((from.clone(), to.clone()))
-                    }
-                {
-                    edges.push(Edge {
-                        from,
-                        to,
-                        kind: EdgeKind::Calls,
-                        weight: None,
-                    });
+                if from == to {
+                    continue;
                 }
+                let site = format!("{path}:{}", r.line);
+                if folders.is_some() {
+                    if !module_refs.insert((path, r.byte, to.clone())) {
+                        continue;
+                    }
+                } else if let Some(&i) = seen.get(&(from.clone(), to.clone())) {
+                    let at = &mut edges[i].at;
+                    if at.len() < MAX_AT && !at.contains(&site) {
+                        at.push(site);
+                    }
+                    continue;
+                } else {
+                    seen.insert((from.clone(), to.clone()), edges.len());
+                }
+                edges.push(Edge {
+                    from,
+                    to,
+                    kind: EdgeKind::Calls,
+                    weight: None,
+                    at: vec![site],
+                });
             }
         }
     }
@@ -465,19 +477,26 @@ fn group_folders(
         .iter()
         .map(|n| (n.symbol.as_str(), n.id.as_str()))
         .collect();
-    let mut weights: BTreeMap<(String, String), usize> = BTreeMap::new();
+    let mut weights: BTreeMap<(String, String), (usize, Vec<String>)> = BTreeMap::new();
     for e in edges {
-        *weights
+        let (weight, at) = weights
             .entry((ids[e.from.as_str()].into(), ids[e.to.as_str()].into()))
-            .or_default() += 1;
+            .or_default();
+        *weight += 1;
+        for site in e.at {
+            if at.len() < MAX_AT && !at.contains(&site) {
+                at.push(site);
+            }
+        }
     }
     let mut edges: Vec<Edge> = weights
         .into_iter()
-        .map(|((from, to), weight)| Edge {
+        .map(|((from, to), (weight, at))| Edge {
             from,
             to,
             kind: EdgeKind::Calls,
             weight: Some(weight),
+            at,
         })
         .collect();
     prune_edges(&mut edges);
@@ -947,6 +966,7 @@ mod tests {
             to: to.into(),
             kind: EdgeKind::Calls,
             weight: None,
+            at: Vec::new(),
         }
     }
 
@@ -1242,6 +1262,7 @@ mod tests {
                 to: format!("N{}", i + 20),
                 kind: EdgeKind::Calls,
                 weight: Some(i),
+                at: Vec::new(),
             })
             .collect();
         prune_edges(&mut edges);

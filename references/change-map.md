@@ -31,7 +31,7 @@ Above 300 draft nodes, the draft groups by folder (default depth 2: `apps/x`, `p
 ## Edges
 
 - **Module edges** have a `weight`: the number of reference sites reaching declarations in the target module. The draft keeps the strongest two outgoing calls per module, at most 15 total; After uses these calls; Before keeps base-side calls between modules and drops external boxes. `grouped: true` keeps removed symbols inside their module and caps After prose steps at 20, reporting omitted steps. A scoped map records `path`; validation covers only that path.
-- **edges**: the draft links a node to the nodes whose symbols it names, following imports to the file that declares them. Between two nodes, the After flow draws an arrow only when `edges` has it. Delete an edge the code does not make, for example two unrelated symbols that share a name; `flow` and `render` keep the arrow out on every run. Adding an edge does not draw an arrow the code does not show.
+- **edges**: the draft links a node to the nodes whose symbols it names, following imports to the file that declares them. `at` lists the first references behind an edge as `path:line` at head: read them to check the edge. `validate` warns when none of them can name the target's code (a property, key or local of the same name). Between two nodes, the After flow draws an arrow only when `edges` has it. Delete an edge the code does not make, for example two unrelated symbols that share a name; `flow` and `render` keep the arrow out on every run. Adding an edge does not draw an arrow the code does not show.
 
 ## Tour
 
