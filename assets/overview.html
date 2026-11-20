@@ -750,14 +750,19 @@ function openLink(href) {
   a.setAttribute('aria-label', 'Open in a new tab');
   return a;
 }
-// Opens the side panel with `title` and its tools in the head (wrap when it can show code, open
-// when there is a link, close) and `body` below. `onClose` runs while the panel is still open.
-// Returns the close button.
-function showPanel({ label, title, href, wrap, live, body, onClose }) {
+// Opens the side panel with `title` and its tools in the head (copy when there is a path, wrap when
+// it can show code, open when there is a link, close) and `body` below. `onClose` runs while the
+// panel is still open. Returns the close button.
+function showPanel({ label, title, path, href, wrap, live, body, onClose }) {
   closePanel?.();
   const head = el('div', 'detail-head');
   head.append(...title);
   const tools = el('div', 'tools');
+  if (path) {
+    const b = iconButton(COPY, 'Copy path');
+    b.addEventListener('click', () => copy(path, b, CHECK));
+    tools.append(b);
+  }
   if (wrap) {
     const b = iconButton(WRAP, 'Wrap long lines');
     b.setAttribute('aria-pressed', String(document.documentElement.classList.contains('code-wrap')));
@@ -811,6 +816,7 @@ function showCode(text, preview, href, button, before) {
   const close = showPanel({
     label: 'Code preview',
     title: [el('code', null, text)],
+    path: text,
     href,
     wrap: true,
     body: [...parts, pre],
