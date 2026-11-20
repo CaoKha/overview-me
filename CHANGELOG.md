@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/CaoKha/overview-me/compare/v0.14.0...v0.15.0) (2026-11-20)
+
+
+### Features
+
+* **page:** resize file previews from a bar under them ([#66](https://github.com/CaoKha/overview-me/issues/66)) ([57a9d6d](https://github.com/CaoKha/overview-me/commit/57a9d6d0b43c375b9fb340ffc752eaf4a1c91ca1))
+
 ## [0.14.0](https://github.com/CaoKha/overview-me/compare/v0.13.1...v0.14.0) (2026-11-20)
 
 
