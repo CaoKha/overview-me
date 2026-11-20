@@ -233,9 +233,10 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
   .detail-body { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; }
   :root.panel-sized .detail pre.code { resize: none; }
   :root.panel-sized .detail > pre.code { flex: 1; min-height: 0; max-height: none; }
-  :root.panel-sized .detail.single-preview .detail-body,
-  :root.panel-sized .detail.single-preview ul.paths,
-  :root.panel-sized .detail.single-preview li:has(pre.code) { flex: 1; min-height: 0; }
+  :root.panel-sized .detail.single-preview .detail-body { flex: 1; min-height: 0; }
+  /* The open preview fills the space the other rows leave, but keeps 240px when a long list leaves none; the list then scrolls. */
+  :root.panel-sized .detail.single-preview ul.paths { flex: 1 0 auto; }
+  :root.panel-sized .detail.single-preview li:has(pre.code) { flex: 1 0 0; min-height: 240px; }
   :root.panel-sized .detail.single-preview ul.paths > li:not(:has(pre.code)) { flex-shrink: 0; }
   :root.panel-sized .detail.single-preview li:has(pre.code) { display: grid; grid-template-columns: auto auto auto 1fr; grid-template-rows: auto minmax(0, 1fr); }
   :root.panel-sized .detail.single-preview ul.paths pre.code { grid-column: 1 / -1; align-self: stretch; width: auto; height: auto; min-height: 0; }
