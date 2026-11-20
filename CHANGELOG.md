@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.14.0](https://github.com/CaoKha/overview-me/compare/v0.13.1...v0.14.0) (2026-11-20)
+
+
+### Features
+
+* **cli:** large-PR mode for extract, validate and render ([#65](https://github.com/CaoKha/overview-me/issues/65)) ([f9baad7](https://github.com/CaoKha/overview-me/commit/f9baad73168eab373f2524b8390d65016fc651cc))
+* **page:** word wrap in code previews, one side panel, icon buttons ([#62](https://github.com/CaoKha/overview-me/issues/62)) ([150d997](https://github.com/CaoKha/overview-me/commit/150d99765c04225a9ea0d201c4008172ce05fa5f))
+
+
+### Bug Fixes
+
+* **page:** keep a code preview readable in a resized panel with many files ([#64](https://github.com/CaoKha/overview-me/issues/64)) ([c34c48d](https://github.com/CaoKha/overview-me/commit/c34c48d32c81f553fd8ff086b1ca35b8be5ecbee))
+
 ## [0.13.1](https://github.com/CaoKha/overview-me/compare/v0.13.0...v0.13.1) (2026-11-19)
 
 

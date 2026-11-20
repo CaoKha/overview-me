@@ -1,6 +1,6 @@
 {
   "name": "overview-me",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "description": "One-page overviews of agent-written code: a PR, your uncommitted changes, or the whole codebase, each checked against git and shown as a page with before and after flows.",
   "author": {
     "name": "CaoKha"
