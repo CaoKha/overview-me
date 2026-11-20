@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.16.0](https://github.com/CaoKha/overview-me/compare/v0.15.1...v0.16.0) (2026-11-20)
+
+
+### Features
+
+* **flow:** record where edges come from and keep hand edits on rerun ([#73](https://github.com/CaoKha/overview-me/issues/73)) ([87c1126](https://github.com/CaoKha/overview-me/commit/87c11263cde45a7a0671767e8a2d336384f622a4))
+* **page:** copy button in the code preview panel ([#74](https://github.com/CaoKha/overview-me/issues/74)) ([5d3e6f7](https://github.com/CaoKha/overview-me/commit/5d3e6f7ff1b9daecc93e818c16225590e742f01f))
+
+
+### Bug Fixes
+
+* **flow:** label Before boxes with base code, not the new symbol ([#71](https://github.com/CaoKha/overview-me/issues/71)) ([c021a34](https://github.com/CaoKha/overview-me/commit/c021a34e95aa182ac1301c8457f748d0ae14e48c))
+
 ## [0.15.1](https://github.com/CaoKha/overview-me/compare/v0.15.0...v0.15.1) (2026-11-20)
 
 
