@@ -580,9 +580,12 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
                 base_paths.push(d.file.clone());
             }
         }
-        if code_sites > 0 && code_sites == top_level && !db {
+        let top_level_only = code_sites > 0 && code_sites == top_level && !db;
+        if top_level_only {
             not_drawn.push(format!("{} (top-level code only)", node.id));
-            continue;
+            if !map.grouped || base.decls.is_empty() {
+                continue;
+            }
         }
         let on_head = code_sites > 0 || (db && !node.sites.is_empty());
         let on_base = !base.decls.is_empty() || !base_paths.is_empty();
@@ -606,7 +609,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
             store: db,
             order: (0, tour.get(node.id.as_str()).copied().unwrap_or(usize::MAX)),
             kind,
-            head: on_head.then_some(head),
+            head: (on_head && !top_level_only).then_some(head),
             base: on_base.then_some(base),
             head_paths,
             base_paths,
@@ -656,7 +659,6 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
                 if !items.iter().any(|i| owners.contains(i.key.as_str()))
                     && let Some(node) = map.nodes.iter().find(|n| owners.contains(n.id.as_str()))
                 {
-                    not_drawn.retain(|entry| !entry.starts_with(&format!("{} (", node.id)));
                     items.push(Item {
                         key: node.id.clone(),
                         label: label(&node.symbol),
@@ -665,7 +667,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
                         lane: node.lane.clone(),
                         store: rules.is_store(&old_file),
                         order: (0, tour.get(node.id.as_str()).copied().unwrap_or(usize::MAX)),
-                        kind: Kind::Removed,
+                        kind: Kind::Changed,
                         head: None,
                         base: None,
                         head_paths: Vec::new(),
@@ -677,11 +679,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
                     code.spans.push((old_file.clone(), s.start, s.end));
                     code.decls.push((old_file.clone(), (*s).clone()));
                     item.base_paths.push(span_path(&old_file, s.start, s.end));
-                    item.kind = if item.head.is_some() {
-                        Kind::Changed
-                    } else {
-                        Kind::Removed
-                    };
+                    item.kind = Kind::Changed;
                 } else {
                     not_drawn.push(format!(
                         "{}#{} (removed symbol has no module)",
@@ -756,6 +754,11 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         &boxes_at(false),
         &mut base_files,
     )?;
+    // Pruning changes what is drawn, not whether a base call still exists at head.
+    let unpruned_head = map.grouped.then(|| Graph {
+        edges: head_graph.edges.clone(),
+        ..Graph::default()
+    });
     // In After, an arrow between two map nodes needs an edge in the map: deleting a wrong
     // edge from the map removes its arrow for good.
     let node_ids: HashSet<&str> = map.nodes.iter().map(|n| n.id.as_str()).collect();
@@ -865,7 +868,13 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         .any(|i| i.base.is_some() && i.kind != Kind::Existing);
     let mut before = None;
     if before_has_change {
-        let (spec, dropped) = diagram(&items, &short, &base_graph, &head_graph, false);
+        let (spec, dropped) = diagram(
+            &items,
+            &short,
+            &base_graph,
+            unpruned_head.as_ref().unwrap_or(&head_graph),
+            false,
+        );
         if dropped > 0 {
             not_drawn.push(format!("{dropped} arrows in Before (over {MAX_EDGES})"));
         }
@@ -1426,7 +1435,7 @@ mod tests {
     #[test]
     fn grouped_removals_survive_skipped_and_added_owners() {
         for (i, body, expected) in [
-            (0, "console.log('new')\n", "removed"),
+            (0, "console.log('new')\n", "changed"),
             (1, "export function replacement() { return 2 }\n", "changed"),
         ] {
             let repo = TempRepo::new(&format!("grouped-removal-{i}"));
@@ -1442,8 +1451,14 @@ mod tests {
                 before["nodes"][&map.nodes[0].id]["kind"].as_str(),
                 (expected == "removed").then_some("removed")
             );
-            if expected == "changed" {
-                assert!(flow.after["nodes"][&map.nodes[0].id]["kind"].is_null());
+            assert!(flow.after["nodes"][&map.nodes[0].id]["kind"].is_null());
+            if i == 0 {
+                assert!(
+                    flow.not_drawn
+                        .iter()
+                        .any(|n| n.ends_with("(top-level code only)"))
+                );
+                assert!(flow.after["nodes"].get(&map.nodes[0].id).is_none());
             }
         }
     }
@@ -1471,6 +1486,78 @@ mod tests {
         assert_eq!(before["edges"].as_array().expect("edges").len(), 1);
         assert_eq!(before["edges"][0][3], "removed");
         assert!(flow.after["edges"].as_array().expect("edges").is_empty());
+    }
+
+    #[test]
+    fn grouped_before_does_not_mark_pruned_calls_removed() {
+        let repo = TempRepo::new("pruned-before");
+        for n in ["a", "b", "c"] {
+            repo.write(
+                &format!("packages/{n}/{n}.ts"),
+                &format!("export function {n}() {{ return 1 }}\n"),
+            );
+        }
+        let caller = "import { a } from '../../packages/a/a'\nimport { b } from '../../packages/b/b'\nimport { c } from '../../packages/c/c'\nexport function x() { return a() + b() + c()";
+        repo.write("apps/x/x.ts", &format!("{caller} + 1 }}\n"));
+        let base = repo.commit("base");
+        for n in ["a", "b", "c"] {
+            repo.write(
+                &format!("packages/{n}/{n}.ts"),
+                &format!("export function {n}() {{ return 2 }}\n"),
+            );
+        }
+        repo.write("apps/x/x.ts", &format!("{caller} + 2 }}\n"));
+        let head = repo.commit("head");
+        let mut map = draft(&repo, &base, &head);
+        map.grouped = true;
+        assert_eq!(map.edges.len(), 3);
+        map.edges.pop();
+        let flow = flow_of(&repo, &map);
+        let before = flow.before.expect("before");
+        assert_eq!(before["edges"].as_array().expect("edges").len(), 3);
+        assert!(
+            before["edges"]
+                .as_array()
+                .expect("edges")
+                .iter()
+                .all(|e| e.get(3).is_none())
+        );
+        assert_eq!(flow.after["edges"].as_array().expect("edges").len(), 2);
+    }
+
+    #[test]
+    fn grouped_mixed_deletion_and_top_level_keeps_before() {
+        let repo = TempRepo::new("mixed-top-level");
+        repo.write("src/gone.ts", "export function gone() { return 1 }\n");
+        repo.write("src/keep.ts", "console.log(1)\n");
+        let base = repo.commit("base");
+        std::fs::remove_file(repo.path().join("src/gone.ts")).expect("remove");
+        repo.write("src/keep.ts", "console.log(2)\n");
+        let head = repo.commit("head");
+        let path = crate::extract::run(
+            &Git::new(repo.path()),
+            &Rules::load(None).expect("rules"),
+            &base,
+            &head,
+            None,
+            None,
+            &crate::extract::Options {
+                group_by: Some(crate::extract::GroupBy::Dir),
+                ..Default::default()
+            },
+        )
+        .expect("extract");
+        let map: ChangeMap =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("read")).expect("map");
+        assert_eq!(map.nodes.len(), 1);
+        let flow = flow_of(&repo, &map);
+        let before = flow.before.expect("deleted declaration keeps Before");
+        assert!(before["nodes"][&map.nodes[0].id]["kind"].is_null());
+        assert!(
+            flow.not_drawn
+                .iter()
+                .any(|n| n.ends_with("(top-level code only)"))
+        );
     }
 
     fn flow_of(repo: &TempRepo, map: &ChangeMap) -> FlowFile {

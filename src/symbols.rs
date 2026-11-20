@@ -645,10 +645,14 @@ fn collect_identifiers(lang: Lang, node: Node<'_>, src: &[u8], in_import: bool, 
             "for_in_statement" => node
                 .child_by_field_name("left")
                 .filter(|_| node.child_by_field_name("kind").is_some()),
-            "arrow_function" => node.child_by_field_name("parameter"),
+            "arrow_function" | "catch_clause" => node.child_by_field_name("parameter"),
             _ => None,
         };
         if let Some(pattern) = binding {
+            let function_parameter = node
+                .parent()
+                .filter(|p| p.kind() == "formal_parameters")
+                .and_then(|p| p.parent());
             let lexical = if node.kind() == "for_in_statement" {
                 node.child_by_field_name("kind")
                     .is_none_or(|kind| text(kind, src) != "var")
@@ -667,11 +671,18 @@ fn collect_identifiers(lang: Lang, node: Node<'_>, src: &[u8], in_import: bool, 
                         | "arrow_function"
                         | "method_definition"
                 );
-                if function
+                if (function && (!parameter || function_parameter == Some(scope)))
                     || (!parameter
-                        && (scope.kind() == "statement_block"
+                        && (scope.kind() == "program"
+                            || (node.kind() == "catch_clause" && scope == node)
                             || (lexical
-                                && matches!(scope.kind(), "for_statement" | "for_in_statement"))))
+                                && matches!(
+                                    scope.kind(),
+                                    "statement_block"
+                                        | "switch_body"
+                                        | "for_statement"
+                                        | "for_in_statement"
+                                ))))
                 {
                     collect_bindings(pattern, scope, src, out);
                     break;
@@ -857,6 +868,86 @@ mod tests {
             .collect();
         v.sort_by_key(|s| s.1);
         v
+    }
+
+    fn local_at(source: &str, name: &str, byte: usize) -> bool {
+        let parsed = parse("x.ts", source).expect("parse").expect("typescript");
+        parsed
+            .locals
+            .iter()
+            .any(|(n, a, b)| n == name && *a <= byte && byte < *b)
+    }
+
+    #[test]
+    fn type_signature_parameters_do_not_bind_enclosing_function() {
+        for ty in [
+            "(fee: number) => void",
+            "{ (fee: number): void }",
+            "{ m(fee: number): void }",
+            "{ new(fee: number): object }",
+            "new (fee: number) => object",
+        ] {
+            let src = format!("function g(cb: {ty}) {{ return fee }}");
+            assert!(
+                !local_at(&src, "fee", src.rfind("fee").expect("ref")),
+                "{ty}"
+            );
+            assert!(
+                local_at(&src, "cb", src.rfind("fee").expect("ref")),
+                "real parameter"
+            );
+        }
+    }
+
+    #[test]
+    fn switch_lexical_bindings_end_at_switch_body() {
+        for kind in ["let", "const"] {
+            let src = format!(
+                "function g() {{ switch (1) {{ case 1: {kind} fee = 1; console.log(fee) }} return fee }}"
+            );
+            assert!(local_at(
+                &src,
+                "fee",
+                src.find("log(fee").expect("in switch") + 4
+            ));
+            assert!(!local_at(
+                &src,
+                "fee",
+                src.rfind("fee").expect("after switch")
+            ));
+        }
+    }
+
+    #[test]
+    fn var_bindings_hoist_to_function_or_program() {
+        for src in [
+            "function g() { if (true) { var fee = 0 } return fee }",
+            "if (true) { var fee = 0 } console.log(fee)",
+            "function g() { switch (1) { case 1: var fee = 0 } return fee }",
+            "function g() { try {} catch (err) { var fee = 0 } return fee }",
+        ] {
+            assert!(
+                local_at(src, "fee", src.rfind("fee").expect("ref")),
+                "{src}"
+            );
+        }
+        let src = "function g() { if (true) { var fee = 0 } } function h() { return fee }";
+        assert!(!local_at(src, "fee", src.rfind("fee").expect("ref")));
+    }
+
+    #[test]
+    fn catch_parameter_binds_only_catch_clause() {
+        let src = "function g() { try {} catch (fee) { console.log(fee) } return fee }";
+        assert!(local_at(
+            src,
+            "fee",
+            src.find("log(fee").expect("in catch") + 4
+        ));
+        assert!(!local_at(
+            src,
+            "fee",
+            src.rfind("fee").expect("after catch")
+        ));
     }
 
     #[test]

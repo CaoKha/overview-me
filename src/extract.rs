@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::facts::{self, Changes, Skipped, Unit};
 use crate::git::Git;
-use crate::map::{ChangeMap, Deletion, Edge, EdgeKind, Node, Risk, Site, TestRef};
+use crate::map::{ChangeMap, Deletion, Edge, EdgeKind, Grouping, Node, Risk, Site, TestRef};
 use crate::rules::{Rules, lane_rank};
 use crate::scope::{Scope, under};
 use crate::symbols::{self, Symbol};
@@ -320,6 +320,7 @@ fn call_edges(
         }
     }
     let mut seen = HashSet::new();
+    let mut module_refs = HashSet::new();
     for callee in drafts {
         let mut targets: Vec<(&str, &Symbol)> = callee
             .units
@@ -351,7 +352,13 @@ fn call_edges(
                 } else {
                     (caller.node.id.clone(), callee.node.id.clone())
                 };
-                if from != to && (folders.is_some() || seen.insert((from.clone(), to.clone()))) {
+                if from != to
+                    && if folders.is_some() {
+                        module_refs.insert((path, r.byte, to.clone()))
+                    } else {
+                        seen.insert((from.clone(), to.clone()))
+                    }
+                {
                     edges.push(Edge {
                         from,
                         to,
@@ -612,8 +619,8 @@ fn context(store: &Path) -> String {
     }
 }
 
-/// Writes `<store>/<head>.facts.json` (or `out`) and, unless a map for this base exists (or
-/// `fresh`), the draft map; prints each draft node with its diff. Returns the map path.
+/// Writes `<store>/<head>.facts.json` (or `out`) and keeps a map only for the same base, head,
+/// path and grouping unless `fresh` is set. Otherwise writes the draft. Returns the map path.
 ///
 /// # Errors
 /// When git fails or a file cannot be written.
@@ -702,6 +709,20 @@ pub fn run(
     let mut draft = ChangeMap {
         version: 1,
         grouped,
+        grouping: (options.group_by.is_some()
+            || options.depth != Options::default().depth
+            || !options.split.is_empty())
+        .then(|| Grouping {
+            by: options.group_by.map(|by| {
+                match by {
+                    GroupBy::Dir => "dir",
+                    GroupBy::Symbol => "symbol",
+                }
+                .to_owned()
+            }),
+            depth: options.depth,
+            split: options.split.clone(),
+        }),
         path: options.path.clone(),
         base: base.clone(),
         head: head.clone(),
@@ -780,9 +801,6 @@ pub fn run(
         std::fs::create_dir_all(parent)?;
     }
     let kept = !options.fresh
-        && options.group_by.is_none()
-        && options.split.is_empty()
-        && options.depth == Options::default().depth
         && std::fs::read_to_string(&map_path)
             .ok()
             .and_then(|t| serde_json::from_str::<ChangeMap>(&t).ok())
@@ -791,6 +809,7 @@ pub fn run(
                     && m.head == head
                     && m.path == draft.path
                     && m.grouped == draft.grouped
+                    && m.grouping == draft.grouping
             });
     if !kept {
         std::fs::write(&map_path, serde_json::to_string_pretty(&draft)? + "\n")
@@ -803,7 +822,7 @@ pub fn run(
         "map:   {}  ({})",
         map_path.display(),
         if kept {
-            "kept: a map for this base exists; pass --fresh to start over"
+            "kept: a map for the same base, head, path and grouping exists; pass --fresh to start over"
         } else {
             "draft written: fill in its labels"
         }
@@ -1022,7 +1041,7 @@ mod tests {
         let original: ChangeMap =
             serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("map");
         for field in [
-            "head", "path", "grouped", "matching", "depth", "split", "group_by",
+            "base", "head", "path", "grouped", "matching", "depth", "split", "group_by",
         ] {
             let mut old = original.clone();
             old.nodes[0].caption = "retained label".into();
@@ -1031,6 +1050,7 @@ mod tests {
                 ..Default::default()
             };
             match field {
+                "base" => old.base = head.clone(),
                 "head" => old.head = base.clone(),
                 "path" => old.path = Some("other".into()),
                 "grouped" => old.grouped = true,
@@ -1136,6 +1156,76 @@ mod tests {
                 (("apps/y", "packages/b"), Some(1))
             ])
         );
+    }
+
+    #[test]
+    fn module_weight_counts_reference_once_across_candidates() {
+        let repo = crate::testutil::TempRepo::new("same-module-targets");
+        repo.write("packages/a/package.json", r#"{"name":"@t/a"}"#);
+        for file in ["packages/a/a.ts", "packages/a/b.ts"] {
+            repo.write(file, "export function target() { return 1 }\n");
+        }
+        let base = repo.commit("base");
+        for file in ["packages/a/a.ts", "packages/a/b.ts"] {
+            repo.write(file, "export function target() { return 2 }\n");
+        }
+        repo.write(
+            "packages/a/index.ts",
+            "export * from './a'\nexport * from './b'\n",
+        );
+        repo.write(
+            "apps/x/x.ts",
+            "import { target } from '@t/a'\nexport function x() { return target() }\n",
+        );
+        let head = repo.commit("head");
+        let path = run(
+            &Git::new(repo.path()),
+            &Rules::load(None).expect("rules"),
+            &base,
+            &head,
+            None,
+            None,
+            &Options {
+                group_by: Some(GroupBy::Dir),
+                ..Default::default()
+            },
+        )
+        .expect("extract");
+        let map: ChangeMap =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("read")).expect("map");
+        assert_eq!(map.edges.len(), 1);
+        assert_eq!(map.edges[0].weight, Some(1));
+    }
+
+    #[test]
+    fn identical_grouping_preserves_labels_on_rerun() {
+        let repo = crate::testutil::TempRepo::new("kept-grouping");
+        let base = repo.commit("base");
+        repo.write("packages/a/src/a.ts", "export function a() { return 1 }\n");
+        let head = repo.commit("head");
+        let git = Git::new(repo.path());
+        let rules = Rules::load(None).expect("rules");
+        for (by, depth, split) in [
+            (Some(GroupBy::Dir), 1, vec!["packages/a".into()]),
+            (Some(GroupBy::Symbol), 2, vec![]),
+            (None, 2, vec![]),
+        ] {
+            let options = Options {
+                group_by: by,
+                depth,
+                split,
+                map: Some(repo.path().join("map.json")),
+                ..Default::default()
+            };
+            let path = run(&git, &rules, &base, &head, None, None, &options).expect("extract");
+            let mut map: ChangeMap =
+                serde_json::from_str(&std::fs::read_to_string(&path).expect("read")).expect("map");
+            map.nodes[0].caption = "hand label".into();
+            let labelled = serde_json::to_string_pretty(&map).expect("json");
+            std::fs::write(&path, &labelled).expect("write");
+            run(&git, &rules, &base, &head, None, None, &options).expect("rerun");
+            assert_eq!(std::fs::read_to_string(&path).expect("read"), labelled);
+        }
     }
 
     #[test]

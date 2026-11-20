@@ -574,6 +574,7 @@ mod tests {
         let map = ChangeMap {
             version: 1,
             grouped: false,
+            grouping: None,
             path: None,
             base: SHA.into(),
             head: SHA.into(),

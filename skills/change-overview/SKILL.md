@@ -19,7 +19,7 @@ The steps are those of pr-overview. Read `<root>/skills/pr-overview/SKILL.md` fi
    - Run `git status --porcelain --untracked-files=all`. If it is empty, nothing is uncommitted: say so, suggest the pr-overview skill for the branch's commits, and stop.
 2. **Snapshot the working tree.** Run `overview-me snapshot`. It prints `<head>`, a commit that holds HEAD plus every uncommitted and untracked file. It does not touch the branch, the index or the files. The same files always give the same sha, so a second run with no new edits reuses the map.
 3. **Do pr-overview steps 2 to 8**, with these changes:
-   - **Large changes.** Follow pr-overview’s >300-node branch: give the time estimate and offer a scoped area or modules-only page. `--path <prefix>` requires `--map <scoped.json>`; facts go beside it. Explicit `--depth`, `--split` or `--group-by` implies `--fresh`.
+   - **Large changes.** Follow pr-overview’s >300-node branch: give the time estimate and offer a scoped area or modules-only page. `--path <prefix>` requires `--map <scoped.json>`; facts go beside it. Labels are kept for the same base, head, path and grouping; changed grouping settings write a new draft.
    - **No PR.** Skip `gh pr view`. Uncommitted work has no message: take the criteria from a spec if the user names one, from what the user said they are working on, and from the diff.
    - **Render.** Run `overview-me render <map> --change --scope "<scope>"`, where `<scope>` is `uncommitted files`, or `branch and uncommitted files` when the base is the merge-base.
    - **Code.** Read files at `<head>` with `git show <head>:<path>`; it equals the working tree.

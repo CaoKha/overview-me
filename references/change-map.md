@@ -4,7 +4,7 @@ The map follows `<root>/schema/change-map.schema.json`. `overview-me extract` wr
 
 The draft already has the structure: one node per changed symbol, import-only hunks folded into the function in their file, the same edit at several places grouped into one node, `calls` edges, risk, `touchedByTest`, and a tour with callees before callers. Change the structure only where the draft got it wrong.
 
-Above 300 draft nodes, the draft groups by folder (default depth 2: `apps/x`, `packages/x`). Keep these module groups for a modules-only page. Use `--depth N`, `--split <prefix>` (repeat, first match wins), or `--path <prefix> --map <scoped.json>` to change scope. `--path` requires `--map`; facts go beside the custom map unless `--out` is set. Explicit `--depth`, `--split` or `--group-by` implies `--fresh`. `overview-me node N3 --map <map>` prints one group’s hunks; tests remain in the facts file. The main site is the largest body hunk, with imports and error definitions used only as fallbacks.
+Above 300 draft nodes, the draft groups by folder (default depth 2: `apps/x`, `packages/x`). Keep these module groups for a modules-only page. Use `--depth N`, `--split <prefix>` (repeat, first match wins), or `--path <prefix> --map <scoped.json>` to change scope. `--path` requires `--map`; facts go beside the custom map unless `--out` is set. Labels are kept for the same base, head, path and grouping; changed grouping settings write a new draft. `overview-me node N3 --map <map>` prints one group’s hunks; tests remain in the facts file. The main site is the largest body hunk, with imports and error definitions used only as fallbacks.
 
 ## Criteria
 

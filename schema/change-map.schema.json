@@ -34,6 +34,17 @@
       "description": "Folder-level draft: flows and page slots stay at module granularity.",
       "type": "boolean"
     },
+    "grouping": {
+      "description": "Non-default draft grouping settings, used to preserve labels on identical reruns.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Grouping"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "head": {
       "description": "Full sha of the head commit.",
       "type": "string",
@@ -244,6 +255,33 @@
         "calls",
         "implements",
         "uses"
+      ]
+    },
+    "Grouping": {
+      "type": "object",
+      "properties": {
+        "by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "depth": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "split": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "depth",
+        "split"
       ]
     },
     "Node": {

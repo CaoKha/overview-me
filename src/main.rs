@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 
 use crate::git::Git;
 use crate::rules::Rules;
@@ -115,18 +115,8 @@ enum Command {
     },
 }
 
-fn cli_from_matches(matches: &clap::ArgMatches) -> Result<Cli> {
-    let mut cli = Cli::from_arg_matches(matches)?;
-    if let Command::Extract { options, .. } = &mut cli.command {
-        options.fresh |= matches.subcommand_matches("extract").is_some_and(|args| {
-            args.value_source("depth") == Some(clap::parser::ValueSource::CommandLine)
-        });
-    }
-    Ok(cli)
-}
-
 fn main() -> Result<ExitCode> {
-    let cli = cli_from_matches(&Cli::command().get_matches())?;
+    let cli = Cli::parse();
     let git = Git::new(&cli.repo);
     match cli.command {
         Command::Base { pr } => base::run(&git, pr.as_deref())?,
@@ -215,16 +205,5 @@ mod cli_tests {
             ])
             .is_err()
         );
-        for extra in [vec![], vec!["--depth", "2"]] {
-            let mut args = vec!["overview-me", "extract", "--base", "HEAD"];
-            args.extend(&extra);
-            let matches = Cli::command().try_get_matches_from(args).expect("args");
-            let Command::Extract { options, .. } = cli_from_matches(&matches).expect("cli").command
-            else {
-                panic!("extract")
-            };
-            assert_eq!(options.depth, 2);
-            assert_eq!(options.fresh, !extra.is_empty());
-        }
     }
 }
