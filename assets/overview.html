@@ -11,7 +11,7 @@
   `overview-me page` (src/page.rs), which fills in the title, markdown, config and code placeholders. The markdown is turned into a review sheet:
   one section per `##` with a sticky section bar, tables in cards, node ids (N3) as chips, `path:line` linked to the forge with embedded code previews,
   "### Before" / "### After" side by side, and ```flow blocks drawn as lane diagrams: hovering a box
-  traces its edges, clicking it pins it and lists its files in a draggable fixed side panel resizable from every edge and corner (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline code previews.
+  traces its edges, clicking it pins it and lists its files in a draggable fixed side panel resizable from every edge and corner (a height-adjustable bottom sheet on phones) with copy buttons and vertically resizable inline code previews. The code panel has a word-wrap toggle, remembered per reader.
   Previewing a `path:line` elsewhere highlights the boxes that hold it and links to them from the preview. Works as a Claude artifact (inline styles, pinned CDN scripts, Google Fonts)
   and as a local file in the browser.
 -->
@@ -269,6 +269,10 @@ pre.code { max-height: calc(100vh - 120px); min-height: 0; padding: 8px 0; font:
 pre.code .code-line { display: block; min-width: max-content; padding-right: 12px; }
 pre.code .code-line.cited { background: color-mix(in srgb, var(--hl) 14%, transparent); }
 pre.code .line-number { display: inline-block; width: 4.5em; padding-right: 12px; text-align: right; color: var(--muted); user-select: none; }
+/* Word wrap: wrapped rows hang under the code, not the line number. */
+:root.code-wrap pre.code .code-line { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 4.5em; text-indent: -4.5em; }
+:root.code-wrap pre.code .line-number { text-indent: 0; }
+button.btn[aria-pressed="true"] { color: var(--on-hl); background: var(--hl); }
 pre.code :is(.hljs-keyword, .hljs-built_in, .hljs-selector-tag) { color: var(--link); }
 pre.code :is(.hljs-string, .hljs-regexp, .hljs-addition) { color: var(--ok); }
 pre.code :is(.hljs-comment, .hljs-quote) { color: var(--muted); font-style: italic; }
@@ -500,6 +504,10 @@ const panelWidthKey = 'overview-me:panel-width';
 const panelPositionKey = 'overview-me:panel-position';
 const panelHeightKey = 'overview-me:panel-height';
 const desktopHeightKey = 'overview-me:panel-desktop-height';
+const codeWrapKey = 'overview-me:code-wrap';
+try {
+  document.documentElement.classList.toggle('code-wrap', localStorage.getItem(codeWrapKey) === '1');
+} catch {}
 try {
   const width = Number(localStorage.getItem(panelWidthKey));
   if (Number.isFinite(width) && width >= 320) document.documentElement.style.setProperty('--panel-width', `${width}px`);
@@ -737,6 +745,17 @@ function showCode(text, preview, href, button, before) {
     a.rel = 'noopener';
     head.append(a);
   }
+  const wrap = el('button', 'btn', 'Wrap');
+  wrap.type = 'button';
+  wrap.title = 'Word wrap';
+  wrap.setAttribute('aria-pressed', String(document.documentElement.classList.contains('code-wrap')));
+  wrap.addEventListener('click', () => {
+    const on = document.documentElement.classList.toggle('code-wrap');
+    wrap.setAttribute('aria-pressed', String(on));
+    try { localStorage.setItem(codeWrapKey, on ? '1' : '0'); } catch {}
+    scrollCode(pre);
+  });
+  head.append(wrap);
   const close = el('button', 'btn close', 'Close');
   close.type = 'button';
   close.addEventListener('click', closePanel);
