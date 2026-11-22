@@ -14,7 +14,7 @@ function pathScore(boxPath, path, from, to) {
   return m[2] && Number(m[2]) <= to && from <= Number(m[3] || m[2]) ? 3 : 2;
 }
 
-function legend(spec) {
+function legend(spec, before) {
   const kinds = new Set(Object.values(spec.nodes).map(nodeKind));
   const box = el('div', 'legend');
   if (['existing', 'added', 'removed'].some((k) => kinds.has(k))) {
@@ -25,7 +25,10 @@ function legend(spec) {
       box.append(s);
     }
   }
-  box.append(el('span', null, 'Hover a box to trace its links; click it for its files.'));
+  const flagged = !before && Object.values(spec.nodes).some((n) => n.n && findingsByNode.has(n.n));
+  box.append(el('span', null, flagged
+    ? 'Hover a box to trace its links; click it for its findings and files. A badge counts review findings, red for critical and high.'
+    : 'Hover a box to trace its links; click it for its files.'));
   return box;
 }
 
@@ -54,6 +57,11 @@ function drawFlow(arch, spec) {
         b.tabIndex = 0;
         if (n.n) b.append(el('span', 'n', n.n));
         b.append(el('span', 'label', n.label));
+        const found = boxFindings(n, arch);
+        if (found.length) {
+          b.append(findingsBadge(found));
+          b.dataset.findings = found.length;
+        }
         bx.append(b);
         boxes[nid] = b;
       }
@@ -190,6 +198,8 @@ function drawFlow(arch, spec) {
     const body = el('div', 'detail-body');
     let previews = false;
     if (n.note) body.append(el('p', 'detail-note', n.note));
+    const found = boxFindings(n, arch);
+    if (found.length) body.append(findingsList(found, arch));
     const paths = Array.isArray(n.paths) ? n.paths : [];
     if (!paths.length) body.append(el('p', 'none', 'No file given for this box.'));
     else {
@@ -244,7 +254,7 @@ function drawFlow(arch, spec) {
       body.append(list);
     }
     // Opening the panel first closes whatever it showed, including this flow's previous pin.
-    return showPanel({ label: `${n.label} files`, title, wrap: previews, live: true, body: [body], onClose: unpinned });
+    return showPanel({ label: `${n.label} files`, title, wrap: previews || found.some((f) => f.start), live: true, body: [body], onClose: unpinned });
   }
   function unpinned() {
     const back = sidePanel.contains(document.activeElement) ? boxes[pinned] : null;
@@ -268,7 +278,9 @@ function drawFlow(arch, spec) {
   }
   for (const [k, b] of Object.entries(boxes)) {
     b.setAttribute('role', 'button');
-    b.setAttribute('aria-label', `${spec.nodes[k].n ? `${spec.nodes[k].n} ` : ''}${spec.nodes[k].label}: show files`);
+    const count = Number(b.dataset.findings || 0);
+    const flagged = count ? ` and ${count} finding${count === 1 ? '' : 's'}` : '';
+    b.setAttribute('aria-label', `${spec.nodes[k].n ? `${spec.nodes[k].n} ` : ''}${spec.nodes[k].label}: show files${flagged}`);
     b.addEventListener('mouseenter', () => { if (!pinned) focusOn(k); });
     b.addEventListener('mouseleave', () => { if (!pinned) clear(); });
     b.addEventListener('focus', () => { if (!pinned) focusOn(k); });
@@ -328,7 +340,7 @@ for (const code of out.querySelectorAll('pre > code.language-flow')) {
   const arch = el('div', 'arch');
   const before = !!pre.closest('.panel.before');
   scroll.append(arch);
-  flow.append(scroll, legend(spec));
+  flow.append(scroll, legend(spec, before));
   pre.replaceWith(flow);
   flows.push({ before, locate: drawFlow(arch, spec) });
 }

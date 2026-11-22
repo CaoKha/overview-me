@@ -1,5 +1,5 @@
 // Lists: numbered lists are steps, except Read first; Entry points, Watch out, Open questions and Gaps are cards.
-const listKind = { 'entry points': 'cards', 'watch out': 'cards', 'open questions': 'cards', gaps: 'cards', 'read first': 'read' };
+const listKind = { 'entry points': 'cards', 'watch out': 'cards', 'open questions': 'cards', gaps: 'cards', findings: 'cards', 'read first': 'read' };
 for (const list of out.querySelectorAll('section ul, section ol')) {
   if (list.parentElement.closest('li')) continue;
   const kind = listKind[list.closest('section').dataset.name];
@@ -21,4 +21,11 @@ for (const li of out.querySelectorAll('section[data-name="watch out"] ul.cards >
   if (!kind) continue;
   const chip = el('span', `chip callout ${kind}`, first.textContent.trim());
   first.replaceWith(chip);
+}
+// Findings: a finding's leading **Severity** becomes a chip; critical and high are red.
+for (const li of out.querySelectorAll('section[data-name="findings"] ul.cards > li')) {
+  const first = li.firstElementChild;
+  if (!first || first.tagName !== 'STRONG' || li.firstChild !== first) continue;
+  const kind = SEVERITY_KIND[first.textContent.trim().toLowerCase()];
+  if (kind) first.replaceWith(el('span', `chip callout ${kind}`, first.textContent.trim()));
 }

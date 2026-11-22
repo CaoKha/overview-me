@@ -1,0 +1,15 @@
+/* Review findings: a badge on a flow box, the list in its panel. */
+.chip.low { color: var(--accent); background: var(--secondary); }
+.findings-badge { display: inline-flex; gap: 3px; margin-left: 8px; vertical-align: 1px; }
+.findings-badge .chip { font-family: var(--font-mono); font-size: 11px; line-height: 1.5; padding: 0 6px; }
+.detail .findings { display: flex; flex-direction: column; gap: 8px; }
+.detail .findings-list { list-style: none; padding: 0; gap: 8px; }
+.detail .finding { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r); min-width: 0; }
+.finding-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.finding-head .chip.callout { margin-right: 0; }
+.finding-head code { flex: 0 1 auto; min-width: 0; user-select: all; background: var(--popover); }
+.finding-category { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.finding-text { font-size: 14px; overflow-wrap: anywhere; }
+.finding pre.code { max-height: 320px; }
+.finding-fix summary { font-size: 13px; color: var(--accent); cursor: pointer; }
+.finding-fix pre { margin-top: 6px; padding: 8px 12px; font: 12px/1.6 var(--font-mono); background: var(--popover); }

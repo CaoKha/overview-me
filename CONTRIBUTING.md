@@ -43,7 +43,8 @@ overview-me base [<pr>]                             # base and head of the PR or
 overview-me extract --base <sha> [--spec spec.md]   # facts + draft map, with each node's diff
 overview-me validate <map.json>                     # exit 1 on any problem
 overview-me flow <map.json>                         # Before and After diagrams from the code
-overview-me render <map.json> [--change --scope <text>]  # overview page with slots to fill
+overview-me render <map.json> [--change --scope <text>] [--findings]  # overview page with slots to fill
+overview-me findings <map.json> <review.json|.sarif>  # review findings placed on the map's nodes
 overview-me page <file.md> [--out page.html] [--unpushed]  # overview as an HTML page, checked
 overview-me snapshot                                # commit of HEAD + uncommitted files, branch untouched
 overview-me path                                    # where the map for HEAD lives

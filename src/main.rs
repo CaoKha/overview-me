@@ -4,6 +4,7 @@
 mod base;
 mod extract;
 mod facts;
+mod findings;
 mod flow;
 mod git;
 mod map;
@@ -93,6 +94,24 @@ enum Command {
         /// Overwrite the page if it exists (what was filled in is lost).
         #[arg(long)]
         fresh: bool,
+        /// Add a Findings section from <store>/<head>.findings.json; on an existing page, only
+        /// that section is written.
+        #[arg(long)]
+        findings: bool,
+    },
+    /// Check code-review findings (OpenCodeReview JSON or SARIF 2.1.0) at the map's head, place
+    /// each on the node whose sites hold it, and write <store>/<head>.findings.json.
+    Findings {
+        map: PathBuf,
+        /// The review: `ocr review --format json` output, the same comments written by a host
+        /// agent, or a SARIF file.
+        review: PathBuf,
+        /// The commit the review read, when the file does not name it; must be the map's head.
+        #[arg(long)]
+        head: Option<String>,
+        /// Findings file to write instead of the default.
+        #[arg(long)]
+        out: Option<PathBuf>,
     },
     /// Write a store markdown file (PR or codebase overview) as an HTML page; exits 1 on an
     /// invalid flow block.
@@ -150,6 +169,7 @@ fn main() -> Result<ExitCode> {
             scope,
             out,
             fresh,
+            findings,
         } => {
             let rules = Rules::load(cli.rules.as_deref())?;
             let kind = render::Kind {
@@ -160,7 +180,15 @@ fn main() -> Result<ExitCode> {
                 },
                 scope: scope.as_deref(),
             };
-            render::run(&git, &rules, &map, &kind, out, fresh)?;
+            render::run(&git, &rules, &map, &kind, out, fresh, findings)?;
+        }
+        Command::Findings {
+            map,
+            review,
+            head,
+            out,
+        } => {
+            findings::run(&git, &map, &review, head.as_deref(), out)?;
         }
         Command::Page { md, out, unpushed } => {
             println!("{}", page::run(&git, &md, out, unpushed)?.display());

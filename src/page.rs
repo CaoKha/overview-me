@@ -30,6 +30,7 @@ const STYLE: &str = concat!(
     include_str!("../assets/styles/panel.css"),
     include_str!("../assets/styles/buttons.css"),
     include_str!("../assets/styles/code.css"),
+    include_str!("../assets/styles/findings.css"),
 );
 /// The page script: parts of one module scope, in run order.
 const SCRIPT: &str = concat!(
@@ -49,6 +50,7 @@ const SCRIPT: &str = concat!(
     include_str!("../assets/scripts/side-panel.js"),
     include_str!("../assets/scripts/code-preview.js"),
     include_str!("../assets/scripts/references.js"),
+    include_str!("../assets/scripts/findings.js"),
     include_str!("../assets/scripts/flow.js"),
     include_str!("../assets/scripts/mermaid.js"),
 );
@@ -108,6 +110,24 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
             .or_insert_with(|| git.show(at, path))
             .as_ref()
             .map(|t| t.lines().count())
+    };
+    // A page with a Findings section shows `<head>.findings.json` on its flow boxes.
+    let has_findings = text
+        .lines()
+        .any(|l| l.trim_end() == crate::render::FINDINGS);
+    let findings = match (has_findings, sha) {
+        (true, Some(s)) => match crate::findings::load(md, s) {
+            Ok((_, file)) => serde_json::to_value(&file)?,
+            Err(e) => {
+                errs.push(format!("{e:#}"));
+                Value::Null
+            }
+        },
+        (true, None) => {
+            errs.push("a Findings section needs a page named <head>.review.md".to_owned());
+            Value::Null
+        }
+        _ => Value::Null,
     };
     let mut citations = Vec::new();
     let page_errs = check_page(
@@ -187,6 +207,7 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         base.as_deref(),
         cited_at.as_deref(),
         &snippets,
+        &findings,
     );
     std::fs::write(&out, page).with_context(|| format!("writing {}", out.display()))?;
     Ok(out)
@@ -287,6 +308,8 @@ fn guard(md: &str) -> String {
 /// The page for `md`. `sha` is the commit the `path:line` references point at (or `None` to read
 /// "sha <40 hex>" from the header line); `base` is the commit for references under Before.
 /// `head` remains available for embedded `snippets` even when forge links are disabled.
+/// `findings` is the findings file shown on the flow boxes, or null.
+#[allow(clippy::too_many_arguments)]
 pub fn render(
     title: &str,
     md: &str,
@@ -295,6 +318,7 @@ pub fn render(
     base: Option<&str>,
     head: Option<&str>,
     snippets: &Value,
+    findings: &Value,
 ) -> String {
     let config =
         serde_json::json!({ "forge": forge, "sha": sha, "base": base, "head": head }).to_string();
@@ -305,6 +329,7 @@ pub fn render(
         ("MD", guard(md)),
         ("CONFIG", config.replace('<', "\\u003c")),
         ("CODE", snippets.to_string().replace('<', "\\u003c")),
+        ("FINDINGS", findings.to_string().replace('<', "\\u003c")),
     ];
     // One pass over the template, so placeholder-like text inside the values is left alone.
     let mut out = String::with_capacity(TEMPLATE.len() + STYLE.len() + SCRIPT.len() + md.len());
@@ -408,7 +433,14 @@ pub fn check_page(
             errs.push(format!("{at}: slot left to fill: {hint}"));
             continue;
         }
-        let (code, prose) = spans(line);
+        // A finding's text comes from a review tool: only its place (before the mark) is checked.
+        let checked = if section == "findings" && line.starts_with("- ") {
+            line.split_once(crate::render::FINDING_TEXT_MARK)
+                .map_or(line, |(place, _)| place)
+        } else {
+            line
+        };
+        let (code, prose) = spans(checked);
         let sha = if in_before { base.or(head) } else { head };
         if let Some(sha) = sha {
             let short = &sha[..10.min(sha.len())];
@@ -683,8 +715,11 @@ mod tests {
             None,
             None,
             &serde_json::json!({}),
+            &serde_json::json!({"findings": [{"content": "</script>"}]}),
         );
         assert!(page.contains("<title>a&lt;b</title>"));
+        assert!(page.contains(r#"{"findings":[{"content":"\u003c/script>"}]}"#));
+        assert!(!page.contains("{{FINDINGS}}"));
         assert!(page.contains("<\\/SCRIPT> <\\!-- x {{CONFIG}}"));
         assert!(page.contains(r#""forge":"https://h/o/r""#));
         assert!(!page.contains("{{MD}}") && !page.contains("{{TITLE}}"));
@@ -821,6 +856,30 @@ mod tests {
         assert_eq!(cited("http://x.io:80"), None);
         assert_eq!(cited("a.rs:3-12"), Some(("a.rs", 12)));
         assert_eq!(cited("ratio:2"), None);
+    }
+
+    #[test]
+    fn a_finding_is_checked_at_its_place_only() {
+        let md = "# T\n\n## Findings\n- **High** bug · N1 · `src/a.ts:4-5` — text cites `src/a.ts:99` and N7\n- **Low** bug · N8 · `src/a.ts:9` — fine\n";
+        let ids: HashSet<String> = ["N1".to_owned()].into();
+        let lines_at = |_: &str, path: &str| (path == "src/a.ts").then_some(5);
+        let mut cited_spans = Vec::new();
+        let errs = check_page(
+            md,
+            Some(&ids),
+            Some("head"),
+            None,
+            &lines_at,
+            &mut |_, span| cited_spans.push(span.to_owned()),
+        );
+        assert_eq!(
+            errs,
+            vec![
+                "line 5: `src/a.ts:9`: the file has 5 lines at head",
+                "line 5: N8 is not a node in the map",
+            ]
+        );
+        assert_eq!(cited_spans, ["src/a.ts:4-5"]);
     }
 
     #[test]

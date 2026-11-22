@@ -42,10 +42,12 @@ pub struct Kind<'a> {
 }
 
 /// Validates the map, writes the flow file and `<store>/<head>.review.md` (or `out`), and returns
-/// the page path. Refuses to overwrite a page unless `fresh`.
+/// the page path. Refuses to overwrite a page unless `fresh`. With `findings`, the page gets a
+/// Findings section from `<store>/<head>.findings.json`; on an existing page (without `fresh`),
+/// only that section is written and the filled slots are kept.
 ///
 /// # Errors
-/// When the map does not validate, the page exists, or git fails.
+/// When the map does not validate, the page exists, the findings file is missing, or git fails.
 pub fn run(
     git: &Git,
     rules: &Rules,
@@ -53,20 +55,45 @@ pub fn run(
     kind: &Kind<'_>,
     out: Option<PathBuf>,
     fresh: bool,
+    findings: bool,
 ) -> Result<PathBuf> {
     if !crate::validate::run(git, rules, map_path)? {
         bail!("the map has problems (listed above): fix them before rendering");
     }
     let (_, map, flow) = flow::run_flow(git, rules, map_path, None)?;
     let out = out.unwrap_or_else(|| map_path.with_file_name(format!("{}.review.md", map.head)));
+    let section = if findings {
+        let (_, file) = crate::findings::load(map_path, &map.head)?;
+        Some(findings_section(&map, &file))
+    } else {
+        None
+    };
     if out.exists() && !fresh {
-        bail!(
-            "{} exists: fill it in, or pass --fresh to write it again (what was filled in is lost)",
+        let Some(section) = section else {
+            bail!(
+                "{} exists: fill it in, or pass --fresh to write it again (what was filled in is lost)",
+                out.display()
+            );
+        };
+        let md =
+            std::fs::read_to_string(&out).with_context(|| format!("reading {}", out.display()))?;
+        let md = with_section(&md, FINDINGS, &section);
+        std::fs::write(&out, &md).with_context(|| format!("writing {}", out.display()))?;
+        println!(
+            "page:  {} (Findings section written; the rest kept)",
             out.display()
         );
+        println!(
+            "slots: {} to fill (search for \"{SLOT}\")",
+            md.matches(SLOT).count()
+        );
+        return Ok(out);
     }
     let changes = facts::changes_in(git, rules, &map.base, &map.head, map.path.as_deref())?;
-    let md = page(&map, &flow, &changes, kind);
+    let mut md = page(&map, &flow, &changes, kind);
+    if let Some(section) = section {
+        md = with_section(&md, FINDINGS, &section);
+    }
     std::fs::write(&out, &md).with_context(|| format!("writing {}", out.display()))?;
     println!("page:  {}", out.display());
     if map.grouped {
@@ -79,6 +106,158 @@ pub fn run(
         md.matches(SLOT).count()
     );
     Ok(out)
+}
+
+/// The heading of the review findings section.
+pub const FINDINGS: &str = "## Findings";
+/// Sections the findings section goes before, in order of preference.
+const FINDINGS_BEFORE: [&str; 2] = ["## Watch out", "## Open questions"];
+/// Characters of a finding's text shown in the section; the panel shows all of it.
+const FINDING_TEXT: usize = 300;
+/// What separates a finding's place from its text in the section; `page` checks only the place.
+pub const FINDING_TEXT_MARK: &str = " — ";
+
+/// `md` with the section under `heading` replaced by `section`, or `section` inserted before the
+/// first of `FINDINGS_BEFORE` (else at the end).
+fn with_section(md: &str, heading: &str, section: &str) -> String {
+    let lines: Vec<&str> = md.lines().collect();
+    let is_h2 = |l: &str| l.starts_with("## ");
+    let (from, to) = match lines.iter().position(|l| l.trim_end() == heading) {
+        Some(i) => {
+            let end = lines[i + 1..]
+                .iter()
+                .position(|l| is_h2(l))
+                .map_or(lines.len(), |j| i + 1 + j);
+            (i, end)
+        }
+        None => {
+            let at = FINDINGS_BEFORE
+                .iter()
+                .find_map(|h| lines.iter().position(|l| l.trim_end() == *h))
+                .unwrap_or(lines.len());
+            (at, at)
+        }
+    };
+    let mut out: Vec<&str> = lines[..from].to_vec();
+    if out.last().is_some_and(|l| !l.trim().is_empty()) {
+        out.push("");
+    }
+    let section = section.trim_end();
+    out.extend(section.lines());
+    out.push("");
+    out.extend(&lines[to..]);
+    let mut text = out.join("\n");
+    text.push('\n');
+    text
+}
+
+/// One line of markdown from a finding's text: its first paragraph, clipped, with HTML outside
+/// code spans escaped so tool output cannot add markup or slots to the page.
+fn finding_text(s: &str) -> String {
+    let first = s
+        .split("\n\n")
+        .find(|p| !p.trim().is_empty())
+        .unwrap_or_default();
+    let flat = first.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut clipped = match flat.char_indices().nth(FINDING_TEXT) {
+        Some((i, _)) => format!("{}…", &flat[..i]),
+        None => flat,
+    };
+    if clipped.is_empty() {
+        clipped = "(no text)".to_owned();
+    }
+    let mut out = String::with_capacity(clipped.len());
+    for (i, part) in clipped.split('`').enumerate() {
+        if i > 0 {
+            out.push('`');
+        }
+        if i % 2 == 0 {
+            out.push_str(
+                &part
+                    .replace('&', "&amp;")
+                    .replace('<', "&lt;")
+                    .replace('>', "&gt;"),
+            );
+        } else {
+            out.push_str(part);
+        }
+    }
+    out
+}
+
+/// The Findings section: a summary line, the findings on stops, those outside the change, and
+/// how many were rejected.
+pub fn findings_section(map: &ChangeMap, file: &crate::findings::FindingsFile) -> String {
+    use crate::findings::Severity;
+    let mut md = String::new();
+    let w = &mut md;
+    let _ = writeln!(w, "{FINDINGS}");
+    let on: Vec<_> = file.findings.iter().filter(|f| f.node.is_some()).collect();
+    let outside: Vec<_> = file.findings.iter().filter(|f| f.node.is_none()).collect();
+    let stops: HashSet<&str> = on.iter().filter_map(|f| f.node.as_deref()).collect();
+    let severe = file
+        .findings
+        .iter()
+        .filter(|f| matches!(f.severity, Severity::Critical | Severity::High))
+        .count();
+    let plural = |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
+    let _ = writeln!(
+        w,
+        "{} at {} · {} · {severe} critical or high · {} on {} · {} outside this change · {} rejected\n",
+        finding_text(&file.source),
+        &map.head[..10],
+        plural(file.findings.len(), "finding"),
+        on.len(),
+        plural(stops.len(), "stop"),
+        outside.len(),
+        file.rejected.len()
+    );
+    let item = |w: &mut String, f: &crate::findings::Finding| {
+        let node = f
+            .node
+            .as_deref()
+            .map(|n| format!(" · {n}"))
+            .unwrap_or_default();
+        let _ = writeln!(
+            w,
+            "- **{}** {}{node} · `{}`{FINDING_TEXT_MARK}{}",
+            f.severity.label(),
+            f.category,
+            f.place(),
+            finding_text(&f.content)
+        );
+    };
+    if file.findings.is_empty() {
+        let _ = writeln!(w, "None.\n");
+    }
+    if !on.is_empty() {
+        let _ = writeln!(w, "### On the stops");
+        for f in &on {
+            item(w, f);
+        }
+        let _ = writeln!(w);
+    }
+    if !outside.is_empty() {
+        let _ = writeln!(w, "### Outside this change");
+        for f in &outside {
+            item(w, f);
+        }
+        let _ = writeln!(w);
+    }
+    if !file.rejected.is_empty() {
+        let _ = writeln!(
+            w,
+            "{} rejected: the file, the lines or the code {} quotes are not there at this commit (reasons in `{}.findings.json`).\n",
+            plural(file.rejected.len(), "finding"),
+            if file.rejected.len() == 1 {
+                "it"
+            } else {
+                "they"
+            },
+            map.head
+        );
+    }
+    md
 }
 
 /// `file:start-end`, or `file:line` when both ends are the same line.
@@ -675,6 +854,94 @@ mod tests {
             not_drawn: Vec::new(),
         };
         (map, flow)
+    }
+
+    fn findings_file() -> crate::findings::FindingsFile {
+        use crate::findings::{Finding, FindingsFile, Rejected, Severity};
+        let finding = |id: &str,
+                       node: Option<&str>,
+                       file: &str,
+                       start: Option<u32>,
+                       severity,
+                       content: &str| Finding {
+            id: id.into(),
+            node: node.map(Into::into),
+            file: file.into(),
+            start,
+            end: start.map(|s| s + 1),
+            severity,
+            category: "bug".into(),
+            rule: None,
+            content: content.into(),
+            suggestion: None,
+        };
+        FindingsFile {
+            version: 1,
+            base: BASE.into(),
+            head: HEAD.into(),
+            source: "OpenCodeReview".into(),
+            findings: vec![
+                finding(
+                    "F1",
+                    Some("N2"),
+                    "src/services/d.ts",
+                    Some(5),
+                    Severity::High,
+                    "Negative fee.\n\nMore detail.",
+                ),
+                finding(
+                    "F2",
+                    Some("N2"),
+                    "src/services/d.ts",
+                    Some(6),
+                    Severity::Low,
+                    "See `x.ts:999` <b>now</b> — N99",
+                ),
+                finding("F3", None, "src/db/s.ts", None, Severity::Medium, ""),
+            ],
+            rejected: vec![Rejected {
+                file: "gone.ts".into(),
+                start: Some(1),
+                end: Some(1),
+                severity: Severity::Low,
+                content: "x".into(),
+                reason: "no such file".into(),
+            }],
+        }
+    }
+
+    #[test]
+    fn findings_section_lists_stops_then_outside() {
+        let (map, _) = fixture();
+        let md = findings_section(&map, &findings_file());
+        assert_eq!(
+            md,
+            format!(
+                "## Findings\n\
+                 OpenCodeReview at 89abcdef01 · 3 findings · 1 critical or high · 2 on 1 stop · 1 outside this change · 1 rejected\n\n\
+                 ### On the stops\n\
+                 - **High** bug · N2 · `src/services/d.ts:5-6` — Negative fee.\n\
+                 - **Low** bug · N2 · `src/services/d.ts:6-7` — See `x.ts:999` &lt;b&gt;now&lt;/b&gt; — N99\n\n\
+                 ### Outside this change\n\
+                 - **Medium** bug · `src/db/s.ts` — (no text)\n\n\
+                 1 finding rejected: the file, the lines or the code it quotes are not there at this commit (reasons in `{HEAD}.findings.json`).\n\n"
+            )
+        );
+    }
+
+    #[test]
+    fn findings_section_replaces_its_old_self_or_goes_before_watch_out() {
+        let page =
+            "# T\n\n## Read first\n1. a\n\n## Watch out\nNone.\n\n## Open questions\n- None.\n";
+        let first = with_section(page, FINDINGS, "## Findings\nold\n");
+        assert_eq!(
+            first,
+            "# T\n\n## Read first\n1. a\n\n## Findings\nold\n\n## Watch out\nNone.\n\n## Open questions\n- None.\n"
+        );
+        let second = with_section(&first, FINDINGS, "## Findings\nnew\n");
+        assert_eq!(second, first.replace("old", "new"));
+        let at_end = with_section("# T\n\n## Flow\nx\n", FINDINGS, "## Findings\ny\n");
+        assert_eq!(at_end, "# T\n\n## Flow\nx\n\n## Findings\ny\n\n");
     }
 
     #[test]
