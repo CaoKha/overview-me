@@ -622,6 +622,43 @@ fn tour(ids: &[String], edges: &[Edge]) -> Vec<String> {
     placed
 }
 
+/// Remove stale per-SHA store files, preserving the head being extracted and the selected map.
+fn prune_store(store: &Path, keep_head: &str, keep_map: &Path) {
+    const MAX_AGE: std::time::Duration = std::time::Duration::from_secs(30 * 24 * 60 * 60);
+    let Ok(entries) = std::fs::read_dir(store) else {
+        return;
+    };
+    let now = std::time::SystemTime::now();
+    let keep_map = std::fs::canonicalize(keep_map).ok();
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some((sha, _)) = name.to_str().and_then(|name| name.split_once('.')) else {
+            continue;
+        };
+        if sha == keep_head
+            || !matches!(sha.len(), 40 | 64)
+            || !sha
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            continue;
+        }
+        if !entry.file_type().is_ok_and(|kind| kind.is_file()) {
+            continue;
+        }
+        let age = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| now.duration_since(modified).ok());
+        if age.is_some_and(|age| age > MAX_AGE)
+            && std::fs::canonicalize(entry.path()).ok() != keep_map
+        {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// The line naming the codebase overview this change sits in, if one exists.
 fn context(store: &Path) -> String {
     let codebase = store.join("codebase.md");
@@ -809,6 +846,7 @@ pub fn run(
     if let Some(parent) = map_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
+    prune_store(&store, &head, &map_path);
     let kept = !options.fresh
         && std::fs::read_to_string(&map_path)
             .ok()
@@ -959,6 +997,37 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn store_pruning_preserves_recent_and_non_sha_files() {
+        let repo = crate::testutil::TempRepo::new("prune-store");
+        let store = repo.path().join("store");
+        std::fs::create_dir(&store).expect("create store");
+        let keep_head = "a".repeat(40);
+        let old = format!("{}.facts.json", "b".repeat(40));
+        let fresh = format!("{}.json", "c".repeat(64));
+        let kept = format!("{keep_head}.review.md");
+        let map = format!("{}.json", "d".repeat(40));
+        let old_time =
+            std::time::SystemTime::now() - std::time::Duration::from_secs(31 * 24 * 60 * 60);
+        for name in [&old, &fresh, "codebase.md", &kept, &map, "notes.txt"] {
+            let path = store.join(name);
+            std::fs::write(&path, "test").expect("write store file");
+            if name != fresh {
+                std::fs::File::options()
+                    .write(true)
+                    .open(&path)
+                    .expect("open store file")
+                    .set_modified(old_time)
+                    .expect("set old mtime");
+            }
+        }
+        prune_store(&store, &keep_head, &store.join(&map));
+        assert!(!store.join(old).exists());
+        for name in [&fresh, "codebase.md", &kept, &map, "notes.txt"] {
+            assert!(store.join(name).exists(), "{name} should be kept");
+        }
+    }
 
     fn edge(from: &str, to: &str) -> Edge {
         Edge {
