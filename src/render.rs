@@ -112,8 +112,6 @@ pub fn run(
 pub const FINDINGS: &str = "## Findings";
 /// Sections the findings section goes before, in order of preference.
 const FINDINGS_BEFORE: [&str; 2] = ["## Watch out", "## Open questions"];
-/// Characters of a finding's text shown in the section; the panel shows all of it.
-const FINDING_TEXT: usize = 300;
 /// What separates a finding's place from its text in the section; `page` checks only the place.
 pub const FINDING_TEXT_MARK: &str = " — ";
 
@@ -151,35 +149,62 @@ fn with_section(md: &str, heading: &str, section: &str) -> String {
     text
 }
 
-/// One line of markdown from a finding's text: its first paragraph, clipped, with HTML outside
+/// One line of markdown from a finding's whole text, its paragraphs joined, with HTML outside
 /// code spans escaped so tool output cannot add markup or slots to the page.
 fn finding_text(s: &str) -> String {
-    let first = s
-        .split("\n\n")
-        .find(|p| !p.trim().is_empty())
-        .unwrap_or_default();
-    let flat = first.split_whitespace().collect::<Vec<_>>().join(" ");
-    let mut clipped = match flat.char_indices().nth(FINDING_TEXT) {
-        Some((i, _)) => format!("{}…", &flat[..i]),
-        None => flat,
-    };
-    if clipped.is_empty() {
-        clipped = "(no text)".to_owned();
+    let flat = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.is_empty() {
+        return "(no text)".to_owned();
     }
-    let mut out = String::with_capacity(clipped.len());
-    for (i, part) in clipped.split('`').enumerate() {
-        if i > 0 {
-            out.push('`');
-        }
-        if i % 2 == 0 {
-            out.push_str(
-                &part
-                    .replace('&', "&amp;")
-                    .replace('<', "&lt;")
-                    .replace('>', "&gt;"),
-            );
-        } else {
-            out.push_str(part);
+    escape_outside_code(&flat)
+}
+
+/// `s` with `&`, `<` and `>` escaped except inside code spans, found as CommonMark finds them:
+/// a run of backticks not after a backslash, closed by the next run of the same length. A run
+/// that nothing closes is plain text, so an odd backtick cannot leave the rest of `s` unescaped.
+fn escape_outside_code(s: &str) -> String {
+    let b = s.as_bytes();
+    let run_at = |i: usize| b[i..].iter().take_while(|&&c| c == b'`').count();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            // `\<` meant a literal `<`: the entity written next says the same.
+            b'\\' if matches!(b.get(i + 1), Some(b'&' | b'<' | b'>')) => i += 1,
+            b'\\' if b.get(i + 1).is_some_and(u8::is_ascii_punctuation) => {
+                out.push_str(&s[i..i + 2]);
+                i += 2;
+            }
+            b'`' => {
+                let n = run_at(i);
+                let mut from = i + n;
+                let close = loop {
+                    let Some(k) = b[from..].iter().position(|&c| c == b'`') else {
+                        break None;
+                    };
+                    let m = run_at(from + k);
+                    if m == n {
+                        break Some(from + k + n);
+                    }
+                    from += k + m;
+                };
+                let end = close.unwrap_or(i + n);
+                out.push_str(&s[i..end]);
+                i = end;
+            }
+            b'&' | b'<' | b'>' => {
+                out.push_str(match b[i] {
+                    b'&' => "&amp;",
+                    b'<' => "&lt;",
+                    _ => "&gt;",
+                });
+                i += 1;
+            }
+            _ => {
+                let c = s[i..].chars().next().unwrap_or_default();
+                out.push(c);
+                i += c.len_utf8();
+            }
         }
     }
     out
@@ -920,13 +945,41 @@ mod tests {
                 "## Findings\n\
                  OpenCodeReview at 89abcdef01 · 3 findings · 1 critical or high · 2 on 1 stop · 1 outside this change · 1 rejected\n\n\
                  ### On the stops\n\
-                 - **High** bug · N2 · `src/services/d.ts:5-6` — Negative fee.\n\
+                 - **High** bug · N2 · `src/services/d.ts:5-6` — Negative fee. More detail.\n\
                  - **Low** bug · N2 · `src/services/d.ts:6-7` — See `x.ts:999` &lt;b&gt;now&lt;/b&gt; — N99\n\n\
                  ### Outside this change\n\
                  - **Medium** bug · `src/db/s.ts` — (no text)\n\n\
                  1 finding rejected: the file, the lines or the code it quotes are not there at this commit (reasons in `{HEAD}.findings.json`).\n\n"
             )
         );
+    }
+
+    #[test]
+    fn finding_text_keeps_all_of_a_long_finding() {
+        let long = format!(
+            "{} the tail says how bad.\n\nSecond paragraph.",
+            "word ".repeat(200)
+        );
+        let text = finding_text(&long);
+        assert!(text.ends_with("the tail says how bad. Second paragraph."));
+        assert!(!text.contains('…'));
+    }
+
+    #[test]
+    fn finding_text_escapes_html_outside_code_spans_only() {
+        for (input, want) in [
+            ("`a<b>` <i>", "`a<b>` &lt;i&gt;"),
+            ("``a ` <b> ``", "``a ` <b> ``"),
+            // Unclosed runs are text: what follows them is escaped.
+            ("`<img>``", "`&lt;img&gt;``"),
+            ("a ` <img>", "a ` &lt;img&gt;"),
+            // An escaped backtick opens nothing.
+            ("\\`<img>`", "\\`&lt;img&gt;`"),
+            ("\\<b> & `x`", "&lt;b&gt; &amp; `x`"),
+            ("café `ü<1>` ö", "café `ü<1>` ö"),
+        ] {
+            assert_eq!(escape_outside_code(input), want, "{input}");
+        }
     }
 
     #[test]
