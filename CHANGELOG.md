@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.18.0](https://github.com/CaoKha/overview-me/compare/v0.17.0...v0.18.0) (2026-11-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* a --rules file with a "lanes" key no longer parses. Move the store globs to "storeGlobs" and drop "lanes".
+
+### Features
+
+* draft flow lanes from the folder tree ([#81](https://github.com/CaoKha/overview-me/issues/81)) ([38d5eb0](https://github.com/CaoKha/overview-me/commit/38d5eb0f37d06ccf5b94e4d2f604fb3e5aec997b))
+* **extract:** prune store files older than 30 days ([#78](https://github.com/CaoKha/overview-me/issues/78)) ([c67b0c1](https://github.com/CaoKha/overview-me/commit/c67b0c15dd352cad891b0f259c281bed43d7372f))
+
+
+### Bug Fixes
+
+* **render:** show each finding's full text in the Findings section ([#80](https://github.com/CaoKha/overview-me/issues/80)) ([21e5e75](https://github.com/CaoKha/overview-me/commit/21e5e756cf5c05e3c5f70c767acd8a076561ab1c))
+
 ## [0.17.0](https://github.com/CaoKha/overview-me/compare/v0.16.0...v0.17.0) (2026-11-22)
 
 
