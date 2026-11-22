@@ -1,6 +1,6 @@
 ---
 name: change-overview
-description: Write a one-page overview of uncommitted work, meaning the staged, unstaged and untracked files against HEAD (or, on request, together with the branch's commits), as the same page pr-overview makes. Use when the user asks for a "change overview", an "overview of my changes", to "map my changes", "what did I change", an "overview before I commit", or a guide to code you just wrote and have not committed. This is an overview, not a code review, so do not use it when the user asks to "review" their changes, look for bugs, or check them before committing, unless they also ask for an overview or map. For commits or a PR, use pr-overview.
+description: Write a one-page overview of uncommitted work, meaning the staged, unstaged and untracked files against HEAD (or, on request, together with the branch's commits), as the same page pr-overview makes. Use when the user asks for a "change overview", an "overview of my changes", to "map my changes", "what did I change", an "overview before I commit", or a guide to code you just wrote and have not committed. This is an overview, not a code review, so do not use it when the user asks to "review" their changes, look for bugs, or check them before committing, unless they also ask for an overview or map. To show review findings on the flow, use ocr-overview. For commits or a PR, use pr-overview.
 ---
 
 # Change overview
