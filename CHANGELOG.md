@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.17.0](https://github.com/CaoKha/overview-me/compare/v0.16.0...v0.17.0) (2026-11-22)
+
+
+### Features
+
+* **ocr-overview:** show OpenCodeReview findings on the flow ([#77](https://github.com/CaoKha/overview-me/issues/77)) ([dcefc06](https://github.com/CaoKha/overview-me/commit/dcefc06c0f1f3385b6312fab1a9f7171b74d096c))
+
+
+### Refactoring
+
+* **page:** split the page template into style and script files ([#75](https://github.com/CaoKha/overview-me/issues/75)) ([542fbdb](https://github.com/CaoKha/overview-me/commit/542fbdbec190c782a0514f3a2c484f068c91d30e))
+
 ## [0.16.0](https://github.com/CaoKha/overview-me/compare/v0.15.1...v0.16.0) (2026-11-20)
 
 
