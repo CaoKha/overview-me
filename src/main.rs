@@ -33,7 +33,7 @@ struct Cli {
     /// Repository to read (any worktree).
     #[arg(long, global = true, default_value = ".")]
     repo: PathBuf,
-    /// Lane, test and risk rules; defaults to the built-in rules.json.
+    /// Test, store and risk rules; defaults to the built-in rules.json.
     #[arg(long, global = true)]
     rules: Option<PathBuf>,
     #[command(subcommand)]

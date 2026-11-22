@@ -133,7 +133,8 @@ pub struct Node {
     #[schemars(length(min = 1))]
     pub symbol: String,
     /// The flow section this node is drawn in: a short name for its part of the system, such as
-    /// `api`, `db` or `billing`. The draft names it from `rules.json` or the path.
+    /// `api`, `db` or `billing`. Draft lanes are folders of the change; the Label step renames
+    /// them to what that part of the system is and may regroup them.
     #[schemars(length(min = 1, max = 24))]
     pub lane: String,
     pub risk: Risk,

@@ -1,13 +1,6 @@
 {
   "testGlobs": ["**/*.test.*", "**/*.spec.*", "**/*_test.*", "**/test_*.py", "**/conftest.py", "**/__test__/**", "**/__tests__/**", "**/test/**", "**/tests/**", "**/e2e/**", "**/fixtures/**", "**/__snapshots__/**", "**/*.stories.*", "**/*.story.*"],
-  "lanes": [
-    { "lane": "db", "globs": ["**/migrations/**", "**/db/**", "**/database/**", "**/prisma/**", "**/*.sql"] },
-    { "lane": "jobs", "globs": ["**/jobs/**", "**/workers/**", "**/worker/**", "**/cron/**", "**/queues/**"] },
-    { "lane": "engine", "globs": ["**/engine/**"] },
-    { "lane": "api", "globs": ["**/api/**", "**/api-*/**", "**/routes/**", "**/routers/**", "**/controllers/**", "**/handlers/**", "**/server/**", "**/backend/**", "**/graphql/**", "**/*.proto"] },
-    { "lane": "ui", "globs": ["**/web/**", "**/frontend/**", "**/ui/**", "**/components/**", "**/pages/**", "**/views/**", "**/*.tsx", "**/*.jsx", "**/*.vue", "**/*.svelte", "**/*.css", "**/*.scss", "**/*.html"] },
-    { "lane": "services", "globs": ["**/services/**", "**/service/**", "**/domain/**", "**/lib/**", "packages/*/src/**", "libs/*/src/**", "crates/*/src/**"] }
-  ],
+  "storeGlobs": ["**/migrations/**", "**/db/**", "**/database/**", "**/prisma/**", "**/*.sql"],
   "risk": {
     "skimGlobs": ["**/*.md", "**/*.mdx", "**/docs/**", "**/*.lock", "**/package-lock.json", "**/pnpm-lock.yaml", "**/yarn.lock"],
     "readGlobs": ["**/migrations/**", "**/auth/**", "**/security/**", "**/permissions/**"],

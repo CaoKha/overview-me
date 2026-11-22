@@ -26,7 +26,7 @@ The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(ov
    - The README, docs index, and contributor or agent notes (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/`).
    - The manifests and workspace files (`package.json`, `pnpm-workspace.yaml`, `Cargo.toml`, `go.mod`, `pyproject.toml`, …) for the module list, the scripts and the main dependencies.
    - The directory tree to depth 2 or 3 (`git ls-tree -d`), and file counts per top-level folder to see where the weight is.
-   - Lanes: read `<root>/rules.json`. It maps paths to the lanes the change map uses (ui, api, services, db, engine, jobs). Put each module in a lane by those globs. Group the modules no glob matches into a few lanes named for their part of the system, such as `analysis` or `storage`: at most 5 lanes in all, each 1–24 characters. PR overviews reuse these lane names, so the overview and every change map speak the same words.
+   - Lanes: group modules by their top folders, skipping generic folders such as `src`, `apps` and `packages`. Name each lane for what that part of the system is, such as `analysis` or `storage`, and regroup modules where that makes the system clearer: at most 5 lanes in all, each 1–24 characters. Change maps draft lanes from the folders of the change; their Label step renames and may regroup them, reusing these names so the overview and every change map speak the same words.
    - For a repo with more than about 6 modules, you may survey modules in parallel with subagents, one per module, each returning: purpose, entry points, key types, what it imports from other modules. Keep the writing to yourself.
 4. **Dig** into what a reviewer needs, per module:
    - **Entry points**: routes, CLI commands, job schedules, queue consumers, UI roots, exported public APIs. Find where they are registered.
@@ -38,7 +38,7 @@ The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(ov
 6. **Check the gaps** before you show the page. Test each entry under Gaps against the repo at `$REF`, one by one.
    - **Not confirmed:** look again with `git grep -n` and `git show` at `$REF`, in the code, tests, config and docs. If you find the answer, remove the entry, and put the answer in the section it belongs to, with its `path:line`.
    - **Docs disagree with code:** read both again. Keep the entry only if they still disagree, and cite the doc `path:line` and the code `path:line`.
-   - **Lanes that do not fit:** check the module's paths against the globs in `<root>/rules.json` again. Keep the entry only if a glob puts the module in the wrong lane.
+   - **Lanes that do not fit:** check the module's top folders and role again. Keep the entry only if the folder grouping obscures what that part of the system is.
    - Fix any `path:line` that does not point at the code the entry is about.
    - Keep an entry only when the repo at `$REF` cannot answer it, for example a value set outside the repo or behaviour that only a run would show. If no entry is left, write "None."
 7. **Show the page** as `<root>/references/show-page.md` says, for `<store>/codebase.md`.
@@ -100,4 +100,4 @@ What the system does, for whom, and its shape (monorepo of X apps, a CLI, a serv
 - **Architecture diagram**: one `flow` block, written as `<root>/references/flow-blocks.md` says, with the limits for a codebase overview. One box per module, labelled with its name from the Modules table; group small modules to stay under the limits.
 - Name modules the same way everywhere: the Modules table is the vocabulary that PR overviews reuse.
 - Aim for under about 250 lines. A reader should get the shape in ten minutes. Depth belongs in the code; the overview says where to look.
-- Do not write the overview into the repo, and do not edit `rules.json`. If a glob puts a module in the wrong lane, say which and why under Gaps. Do not suggest a `--rules` file: no skill passes one.
+- Do not write the overview into the repo, and do not edit `rules.json`. If the folder grouping obscures a module's role, say which and why under Gaps. Do not suggest a `--rules` file: no skill passes one.
