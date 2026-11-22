@@ -1,0 +1,22 @@
+/* Section bar: one pill per section, stuck to the top while scrolling; the section in view is filled. */
+.toc { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; margin-block: -12px; padding-block: 8px; background: var(--bg); box-shadow: 0 0 0 100vmax var(--bg); clip-path: inset(0 -100vmax); }
+.toc-track { display: flex; gap: 2px; width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding: 4px; background: var(--card); border-radius: 999px; }
+.toc-track::-webkit-scrollbar { display: none; }
+.toc a { flex-shrink: 0; font-size: 12px; font-weight: 500; line-height: 16px; padding: 6px 10px; border-radius: 999px; color: var(--accent); white-space: nowrap; }
+.toc a:hover { color: var(--fg); text-decoration: none; }
+.toc a[aria-current="true"] { background: var(--hl); color: var(--on-hl); }
+.toc a:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+.toc-title { display: none; }
+/* Wide screens: the sections as a list in a left rail, which the panels on the right never cover. */
+@media (min-width: 1200px) {
+  main { max-width: 1888px; display: grid; grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 40px 48px; }
+  main > header { grid-column: 2; }
+  .content { grid-column: 2; }
+  .toc { grid-column: 1; grid-row: 1 / 3; align-self: start; top: calc(24px + env(safe-area-inset-top, 0px)); margin: 0; padding: 0; background: none; box-shadow: none; clip-path: none; max-height: calc(100vh - 48px); overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+  .toc-title { display: block; font-size: 12px; font-weight: 500; color: var(--accent); }
+  .toc-track { flex-direction: column; gap: 0; width: auto; padding: 0; background: none; border-radius: 0; border-left: 1px solid var(--border); overflow: visible; }
+  .toc a { font-size: 13px; line-height: 18px; padding: 6px 12px; margin-left: -1px; border-radius: 0; border-left: 2px solid transparent; white-space: normal; }
+  .toc a[aria-current="true"] { background: none; color: var(--fg); border-left-color: var(--hl); }
+  section { scroll-margin-top: calc(24px + env(safe-area-inset-top, 0px)); }
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }

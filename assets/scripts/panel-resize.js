@@ -1,0 +1,139 @@
+// Drag, resize and remember the side panel (desktop), or the bottom sheet height (phones).
+function panelResize(panel) {
+  const place = () => {
+    if (!panelPosition || panel.hidden || innerWidth <= 640) return;
+    if (!panel.querySelector('.detail-head')) return;
+    panelPosition.x = Math.max(0, Math.min(panelPosition.x, innerWidth - panel.getBoundingClientRect().width));
+    panelPosition.y = Math.max(0, Math.min(panelPosition.y, innerHeight - 16 - Math.max(200, panel.getBoundingClientRect().height)));
+    document.documentElement.style.setProperty('--panel-left', `${panelPosition.x}px`);
+    document.documentElement.style.setProperty('--panel-top', `${panelPosition.y}px`);
+  };
+  const persistPosition = () => {
+    try { if (panelPosition) localStorage.setItem(panelPositionKey, JSON.stringify(panelPosition)); } catch {}
+  };
+  const persistSize = (dx, dy) => {
+    const style = document.documentElement.style;
+    for (const [axis, property, key] of [[dx, '--panel-width', panelWidthKey], [dy, '--panel-height', desktopHeightKey]]) {
+      if (axis && style.getPropertyValue(property)) {
+        try { localStorage.setItem(key, parseFloat(style.getPropertyValue(property))); } catch {}
+      }
+    }
+    persistPosition();
+  };
+  const headTarget = (ev) => ev.target.closest('.detail-head') && !ev.target.closest('button, a, .panel-resize');
+  const resize = (rect, dx, dy, x, y) => {
+    const root = document.documentElement;
+    const size = (sign, delta, length, end, limit, min, property, key) => {
+      if (!sign) return length;
+      const max = Math.min(limit - 32, sign < 0 ? end : limit - (end - length) - (key === desktopHeightKey ? 16 : 0));
+      const value = Math.min(Math.max(min, length + sign * delta), max);
+      root.style.setProperty(property, `${value}px`);
+      return value;
+    };
+    const width = size(dx, x, rect.width, rect.right, innerWidth, 320, '--panel-width', panelWidthKey);
+    const height = size(dy, y, rect.height, rect.bottom, innerHeight, 200, '--panel-height', desktopHeightKey);
+    if (dy) root.classList.add('panel-sized');
+    panelPosition = { x: dx < 0 ? rect.right - width : rect.left, y: dy < 0 ? rect.bottom - height : rect.top };
+    place();
+  };
+  const grips = [[-1, 0, 'w'], [0, 1, 's'], [0, -1, 'n'], [1, 0, 'e'], [1, -1, 'ne'], [-1, -1, 'nw'], [1, 1, 'se'], [-1, 1, 'sw']].map(([dx, dy, direction]) => {
+    const grip = el('div', `panel-resize panel-resize-${direction}`);
+    const keyboard = direction === 'w' || direction === 's';
+    if (keyboard) {
+      grip.tabIndex = 0;
+      grip.setAttribute('role', 'separator');
+      grip.setAttribute('aria-orientation', dx ? 'vertical' : 'horizontal');
+      grip.setAttribute('aria-label', dx ? 'Resize panel' : 'Resize panel height');
+    } else grip.setAttribute('aria-hidden', 'true');
+    let drag = null;
+    grip.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0 || innerWidth <= 640) return;
+      ev.preventDefault();
+      if (keyboard) grip.focus({ preventScroll: true });
+      grip.setPointerCapture(ev.pointerId);
+      drag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, rect: panel.getBoundingClientRect() };
+    });
+    grip.addEventListener('pointermove', (ev) => {
+      if (drag?.id === ev.pointerId && innerWidth > 640) resize(drag.rect, dx, dy, ev.clientX - drag.x, ev.clientY - drag.y);
+    });
+    grip.addEventListener('lostpointercapture', () => {
+      if (drag) persistSize(dx, dy);
+      drag = null;
+    });
+    if (keyboard) grip.addEventListener('keydown', (ev) => {
+      const keys = dx ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
+      if (innerWidth <= 640 || !keys.includes(ev.key)) return;
+      ev.preventDefault();
+      const rect = panel.getBoundingClientRect();
+      const side = dx ? (rect.left > innerWidth - rect.right ? -1 : 1) : (rect.top > innerHeight - 16 - rect.bottom ? -1 : 1);
+      const delta = side * (keys.indexOf(ev.key) ? 32 : -32);
+      resize(rect, dx ? side : 0, dy ? side : 0, dx ? delta : 0, dy ? delta : 0);
+      persistSize(dx, dy);
+    });
+    grip.addEventListener('dblclick', () => {
+      if (dx) {
+        document.documentElement.style.removeProperty('--panel-width');
+        try { localStorage.removeItem(panelWidthKey); } catch {}
+      }
+      if (dy) {
+        document.documentElement.style.removeProperty('--panel-height');
+        document.documentElement.classList.remove('panel-sized');
+        try { localStorage.removeItem(desktopHeightKey); } catch {}
+      }
+      place();
+      persistPosition();
+    });
+    return grip;
+  });
+  const updateAria = () => {
+    for (const grip of grips.filter((g) => g.tabIndex === 0)) {
+      const width = grip.getAttribute('aria-orientation') === 'vertical';
+      grip.setAttribute('aria-valuemin', width ? 320 : 200);
+      grip.setAttribute('aria-valuemax', Math.max(width ? 320 : 200, (width ? innerWidth : innerHeight) - 32));
+      grip.setAttribute('aria-valuenow', Math.round(panel.getBoundingClientRect()[width ? 'width' : 'height']));
+    }
+  };
+  let move = null;
+  panel.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0 || !headTarget(ev)) return;
+    ev.preventDefault();
+    const rect = panel.getBoundingClientRect();
+    move = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, left: rect.left, top: rect.top, height: rect.height, phone: innerWidth <= 640 };
+    ev.target.closest('.detail-head').setPointerCapture(ev.pointerId);
+    panel.classList.add('dragging');
+  });
+  panel.addEventListener('pointermove', (ev) => {
+    if (move?.id !== ev.pointerId) return;
+    if (move.phone) {
+      const height = Math.max(25, Math.min(90, (move.height + move.y - ev.clientY) / innerHeight * 100));
+      document.documentElement.style.setProperty('--sheet-height', `${height}vh`);
+    } else {
+      panelPosition = { x: move.left + ev.clientX - move.x, y: move.top + ev.clientY - move.y };
+      place();
+    }
+  });
+  panel.addEventListener('lostpointercapture', (ev) => {
+    if (move?.id !== ev.pointerId) return;
+    if (move.phone) {
+      const height = document.documentElement.style.getPropertyValue('--sheet-height');
+      try { if (height) localStorage.setItem(panelHeightKey, parseFloat(height)); } catch {}
+    } else persistPosition();
+    move = null;
+    panel.classList.remove('dragging');
+  });
+  panel.addEventListener('dblclick', (ev) => {
+    if (!headTarget(ev)) return;
+    if (innerWidth <= 640) {
+      document.documentElement.style.removeProperty('--sheet-height');
+      try { localStorage.removeItem(panelHeightKey); } catch {}
+    } else {
+      panelPosition = null;
+      document.documentElement.style.removeProperty('--panel-left');
+      document.documentElement.style.removeProperty('--panel-top');
+      try { localStorage.removeItem(panelPositionKey); } catch {}
+    }
+  });
+  new ResizeObserver(() => { place(); updateAria(); }).observe(panel);
+  window.addEventListener('resize', () => { place(); updateAria(); });
+  return grips;
+}

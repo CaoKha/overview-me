@@ -1,0 +1,52 @@
+/* Flow diagrams: lanes in tiers, boxes, SVG edges; hover or focus a box to trace its edges. */
+.flow { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.arch-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--card); }
+.arch { position: relative; min-width: 560px; padding: 18px; display: flex; flex-direction: column; gap: 46px; }
+.edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.edges path.line { fill: none; stroke: var(--edge); stroke-width: 1.5; transition: opacity .15s, stroke .15s; }
+.edges path.line.added { stroke: var(--ok); }
+.edges path.line.removed { stroke: var(--bad); stroke-dasharray: 5 4; }
+.edges path.line.dashed { stroke-dasharray: 5 4; }
+.edges path.line.on { stroke: var(--hl); stroke-width: 2; }
+.arch.focus .edges path.line:not(.on) { opacity: 0.12; }
+/* Above the lanes: an arrow that names its references shows them on hover. */
+.edge-hits { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 2; }
+.edge-hits path { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: help; }
+.tier { display: flex; gap: 14px; position: relative; z-index: 1; }
+.lane { flex: 1 1 0; min-width: 0; border: 1px dashed var(--border); border-radius: 10px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; background: color-mix(in srgb, var(--bg) 55%, transparent); }
+.lane-name { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+/* Wide column gap for side arrows; a wrapped row keeps room for arrows and labels between rows. */
+.lane-boxes { display: flex; flex-wrap: wrap; gap: 36px 56px; }
+.lane-note { font-size: 13px; color: var(--accent); font-style: italic; }
+.box { font-size: 15px; font-weight: 500; line-height: 1.3; padding: 8px 12px; border: 1px solid var(--fg); border-radius: 6px; background: var(--card); color: var(--fg); transition: border-color .15s, opacity .15s; cursor: pointer; }
+.box.existing { border: 1px dashed var(--muted); font-weight: 400; }
+.box.added { border: 2px solid var(--ok); }
+.box.removed { border: 1.5px dashed var(--bad); color: var(--bad); }
+.box.removed .label { text-decoration: line-through; }
+.box.store { border-radius: 14px; font-family: var(--font-mono); font-size: 13.5px; }
+.box .n { margin-right: 6px; }
+.arch.focus .box:not(.near) { opacity: 0.35; }
+.box.near { border-color: var(--hl); }
+.box:focus-visible { outline: 2px solid var(--hl); outline-offset: 2px; }
+.box.pinned { box-shadow: 0 0 0 2px var(--hl); }
+.box.located { border-color: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 35%, transparent); }
+.box.located:focus-visible { outline-color: var(--warn); }
+.edge-label { position: absolute; z-index: 2; transform: translate(-50%, -50%); font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: var(--card); padding: 0 5px; border-radius: 4px; width: max-content; max-width: 90%; text-align: center; pointer-events: none; transition: opacity .15s; }
+.edge-label.added { color: var(--ok); }
+.edge-label.removed { color: var(--bad); }
+.arch.focus .edge-label:not(.on) { opacity: 0.15; }
+.edge-label.on { color: var(--hl); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--accent); align-items: center; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 18px; height: 12px; border-radius: 3px; border: 1px solid var(--fg); background: var(--card); }
+.legend i.existing { border: 1px dashed var(--muted); }
+.legend i.added { border: 2px solid var(--ok); }
+.legend i.removed { border: 1.5px dashed var(--bad); }
+.flow-error { color: var(--bad); font-size: 14px; }
+
+@media (max-width: 640px) {
+  /* "In the flow" scrolls a box to the top: keep it below the sticky section bar. */
+  .box { scroll-margin-top: calc(var(--bar) + 16px + env(safe-area-inset-top, 0px)); }
+}
+
+@media (prefers-reduced-motion: reduce) { .box, .edges path.line, .edge-label { transition: none; } }
