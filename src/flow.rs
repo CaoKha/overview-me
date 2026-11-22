@@ -16,7 +16,7 @@ use serde_json::{Map, Value, json};
 use crate::facts;
 use crate::git::Git;
 use crate::map::{ChangeMap, MAX_AT};
-use crate::rules::{LANE_MAX, MAX_LANES, Rules, lane_rank};
+use crate::rules::{LANE_MAX, MAX_LANES, Rules};
 use crate::scope::Scope;
 use crate::symbols::{self, Ident, Parsed, Symbol};
 
@@ -754,7 +754,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     let lane_of = |f: &str| {
         file_lane
             .get(f)
-            .map_or_else(|| rules.lane(f), |l| (*l).to_owned())
+            .map_or_else(|| changes.lanes.lane(f), |l| (*l).to_owned())
     };
 
     // Symbols the change removes from files it keeps: outermost ones only.
@@ -1069,7 +1069,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
 
 /// Merges lanes past [`MAX_LANES`] and orders them top to bottom, returning each lane's
 /// position. A lane sits above the lanes it calls; where calls do not decide (none, or a
-/// cycle), rule lanes keep their usual order, then the lane met first in the tour goes first.
+/// cycle), the lane met first in the tour goes first.
 /// The smallest lane merges into the lane it calls or is called by most, else the biggest.
 fn arrange_lanes(items: &mut [Item], graphs: [&Graph; 2]) -> HashMap<String, usize> {
     let at: HashMap<&str, usize> = items
@@ -1092,7 +1092,7 @@ fn arrange_lanes(items: &mut [Item], graphs: [&Graph; 2]) -> HashMap<String, usi
             e.1 += 1;
         }
         let mut v: Vec<_> = lanes.into_iter().collect();
-        v.sort_by_key(|(l, (first, _))| (lane_rank(l), *first, *l));
+        v.sort_by_key(|(l, (first, _))| (*first, *l));
         v.into_iter().map(|(l, (_, n))| (l.to_owned(), n)).collect()
     };
     let between = |items: &[Item], x: &str, y: &str| {
@@ -1314,6 +1314,11 @@ mod tests {
                 base_paths: Vec::new(),
             })
             .collect();
+        let independent = arrange_lanes(&mut items[..3], [&Graph::default(), &Graph::default()]);
+        assert!(
+            independent["billing"] < independent["db"],
+            "tour order breaks ties"
+        );
         let graph = Graph {
             edges: [("api", "billing"), ("billing", "db"), ("api", "x4")]
                 .into_iter()

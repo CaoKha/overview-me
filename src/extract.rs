@@ -16,7 +16,7 @@ use crate::git::Git;
 use crate::map::{
     ChangeMap, Deletion, Edge, EdgeKind, Grouping, MAX_AT, Node, Risk, Site, TestRef,
 };
-use crate::rules::{Rules, lane_rank};
+use crate::rules::{Lanes, Rules};
 use crate::scope::{Scope, under};
 use crate::symbols::{self, Symbol};
 
@@ -113,14 +113,7 @@ fn draft_nodes(units: &[Unit]) -> Vec<Draft<'_>> {
         });
         groups[i].push(u);
     }
-    groups.sort_by_key(|us| {
-        (
-            lane_rank(&us[0].lane),
-            us[0].lane.clone(),
-            us[0].file.clone(),
-            us[0].start,
-        )
-    });
+    groups.sort_by_key(|us| (us[0].lane.clone(), us[0].file.clone(), us[0].start));
     groups
         .into_iter()
         .map(|us| {
@@ -389,7 +382,7 @@ fn group_folders(
     nodes: Vec<Node>,
     edges: Vec<Edge>,
     options: &Options,
-    rules: &Rules,
+    folder_lanes: &Lanes,
 ) -> (Vec<Node>, Vec<Edge>) {
     let mut groups: BTreeMap<String, Node> = BTreeMap::new();
     for node in nodes {
@@ -447,7 +440,7 @@ fn group_folders(
             .chain(n.deletions.iter().map(|d| &d.file))
             .chain(n.renames.iter().map(|r| &r.to))
         {
-            *lanes.entry(rules.lane(file)).or_default() += 1;
+            *lanes.entry(folder_lanes.lane(file)).or_default() += 1;
         }
         n.lane = lanes
             .into_iter()
@@ -455,7 +448,7 @@ fn group_folders(
             .map(|(lane, _)| lane)
             .unwrap_or_else(|| "services".into());
     }
-    // Use the existing lane rules, merging only the least represented lanes past the limit.
+    // Keep the folder lanes, merging only the least represented lanes past the limit.
     let mut lanes: BTreeMap<String, usize> = BTreeMap::new();
     for n in &nodes {
         *lanes.entry(n.lane.clone()).or_default() += 1;
@@ -720,7 +713,7 @@ pub fn run(
         nodes.push(Node {
             id: format!("N{}", nodes.len() + 1),
             symbol: format!("(deleted) {}", file.rsplit('/').next().unwrap_or(file)),
-            lane: rules.lane(file),
+            lane: changes.lanes.lane(file),
             risk: Risk::Read,
             caption: String::new(),
             criteria: Vec::new(),
@@ -738,7 +731,7 @@ pub fn run(
                 "(moved) {}",
                 rename.to.rsplit('/').next().unwrap_or(&rename.to)
             ),
-            lane: rules.lane(&rename.to),
+            lane: changes.lanes.lane(&rename.to),
             risk: Risk::Skim,
             caption: String::new(),
             criteria: Vec::new(),
@@ -757,7 +750,7 @@ pub fn run(
         grouped.then_some(options),
     );
     let (nodes, edges) = if grouped {
-        group_folders(nodes, edges, options, rules)
+        group_folders(nodes, edges, options, &changes.lanes)
     } else {
         (nodes, edges)
     };

@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::git::Git;
 use crate::map::{Rename, Risk, TestRef};
-use crate::rules::Rules;
+use crate::rules::{Lanes, Rules};
 use crate::symbols::{self, Parsed, Symbol};
 
 /// One changed hunk inside one enclosing symbol. Lines are head-side, 1-based, inclusive.
@@ -68,6 +68,7 @@ pub struct Changes {
     /// each must be in one node's `renames`.
     pub renames: Vec<Rename>,
     pub files: Vec<ChangedFile>,
+    pub lanes: Lanes,
 }
 
 struct FileDiff {
@@ -414,7 +415,18 @@ pub fn changes_in(
         .map(|f| f.path.as_str())
         .collect();
     let generated = generated_paths(git, &paths)?;
-    let mut out = Changes::default();
+    let mut out = Changes {
+        // Lanes are looked up by head path, so only head paths build them.
+        lanes: Lanes::new(
+            files
+                .iter()
+                .filter(|f| {
+                    !f.bad_path && !f.path.is_empty() && !f.submodule && !rules.is_test(&f.path)
+                })
+                .map(|f| f.path.as_str()),
+        ),
+        ..Changes::default()
+    };
     for mut f in files {
         if f.bad_path || f.path.is_empty() {
             out.skipped.push(Skipped {
@@ -486,7 +498,7 @@ pub fn changes_in(
         };
         let base_parsed = symbols::parse(&f.old_path, &base_source)?;
         let base_lines: Vec<&str> = base_source.lines().collect();
-        let lane = rules.lane(&f.path);
+        let lane = out.lanes.lane(&f.path);
         let code = symbols::is_code(&f.path);
         for p in all_pieces {
             let changed: Vec<&str> = p

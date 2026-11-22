@@ -313,7 +313,7 @@
           "pattern": "^N[0-9]+$"
         },
         "lane": {
-          "description": "The flow section this node is drawn in: a short name for its part of the system, such as\n`api`, `db` or `billing`. The draft names it from `rules.json` or the path.",
+          "description": "The flow section this node is drawn in: a short name for its part of the system, such as\n`api`, `db` or `billing`. Draft lanes are folders of the change; the Label step renames\nthem to what that part of the system is and may regroup them.",
           "type": "string",
           "maxLength": 24,
           "minLength": 1
