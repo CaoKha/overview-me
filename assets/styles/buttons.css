@@ -1,0 +1,14 @@
+/* Text buttons and quiet icon buttons (the preview eye and the panel tools). */
+button.btn { font: 500 12px/1.5 var(--font-sans); padding: 3px 10px; border: 0; border-radius: var(--r); background: var(--secondary); color: var(--fg); cursor: pointer; white-space: nowrap; }
+button.btn:hover { opacity: 0.85; }
+button.btn:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+/* Quiet icon buttons: the preview eye in the text (so long paragraphs and tables stay readable)
+   and the panel tools. Ghost until hovered, filled while on. */
+.peek, .icon-btn { display: inline-grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--accent); cursor: pointer; transition: color 120ms, background-color 120ms; }
+.peek { width: 22px; height: 22px; margin-left: 2px; vertical-align: -6px; }
+:is(.peek, .icon-btn):hover { color: var(--fg); background: var(--secondary); text-decoration: none; }
+:is(.peek, .icon-btn):is([aria-expanded="true"], [aria-pressed="true"]) { color: var(--on-hl); background: var(--hl); }
+:is(.peek, .icon-btn):focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+.peek svg { width: 15px; height: 15px; }
+.icon-btn svg { width: 16px; height: 16px; }
+.icon-btn svg.check { color: var(--ok); }

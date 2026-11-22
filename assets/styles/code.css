@@ -1,0 +1,17 @@
+/* Code previews: line numbers, cited lines, word wrap, syntax colors; legacy mermaid blocks. */
+pre.code { max-height: calc(100vh - 120px); min-height: 0; padding: 8px 0; font: 12px/1.6 var(--font-mono); }
+pre.code .code-line { display: block; min-width: max-content; padding-right: 12px; }
+pre.code .code-line.cited { background: color-mix(in srgb, var(--hl) 14%, transparent); }
+pre.code .line-number { display: inline-block; width: 4.5em; padding-right: 12px; text-align: right; color: var(--muted); user-select: none; }
+/* Word wrap: wrapped rows hang under the code, not the line number. */
+:root.code-wrap pre.code .code-line { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 4.5em; text-indent: -4.5em; }
+:root.code-wrap pre.code .line-number { text-indent: 0; }
+pre.code :is(.hljs-keyword, .hljs-built_in, .hljs-selector-tag) { color: var(--link); }
+pre.code :is(.hljs-string, .hljs-regexp, .hljs-addition) { color: var(--ok); }
+pre.code :is(.hljs-comment, .hljs-quote) { color: var(--muted); font-style: italic; }
+pre.code :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-variable.constant_) { color: var(--id); }
+pre.code :is(.hljs-title, .hljs-section) { color: var(--warn); }
+pre.code :is(.hljs-type, .hljs-meta, .hljs-attr, .hljs-attribute, .hljs-params) { color: var(--accent); }
+pre.code .hljs-deletion { color: var(--bad); }
+pre.mermaid { background: var(--card); text-align: center; }
+pre.mermaid svg { max-width: none; }

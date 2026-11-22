@@ -1,0 +1,58 @@
+/* The clicked box: its files in a viewport side panel, or a bottom sheet on phones. */
+.detail { position: fixed; top: var(--panel-top, 16px); left: var(--panel-left, auto); right: 16px; max-height: calc(100vh - 32px); overflow-y: auto; width: min(var(--panel-width, 440px), calc(100vw - 32px)); z-index: 10; border: 1px solid var(--border); border-radius: var(--r-block); background: var(--popover); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.detail[hidden] { display: none; }
+.panel-resize { position: absolute; z-index: 1; touch-action: none; user-select: none; }
+.panel-resize::after { content: ''; position: absolute; border-radius: var(--r); background: var(--accent); opacity: 0; }
+.panel-resize:hover::after, .panel-resize:focus-visible::after { opacity: 1; }
+.panel-resize:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
+.panel-resize-n, .panel-resize-s { left: 16px; right: 16px; height: 6px; cursor: ns-resize; }
+.panel-resize-n { top: 0; }
+.panel-resize-s { bottom: 0; }
+.panel-resize-n::after, .panel-resize-s::after { top: 1px; left: calc(50% - 16px); width: 32px; height: 3px; }
+.panel-resize-e, .panel-resize-w { top: 6px; bottom: 16px; width: 6px; cursor: ew-resize; }
+.panel-resize-e { right: 0; }
+.panel-resize-w { left: 0; }
+.panel-resize-e::after, .panel-resize-w::after { top: 24px; left: 1px; width: 3px; height: 32px; }
+.panel-resize-ne, .panel-resize-nw, .panel-resize-se, .panel-resize-sw { width: 16px; height: 16px; }
+.panel-resize-ne, .panel-resize-nw { top: 0; height: 6px; }
+.panel-resize-se, .panel-resize-sw { bottom: 0; }
+.panel-resize-ne, .panel-resize-se { right: 0; }
+.panel-resize-nw, .panel-resize-sw { left: 0; }
+.panel-resize-nw, .panel-resize-se { cursor: nwse-resize; }
+.panel-resize-ne, .panel-resize-sw { cursor: nesw-resize; }
+.panel-resize:is(.panel-resize-ne, .panel-resize-nw, .panel-resize-se, .panel-resize-sw)::after { inset: 1px; border: 2px solid var(--accent); background: none; }
+.detail-body { display: contents; }
+@media (min-width: 641px) {
+  .detail { height: var(--panel-height, auto); max-height: min(calc(100vh - 32px), calc(100vh - var(--panel-top, 16px) - 16px)); overflow: hidden; }
+  .detail > .detail-head { flex-shrink: 0; }
+  .detail-body { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; }
+  :root.panel-sized .detail pre.code { resize: none; }
+  :root.panel-sized .detail > pre.code { flex: 1; min-height: 0; max-height: none; }
+}
+.detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; cursor: grab; touch-action: none; }
+.detail.dragging { user-select: none; }
+.detail.dragging .detail-head { cursor: grabbing; }
+.detail-kind { font-size: 12px; font-weight: 400; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.detail-head .close { margin-left: auto; }
+.detail-note { color: var(--accent); font-size: 14px; }
+.detail ul.paths { list-style: none; padding: 0; gap: 6px; }
+.detail ul.paths li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.detail ul.paths pre.code { flex-basis: 100%; width: 0; height: 480px; max-height: none; }
+/* The bar under a file preview: drag it (or arrow keys) to set the height; double-click restores the default. */
+.preview-resize { flex-basis: 100%; position: relative; height: 12px; margin-top: -8px; cursor: ns-resize; touch-action: none; user-select: none; border-radius: var(--r); }
+.preview-resize::after { content: ''; position: absolute; top: 4px; left: calc(50% - 16px); width: 32px; height: 3px; border-radius: var(--r); background: var(--edge); }
+.preview-resize:hover::after, .preview-resize:focus-visible::after { background: var(--accent); }
+.preview-resize:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
+.detail ul.paths code { flex: 0 1 auto; min-width: 0; user-select: all; }
+.detail code { background: var(--card); }
+.detail .none { color: var(--muted); font-size: 14px; }
+.detail-head .tools { display: flex; align-items: center; gap: 2px; margin-left: auto; padding-right: 8px; border-right: 1px solid var(--border); }
+.detail-head .tools + .close { margin-left: 0; }
+.flow-hits { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex-shrink: 0; font-size: 12px; color: var(--muted); }
+.flow-hits .n { margin-right: 5px; padding: 0 4px; }
+.detail:has(pre.code) { width: min(var(--panel-width, 760px), calc(100vw - 32px)); }
+
+@media (max-width: 640px) {
+  .panel-resize { display: none; }
+  .detail, .detail:has(pre.code) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
+}

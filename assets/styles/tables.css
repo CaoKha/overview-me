@@ -1,0 +1,6 @@
+/* Tables in a card that scrolls sideways on a narrow screen. */
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--card); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+th { font-size: 12px; font-weight: 500; color: var(--accent); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }

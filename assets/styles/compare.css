@@ -1,0 +1,16 @@
+/* "### Before" and "### After": stacked, side by side on a wide screen. */
+.compare { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+@media (min-width: 1500px) {
+  .compare { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+  /* Both panels share the title, diagram and text rows, so the text under each diagram starts at the same height. */
+  .compare > .panel { display: grid; grid-row: span 3; grid-template-rows: subgrid; align-content: start; }
+  .compare > .panel > .panel-fig { grid-row: 2; }
+  .compare > .panel > .panel-body { grid-row: 3; }
+}
+.panel { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel > * { margin: 0; }
+.panel-fig, .panel-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel-fig:empty { display: none; }
+.panel-body > * { margin: 0; }
+.panel h3 { margin: 0; }
+.panel ol.steps > li { font-size: 14px; }

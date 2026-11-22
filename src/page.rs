@@ -1,7 +1,8 @@
 //! `overview-me page`: a store markdown file (PR or codebase overview)
 //! as a standalone HTML page, for the browser or a Claude artifact.
 //!
-//! The page itself is `assets/overview.html`, compiled in. It styles the markdown as a review
+//! The page itself is `assets/overview.html` with `assets/styles/` and `assets/scripts/` inlined,
+//! compiled in (see `assets/README.md`). It styles the markdown as a review
 //! sheet, links `path:line` code spans to the forge with embedded code previews, puts
 //! "### Before" and "### After" side by side, and draws ```` ```flow ```` blocks as lane
 //! diagrams: hovering a box traces its edges, clicking it shows its file paths with copy buttons.
@@ -17,6 +18,40 @@ use crate::git::Git;
 
 const PREVIEW_BUDGET: usize = 8 * 1024 * 1024;
 const TEMPLATE: &str = include_str!("../assets/overview.html");
+/// The page stylesheet, in cascade order.
+const STYLE: &str = concat!(
+    include_str!("../assets/styles/tokens.css"),
+    include_str!("../assets/styles/base.css"),
+    include_str!("../assets/styles/lists.css"),
+    include_str!("../assets/styles/tables.css"),
+    include_str!("../assets/styles/compare.css"),
+    include_str!("../assets/styles/flow.css"),
+    include_str!("../assets/styles/toc.css"),
+    include_str!("../assets/styles/panel.css"),
+    include_str!("../assets/styles/buttons.css"),
+    include_str!("../assets/styles/code.css"),
+);
+/// The page script: parts of one module scope, in run order.
+const SCRIPT: &str = concat!(
+    include_str!("../assets/scripts/core.js"),
+    include_str!("../assets/scripts/header.js"),
+    include_str!("../assets/scripts/sections.js"),
+    include_str!("../assets/scripts/toc.js"),
+    include_str!("../assets/scripts/compare.js"),
+    include_str!("../assets/scripts/lists.js"),
+    include_str!("../assets/scripts/tables.js"),
+    include_str!("../assets/scripts/node-ids.js"),
+    include_str!("../assets/scripts/forge.js"),
+    include_str!("../assets/scripts/icons.js"),
+    include_str!("../assets/scripts/copy.js"),
+    include_str!("../assets/scripts/prefs.js"),
+    include_str!("../assets/scripts/panel-resize.js"),
+    include_str!("../assets/scripts/side-panel.js"),
+    include_str!("../assets/scripts/code-preview.js"),
+    include_str!("../assets/scripts/references.js"),
+    include_str!("../assets/scripts/flow.js"),
+    include_str!("../assets/scripts/mermaid.js"),
+);
 
 const NODE_KINDS: [&str; 4] = ["existing", "added", "removed", "store"];
 const EDGE_STYLES: [&str; 3] = ["dashed", "added", "removed"];
@@ -265,12 +300,14 @@ pub fn render(
         serde_json::json!({ "forge": forge, "sha": sha, "base": base, "head": head }).to_string();
     let values = [
         ("TITLE", escape(title)),
+        ("STYLE", STYLE.to_string()),
+        ("SCRIPT", SCRIPT.to_string()),
         ("MD", guard(md)),
-        ("CONFIG", config),
+        ("CONFIG", config.replace('<', "\\u003c")),
         ("CODE", snippets.to_string().replace('<', "\\u003c")),
     ];
     // One pass over the template, so placeholder-like text inside the values is left alone.
-    let mut out = String::with_capacity(TEMPLATE.len() + md.len());
+    let mut out = String::with_capacity(TEMPLATE.len() + STYLE.len() + SCRIPT.len() + md.len());
     let mut rest = TEMPLATE;
     while let Some(i) = rest.find("{{") {
         out.push_str(&rest[..i]);
@@ -651,6 +688,10 @@ mod tests {
         assert!(page.contains("<\\/SCRIPT> <\\!-- x {{CONFIG}}"));
         assert!(page.contains(r#""forge":"https://h/o/r""#));
         assert!(!page.contains("{{MD}}") && !page.contains("{{TITLE}}"));
+        assert!(!page.contains("{{STYLE}}") && page.contains("<style>\n/* Color, font"));
+        assert!(
+            !page.contains("{{SCRIPT}}") && page.contains("<script type=\"module\">\n// Shared")
+        );
     }
 
     #[test]
