@@ -10,7 +10,7 @@ overview-me is a set of agent skills for [Claude Code](https://claude.com/claude
 
 Reviewing code is hard. It is harder when you don't know the codebase.
 
-**The code is far from the explanation.** Ask Claude to explain a PR and you get paths to the code, not the code. To read each one, you open another browser tab, find the line, then come back. overview-me puts the code next to the explanation: click a box in the flow, or the eye icon next to any `path:line`, and the code opens in a side panel. No tab switching.
+**The code is far from the explanation.** Ask Claude to explain a PR and you get paths to the code, not the code. To read each one, you open another browser tab, find the line, then come back. overview-me puts the code next to the explanation: click a box in the flow, or the eye icon next to any `path:line`, and the code opens in a side panel. No tab switching. The Before and After flows have separate panels, so you can keep both open. In a changed Before box, **Preview diff** shows what the branch changed.
 
 **A big PR doesn't fit in your head.** Halfway through, you forget where you came from and how the parts connect. The flow keeps the whole change on screen: how the code ran before, how it runs now, and which box the code you are reading belongs to.
 
@@ -47,6 +47,8 @@ Ask in plain words, or run the command:
 | "show the bugs in this PR on the flow" | `/overview-me:ocr-overview` | `/skill:ocr-overview` | the PR overview with [OpenCodeReview](https://github.com/alibaba/open-code-review) findings on the flow boxes |
 
 In Claude Code the overview opens as a private Claude artifact; in pi and other agents it opens as an HTML file in your browser.
+
+The findings skill needs the `ocr` CLI. See [how to read findings on the flow](docs/tutorial.md#6-read-findings-on-the-flow).
 
 ## Update
 
