@@ -34,21 +34,29 @@ The Flow section draws how the code ran before the change and how it runs now, s
 
 ## 4. Open a box
 
-Click a box to open its panel on the right. It shows the box's note and its files as `path:line`, each with three icon buttons:
+Click a box to open its panel. The Before flow opens a panel on the left; the After flow opens one on the right. Each title bar has a **Before** or **After** tag. You can keep both panels open. Opening another box replaces only that side's panel.
+
+The panel shows the box's note and its files as `path:line`, each with three icon buttons:
 
 - The copy icon puts the path on your clipboard, ready for your editor's file search. **Copy all** under the list copies every path.
 - The eye icon shows the file under its row, scrolled to the cited lines, which are highlighted. Click it again to hide the file. Drag the bar under the preview to make it taller or shorter, or focus the bar and use the arrow keys. Double-click the bar to go back to the default height.
 - The arrow icon opens the lines on GitHub at the commit the page describes.
 
+In a Before box changed by the branch, **Preview diff** (the eye button) shows a unified diff of the base code against the head code. Removed lines are red, with a `−` and the base line number. Added lines are green, with a `+` and the head line number. If the page holds both whole files, the diff covers the whole file and scrolls to the cited lines. Otherwise it compares only the cited lines. If the head code is missing, the eye button shows plain base code; if the diff is too large, **Preview diff** falls back to plain base code.
+
+![PR #40 with both panels open: Preview diff in the Before panel and the page box's code in the After panel](images/before-after-panels.png)
+
+![A close-up of PR #40's Preview diff, with red removed lines and green added lines](images/preview-diff.png)
+
 The wrap icon in the panel's title bar wraps long lines in every preview. The page remembers this choice.
 
-Drag the panel by its title to move it, and drag any edge or corner to resize it. Double-click the title or an edge to reset it. Press Escape, click the × icon or click the box again to close it.
+Drag a panel by its title to move it, and drag any edge or corner to resize it. Each panel remembers its own size and place. Double-click the title to reset its place, or an edge to reset that dimension. Click a panel to bring it to the front.
 
-![The panel of the new pathScore box, with its file previewed and the cited lines highlighted](images/box-panel.png)
+Click the × icon or click the box again to close only its panel. Escape closes the panel that has focus. If focus is in neither panel, Escape closes both.
 
 ## 5. Preview code from the text
 
-Every `path:line` in the text has an eye button next to it. Click it to open the whole file in a code panel, scrolled to the cited lines.
+Every `path:line` in the text has an eye button next to it. Click it to open the file in a code panel, scrolled to the cited lines. A code link in a Before step opens in the Before panel. All other code links open in the After panel. Opening a link replaces only that side's panel.
 
 The preview also finds that code in the flow. The boxes that hold those lines get a yellow ring, and the panel lists them under **In the flow**. Click one to scroll to its box. Click the eye again, or the × icon, to close the preview and clear the rings. The title bar also has a copy icon for the `path:line`, the wrap icon and an arrow icon that opens the lines on GitHub.
 
@@ -56,7 +64,23 @@ If the panel covers the box you are looking for, drag the panel aside or make it
 
 ![The code panel for showCode, opened from the entry points, with the showCode box ringed in yellow in the After flow](images/preview-highlight.png)
 
-## 6. Check the claims
+## 6. Read findings on the flow
+
+To add a code review to the overview, install the [OpenCodeReview](https://github.com/alibaba/open-code-review) `ocr` CLI. Then ask "show the bugs in this PR on the flow", or run:
+
+```
+/overview-me:ocr-overview
+```
+
+In pi, use `/skill:ocr-overview`. The skill uses OCR to review the same base and head as the overview, then places the findings on the page.
+
+- In the After flow, a badge on a box counts its findings. Red counts critical and high findings, yellow counts medium, and grey counts low. Hover the badge for the severity counts.
+- Click a box to read its findings in the panel, above its files. Each finding shows its severity, category, file and lines, and review text. The first finding's code opens with those lines highlighted; use the eye buttons to show or hide the code. Expand **Suggested code** when a finding includes a fix.
+- The **Findings** section lists the findings on stops and those **Outside this change**. Its summary counts findings, critical or high findings, affected stops and rejected findings. The findings file gives the reasons for rejected findings.
+
+The badges appear only on the After flow because findings refer to the head code. overview-me checks where each finding points, not whether it is correct.
+
+## 7. Check the claims
 
 The sections after the flow tell you what to trust and where to look:
 
@@ -67,15 +91,15 @@ The sections after the flow tell you what to trust and where to look:
 
 ![Claims and proof with three untested criteria, Read first, Watch out and Open questions](images/claims.png)
 
-## 7. Map a codebase
+## 8. Map a codebase
 
 A codebase overview draws the whole repo as modules and how they call each other. It works like the flow: hover a module to trace it, click it for its folder and entry points. PR overviews use this map to say where a change sits.
 
 ![The architecture of overview-me itself, with the CLI module pinned and its panel open](images/architecture.png)
 
-## 8. Light, dark and phone
+## 9. Light, dark and phone
 
-The page follows your system theme. On a phone, the sections bar sits at the top and panels open as a bottom sheet you can drag taller or shorter.
+The page follows your system theme. On a phone, the sections bar sits at the top and panels open as a bottom sheet you can drag taller or shorter. Only one sheet shows at a time; opening either side closes the other.
 
 | Light | Phone |
 | --- | --- |
