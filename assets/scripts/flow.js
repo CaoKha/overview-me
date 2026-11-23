@@ -4,7 +4,7 @@
 const NS = 'http://www.w3.org/2000/svg';
 let uid = 0;
 const nodeKind = (n) => ['removed', 'added', 'existing'].find((k) => (n.kind || '').split(/\s+/).includes(k)) || 'changed';
-// One { before, locate } per flow diagram; `before` when it sits in a Before panel.
+// One { before, spec, locate } per flow diagram; `before` when it sits in a Before panel.
 const flows = [];
 // How well a box path holds path:from-to: 3 its lines, 2 its file, 1 its folder, 0 not at all.
 function pathScore(boxPath, path, from, to) {
@@ -33,6 +33,8 @@ function legend(spec, before) {
 }
 
 function drawFlow(arch, spec) {
+  const before = !!arch.closest('.panel.before');
+  const side = before ? 'before' : 'after';
   uid += 1;
   const id = uid;
   const svg = document.createElementNS(NS, 'svg');
@@ -194,6 +196,8 @@ function drawFlow(arch, spec) {
     if (n.n) title.push(el('span', 'n', n.n));
     title.push(el('span', null, n.label));
     const kind = nodeKind(n);
+    const after = before && kind === 'changed' ? flows.find((f) => !f.before && f.spec.nodes[k])?.spec.nodes[k] : null;
+    const headPaths = Array.isArray(after?.paths) ? after.paths : [];
     title.push(el('span', 'detail-kind', { changed: n.n ? 'changed' : '', added: 'new', removed: 'removed', existing: 'unchanged' }[kind]));
     const body = el('div', 'detail-body');
     let previews = false;
@@ -204,26 +208,34 @@ function drawFlow(arch, spec) {
     if (!paths.length) body.append(el('p', 'none', 'No file given for this box.'));
     else {
       const list = el('ul', 'paths');
-      for (const p of paths) {
+      for (const [i, p] of paths.entries()) {
         const li = el('li');
         li.append(el('code', null, p));
         const b = iconButton(COPY, 'Copy path');
         b.addEventListener('click', () => copy(p, b, CHECK));
         li.append(b);
-        const at = cfg.base && arch.closest('.panel.before') ? cfg.base : cfg.head || sha;
+        const at = cfg.base && before ? cfg.base : cfg.head || sha;
         const preview = codePreview(p, at);
         if (preview) {
           previews = true;
-          const button = iconButton(EYE, 'Preview');
-          button.setAttribute('aria-label', `Preview ${p}`);
+          // The nth range of a file at base pairs with the nth range of that file at head.
+          const file = (q) => q.match(PATH_RE)?.[1];
+          const nth = paths.slice(0, i).filter((q) => file(q) === preview.path).length;
+          const same = headPaths.filter((q) => file(q) === preview.path);
+          // Same index only for a file missing at head, such as a rename.
+          const headPath = same.length ? same[nth] : headPaths[i];
+          const headPreview = headPath ? codePreview(headPath, cfg.head || sha) : null;
+          const label = headPreview ? 'Preview diff' : 'Preview';
+          const button = iconButton(EYE, label);
+          button.setAttribute('aria-label', `${label} ${p}`);
           button.setAttribute('aria-expanded', 'false');
           button.addEventListener('click', () => {
             const pre = li.querySelector('pre.code');
             if (pre) {
               pre.remove();
               li.querySelector('.preview-resize').remove();
-            } else filePreview(li, preview);
-            button.title = pre ? 'Preview' : 'Hide preview';
+            } else filePreview(li, headPreview ? codeDiffPre(preview, headPreview) : codePre(preview));
+            button.title = pre ? label : 'Hide preview';
             button.setAttribute('aria-expanded', String(!pre));
           });
           li.append(button);
@@ -253,11 +265,10 @@ function drawFlow(arch, spec) {
       }
       body.append(list);
     }
-    // Opening the panel first closes whatever it showed, including this flow's previous pin.
-    return showPanel({ label: `${n.label} files`, title, wrap: previews || found.some((f) => f.start), live: true, body: [body], onClose: unpinned });
+    return showPanel({ before, label: `${n.label} files`, title, wrap: previews || found.some((f) => f.start), live: true, body: [body], onClose: unpinned });
   }
   function unpinned() {
-    const back = sidePanel.contains(document.activeElement) ? boxes[pinned] : null;
+    const back = panelHasFocus(side) ? boxes[pinned] : null;
     boxes[pinned].classList.remove('pinned');
     pinned = null;
     clear();
@@ -274,7 +285,7 @@ function drawFlow(arch, spec) {
     if (fromKey) close.focus({ preventScroll: true });
   }
   function unpin() {
-    if (pinned) closePanel?.();
+    if (pinned) closePanel[side]?.();
   }
   for (const [k, b] of Object.entries(boxes)) {
     b.setAttribute('role', 'button');
@@ -342,5 +353,5 @@ for (const code of out.querySelectorAll('pre > code.language-flow')) {
   scroll.append(arch);
   flow.append(scroll, legend(spec, before));
   pre.replaceWith(flow);
-  flows.push({ before, locate: drawFlow(arch, spec) });
+  flows.push({ before, spec, locate: drawFlow(arch, spec) });
 }

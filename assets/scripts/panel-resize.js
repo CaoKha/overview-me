@@ -1,18 +1,43 @@
 // Drag, resize and remember the side panel (desktop), or the bottom sheet height (phones).
 function panelResize(panel) {
+  const prefix = panel.classList.contains('before') ? 'overview-me:before-panel' : 'overview-me:panel';
+  const panelWidthKey = `${prefix}-width`;
+  const panelPositionKey = `${prefix}-position`;
+  const panelHeightKey = `${prefix}-height`;
+  const desktopHeightKey = `${prefix}-desktop-height`;
+  try {
+    const width = Number(localStorage.getItem(panelWidthKey));
+    if (Number.isFinite(width) && width >= 320) panel.style.setProperty('--panel-width', `${width}px`);
+  } catch {}
+  let panelPosition = null;
+  try {
+    const saved = JSON.parse(localStorage.getItem(panelPositionKey));
+    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) panelPosition = saved;
+  } catch {}
+  try {
+    const height = Number(localStorage.getItem(panelHeightKey));
+    if (Number.isFinite(height) && height >= 25 && height <= 90) panel.style.setProperty('--sheet-height', `${height}vh`);
+  } catch {}
+  try {
+    const height = Number(localStorage.getItem(desktopHeightKey));
+    if (Number.isFinite(height) && height >= 200) {
+      panel.style.setProperty('--panel-height', `${height}px`);
+      panel.classList.add('panel-sized');
+    }
+  } catch {}
   const place = () => {
     if (!panelPosition || panel.hidden || innerWidth <= 640) return;
     if (!panel.querySelector('.detail-head')) return;
     panelPosition.x = Math.max(0, Math.min(panelPosition.x, innerWidth - panel.getBoundingClientRect().width));
     panelPosition.y = Math.max(0, Math.min(panelPosition.y, innerHeight - 16 - Math.max(200, panel.getBoundingClientRect().height)));
-    document.documentElement.style.setProperty('--panel-left', `${panelPosition.x}px`);
-    document.documentElement.style.setProperty('--panel-top', `${panelPosition.y}px`);
+    panel.style.setProperty('--panel-left', `${panelPosition.x}px`);
+    panel.style.setProperty('--panel-top', `${panelPosition.y}px`);
   };
   const persistPosition = () => {
     try { if (panelPosition) localStorage.setItem(panelPositionKey, JSON.stringify(panelPosition)); } catch {}
   };
   const persistSize = (dx, dy) => {
-    const style = document.documentElement.style;
+    const style = panel.style;
     for (const [axis, property, key] of [[dx, '--panel-width', panelWidthKey], [dy, '--panel-height', desktopHeightKey]]) {
       if (axis && style.getPropertyValue(property)) {
         try { localStorage.setItem(key, parseFloat(style.getPropertyValue(property))); } catch {}
@@ -22,17 +47,16 @@ function panelResize(panel) {
   };
   const headTarget = (ev) => ev.target.closest('.detail-head') && !ev.target.closest('button, a, .panel-resize');
   const resize = (rect, dx, dy, x, y) => {
-    const root = document.documentElement;
     const size = (sign, delta, length, end, limit, min, property, key) => {
       if (!sign) return length;
       const max = Math.min(limit - 32, sign < 0 ? end : limit - (end - length) - (key === desktopHeightKey ? 16 : 0));
       const value = Math.min(Math.max(min, length + sign * delta), max);
-      root.style.setProperty(property, `${value}px`);
+      panel.style.setProperty(property, `${value}px`);
       return value;
     };
     const width = size(dx, x, rect.width, rect.right, innerWidth, 320, '--panel-width', panelWidthKey);
     const height = size(dy, y, rect.height, rect.bottom, innerHeight, 200, '--panel-height', desktopHeightKey);
-    if (dy) root.classList.add('panel-sized');
+    if (dy) panel.classList.add('panel-sized');
     panelPosition = { x: dx < 0 ? rect.right - width : rect.left, y: dy < 0 ? rect.bottom - height : rect.top };
     place();
   };
@@ -72,12 +96,12 @@ function panelResize(panel) {
     });
     grip.addEventListener('dblclick', () => {
       if (dx) {
-        document.documentElement.style.removeProperty('--panel-width');
+        panel.style.removeProperty('--panel-width');
         try { localStorage.removeItem(panelWidthKey); } catch {}
       }
       if (dy) {
-        document.documentElement.style.removeProperty('--panel-height');
-        document.documentElement.classList.remove('panel-sized');
+        panel.style.removeProperty('--panel-height');
+        panel.classList.remove('panel-sized');
         try { localStorage.removeItem(desktopHeightKey); } catch {}
       }
       place();
@@ -106,7 +130,7 @@ function panelResize(panel) {
     if (move?.id !== ev.pointerId) return;
     if (move.phone) {
       const height = Math.max(25, Math.min(90, (move.height + move.y - ev.clientY) / innerHeight * 100));
-      document.documentElement.style.setProperty('--sheet-height', `${height}vh`);
+      panel.style.setProperty('--sheet-height', `${height}vh`);
     } else {
       panelPosition = { x: move.left + ev.clientX - move.x, y: move.top + ev.clientY - move.y };
       place();
@@ -115,7 +139,7 @@ function panelResize(panel) {
   panel.addEventListener('lostpointercapture', (ev) => {
     if (move?.id !== ev.pointerId) return;
     if (move.phone) {
-      const height = document.documentElement.style.getPropertyValue('--sheet-height');
+      const height = panel.style.getPropertyValue('--sheet-height');
       try { if (height) localStorage.setItem(panelHeightKey, parseFloat(height)); } catch {}
     } else persistPosition();
     move = null;
@@ -124,12 +148,12 @@ function panelResize(panel) {
   panel.addEventListener('dblclick', (ev) => {
     if (!headTarget(ev)) return;
     if (innerWidth <= 640) {
-      document.documentElement.style.removeProperty('--sheet-height');
+      panel.style.removeProperty('--sheet-height');
       try { localStorage.removeItem(panelHeightKey); } catch {}
     } else {
       panelPosition = null;
-      document.documentElement.style.removeProperty('--panel-left');
-      document.documentElement.style.removeProperty('--panel-top');
+      panel.style.removeProperty('--panel-left');
+      panel.style.removeProperty('--panel-top');
       try { localStorage.removeItem(panelPositionKey); } catch {}
     }
   });

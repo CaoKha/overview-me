@@ -1,5 +1,6 @@
 /* The clicked box: its files in a viewport side panel, or a bottom sheet on phones. */
 .detail { position: fixed; top: var(--panel-top, 16px); left: var(--panel-left, auto); right: 16px; max-height: calc(100vh - 32px); overflow-y: auto; width: min(var(--panel-width, 440px), calc(100vw - 32px)); z-index: 10; border: 1px solid var(--border); border-radius: var(--r-block); background: var(--popover); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.detail.before { left: var(--panel-left, 16px); right: auto; }
 .detail[hidden] { display: none; }
 .panel-resize { position: absolute; z-index: 1; touch-action: none; user-select: none; }
 .panel-resize::after { content: ''; position: absolute; border-radius: var(--r); background: var(--accent); opacity: 0; }
@@ -24,12 +25,11 @@
 .detail-body { display: contents; }
 @media (min-width: 641px) {
   .detail { height: var(--panel-height, auto); max-height: min(calc(100vh - 32px), calc(100vh - var(--panel-top, 16px) - 16px)); overflow: hidden; }
-  .detail > .detail-head { flex-shrink: 0; }
-  .detail-body { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow-y: auto; }
-  :root.panel-sized .detail pre.code { resize: none; }
-  :root.panel-sized .detail > pre.code { flex: 1; min-height: 0; max-height: none; }
+  .detail-body { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .detail.panel-sized pre.code { resize: none; }
+  .detail.panel-sized .detail-body > pre.code { flex: 1; min-height: 0; max-height: none; }
 }
-.detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; cursor: grab; touch-action: none; }
+.detail-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0; font-weight: 600; cursor: grab; touch-action: none; }
 .detail.dragging { user-select: none; }
 .detail.dragging .detail-head { cursor: grabbing; }
 .detail-kind { font-size: 12px; font-weight: 400; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -54,5 +54,5 @@
 
 @media (max-width: 640px) {
   .panel-resize { display: none; }
-  .detail, .detail:has(pre.code) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
+  .detail, .detail.before, .detail:has(pre.code) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
 }
