@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.19.0](https://github.com/CaoKha/overview-me/compare/v0.18.0...v0.19.0) (2026-11-23)
+
+
+### Features
+
+* **page:** diff changed Before boxes and give Before and After their own panels ([#82](https://github.com/CaoKha/overview-me/issues/82)) ([af9aa7e](https://github.com/CaoKha/overview-me/commit/af9aa7e531376b88aae670cf5443c1626b6cc1d6))
+
+
+### Documentation
+
+* describe the Before and After panels, Preview diff and findings on the flow ([#83](https://github.com/CaoKha/overview-me/issues/83)) ([f7e891c](https://github.com/CaoKha/overview-me/commit/f7e891c9eb9639aa0c3a44abb3135ecac37b99a5))
+
 ## [0.18.0](https://github.com/CaoKha/overview-me/compare/v0.17.0...v0.18.0) (2026-11-22)
 
 
