@@ -254,7 +254,8 @@ fn preview_windows(text: &str, ranges: &[(usize, usize)]) -> Value {
     Value::Array(windows.into_iter().filter_map(|(start, end)| {
         let count = (end - start + 1).min(remaining);
         remaining -= count;
-        (count > 0).then(|| serde_json::json!({"start": start, "lines": &lines[start - 1..start - 1 + count]}))
+        // `whole` tells the page a window is the entire file, so it may diff whole files.
+        (count > 0).then(|| serde_json::json!({"start": start, "lines": &lines[start - 1..start - 1 + count], "whole": count == lines.len()}))
     }).collect())
 }
 
@@ -769,28 +770,28 @@ mod tests {
         assert_eq!(
             snippets[format!("{head}:a.rs")],
             serde_json::json!([{"start": 1, "lines":
-                std::iter::once("</script>").chain(std::iter::repeat_n("new", 19)).collect::<Vec<_>>()}])
+                std::iter::once("</script>").chain(std::iter::repeat_n("new", 19)).collect::<Vec<_>>(), "whole": true}])
         );
         assert_eq!(
             snippets[format!("{base}:a.rs")],
             serde_json::json!([{"start": 1, "lines":
-                std::iter::once("</script>").chain(std::iter::repeat_n("line", 19)).collect::<Vec<_>>()}])
+                std::iter::once("</script>").chain(std::iter::repeat_n("line", 19)).collect::<Vec<_>>(), "whole": true}])
         );
         assert_eq!(
             snippets[format!("{head}:large.rs")],
             serde_json::json!([{"start": 1, "lines":
-                (1..=202).map(|n| format!("line {n}")).collect::<Vec<_>>()},
-                {"start": 5890, "lines": (5890..=6000).map(|n| format!("line {n}")).collect::<Vec<_>>()}])
+                (1..=202).map(|n| format!("line {n}")).collect::<Vec<_>>(), "whole": false},
+                {"start": 5890, "lines": (5890..=6000).map(|n| format!("line {n}")).collect::<Vec<_>>(), "whole": false}])
         );
         assert_eq!(
             snippets[format!("{base}:large.rs")],
             serde_json::json!([{"start": 5800, "lines":
-                (5800..=6000).map(|n| format!("line {n}")).collect::<Vec<_>>()}])
+                (5800..=6000).map(|n| format!("line {n}")).collect::<Vec<_>>(), "whole": false}])
         );
         assert_eq!(
             snippets[format!("{head}:window.rs")],
             serde_json::json!([{"start": 1, "lines":
-                (1..=202).map(|n| format!("line {n}")).collect::<Vec<_>>()}])
+                (1..=202).map(|n| format!("line {n}")).collect::<Vec<_>>(), "whole": false}])
         );
         assert_eq!(
             budget_previews(serde_json::json!({"c": 0, "b": "<", "a": 0}), 15),
