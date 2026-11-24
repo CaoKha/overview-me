@@ -247,7 +247,9 @@ function drawFlow(arch, spec) {
             : shown.some(([, head]) => head) ? codeDiffPre(shown) : codePre(...shown.map(([base]) => base));
           // A removed or added box has no other side to diff, so its cited lines take the diff colors.
           if (kind === 'removed' || kind === 'added') {
-            for (const row of code.querySelectorAll('.cited')) {
+            // A file without lines has no cited rows: all of it was added or removed.
+            const rows = shown.every(([base]) => base.bare) ? '.code-line:not(.gap)' : '.cited';
+            for (const row of code.querySelectorAll(rows)) {
               row.classList.add(kind);
               row.querySelector('.line-number').append(` ${kind === 'added' ? '+' : '−'}`);
             }

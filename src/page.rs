@@ -157,18 +157,25 @@ pub fn run(
             cited_at.as_deref()
         };
         if let Some(at) = at {
-            for span in spec["nodes"]
+            let boxes = spec["nodes"]
                 .as_object()
                 .into_iter()
                 .flat_map(|nodes| nodes.values())
-                .flat_map(|n| n["paths"].as_array().into_iter().flatten())
-                .filter_map(Value::as_str)
-            {
-                if let Some((path, last)) = cited(span)
-                    && last > 0
-                    && lines_at(at, path).is_some_and(|n| last <= n)
-                {
-                    citations.push((at.to_owned(), span.to_owned()));
+                .flat_map(|n| n["paths"].as_array().into_iter().flatten());
+            // The references behind an arrow, which its boxes list under their files.
+            let arrows = spec["edges"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .flat_map(|e| e.get(4).and_then(Value::as_array).into_iter().flatten());
+            for span in boxes.chain(arrows).filter_map(Value::as_str) {
+                if let Some((path, last)) = cited(span) {
+                    if last > 0 && lines_at(at, path).is_some_and(|n| last <= n) {
+                        citations.push((at.to_owned(), span.to_owned()));
+                    }
+                } else if !span.ends_with('/') && lines_at(at, span).is_some_and(|n| n > 0) {
+                    // A box's file without lines previews from its top; a short file is embedded whole.
+                    citations.push((at.to_owned(), format!("{span}:1")));
                 }
             }
         }
@@ -918,6 +925,64 @@ mod tests {
         assert_eq!(crowded[1]["start"], 3500);
         assert!(page.contains(&format!("\"head\":\"{head}\"")));
         assert!(page.contains("\"sha\":null"));
+    }
+
+    #[test]
+    fn code_previews_cover_arrow_references_and_files_without_lines() {
+        let repo = crate::testutil::TempRepo::new("arrow-previews");
+        repo.write("cli.rs", "fn main() {}\n");
+        repo.write("web.rs", &"line\n".repeat(24));
+        repo.write("skills/a.md", "a\n");
+        let base = repo.commit("code");
+        repo.write("cli.rs", "fn main() { run() }\n");
+        let head = repo.commit("new code");
+        let md = repo.path().join(format!("{head}.md"));
+        let flow = r#"```flow
+{"nodes":{"c":{"label":"C","paths":["cli.rs","skills/","missing.rs"]},"w":{"label":"W","paths":["web.rs"]}},
+ "tiers":[[{"name":"code","ids":["c","w"]}]],
+ "edges":[["c","w","calls",null,["web.rs:13","missing.rs:2","web.rs:99"]]]}
+```"#;
+        std::fs::write(&md, format!("# T\n{flow}\n## Flow\n### Before\n{flow}\n"))
+            .expect("write overview");
+        repo.write(
+            &format!("{head}.json"),
+            &serde_json::json!({"base": base}).to_string(),
+        );
+        let out = run(&Git::new(repo.path()), &md, None, true, &[]).expect("render page");
+        let page = std::fs::read_to_string(out).expect("read page");
+        let json = page
+            .split_once("id=\"code\">")
+            .expect("code data block")
+            .1
+            .split_once("</script>")
+            .expect("closed data block")
+            .0;
+        let snippets: Value = serde_json::from_str(json).expect("snippet JSON");
+        let mut keys: Vec<_> = snippets
+            .as_object()
+            .expect("snippet map")
+            .keys()
+            .cloned()
+            .collect();
+        keys.sort_unstable();
+        let mut want = vec![
+            format!("{base}:cli.rs"),
+            format!("{base}:web.rs"),
+            format!("{head}:cli.rs"),
+            format!("{head}:web.rs"),
+        ];
+        want.sort_unstable();
+        assert_eq!(keys, want);
+        assert_eq!(
+            snippets[format!("{head}:cli.rs")],
+            serde_json::json!([{"start": 1, "lines": ["fn main() { run() }"], "whole": true}])
+        );
+        assert_eq!(
+            snippets[format!("{head}:web.rs")][0]["lines"]
+                .as_array()
+                .map(Vec::len),
+            Some(24)
+        );
     }
 
     #[test]
