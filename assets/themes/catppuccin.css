@@ -1,0 +1,18 @@
+/* Catppuccin palette: Latte in light mode, Mocha in dark mode. https://catppuccin.com/palette */
+:root[data-palette="catppuccin"] {
+  --bg: light-dark(#E6E9EF, #181825); --card: light-dark(#EFF1F5, #1E1E2E);
+  --popover: light-dark(#CCD0DA, #313244); --border: light-dark(#BCC0CC, #45475A);
+  --fg: light-dark(#4C4F69, #CDD6F4); --accent: light-dark(#6C6F85, #A6ADC8);
+  --muted: light-dark(#8C8FA1, #7F849C); --edge: light-dark(#9CA0B0, #6C7086);
+  --hl: light-dark(#8839EF, #CBA6F7); --on-hl: light-dark(#EFF1F5, #1E1E2E);
+  --ok: light-dark(#40A02B, #A6E3A1);
+  --ok-bg: light-dark(color-mix(in srgb, #40A02B 15%, #EFF1F5), color-mix(in srgb, #A6E3A1 15%, #1E1E2E));
+  --warn: light-dark(#DF8E1D, #F9E2AF);
+  --warn-bg: light-dark(color-mix(in srgb, #DF8E1D 15%, #EFF1F5), color-mix(in srgb, #F9E2AF 15%, #1E1E2E));
+  --bad: light-dark(#D20F39, #F38BA8);
+  --bad-bg: light-dark(color-mix(in srgb, #D20F39 15%, #EFF1F5), color-mix(in srgb, #F38BA8 15%, #1E1E2E));
+  --id: light-dark(#FE640B, #FAB387);
+  --id-bg: light-dark(color-mix(in srgb, #FE640B 15%, #EFF1F5), color-mix(in srgb, #FAB387 15%, #1E1E2E));
+  --link: light-dark(#1E66F5, #89B4FA);
+  --secondary: light-dark(#CCD0DA, #313244);
+}
