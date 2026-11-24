@@ -143,7 +143,7 @@ function showCode(text, preview, href, button, before) {
     title: [el('code', null, text)],
     path: text,
     href,
-    tree: others.length > 0,
+    tree: others.length > 0 && 'Show all changed files',
     wrap: true,
     body: [body],
     onClose: () => {
@@ -215,26 +215,58 @@ function fileSplit(counts, others, status, node, pane, show) {
         if (href) Object.assign(row, { href, target: '_blank', rel: 'noopener' });
         row.append(mark(name));
         li.append(row);
-      } else {
-        const count = counts.get(name);
-        const b = el('button', 'tree-file');
-        b.type = 'button';
-        b.title = name;
-        const changed = status.has(name) ? `, ${status.get(name)[1]}` : '';
-        b.setAttribute('aria-label', `${name}, ${count} range${count === 1 ? '' : 's'}${changed}`);
-        // A cited folder (`skills/`) sits inside its own folder row, so it has no name of its own.
-        b.append(el('span', null, name.split('/').pop() || 'whole folder'));
-        if (status.has(name)) b.append(mark(name));
-        b.append(el('span', 'count', count));
-        b.addEventListener('click', () => {
-          for (const other of buttons) other.removeAttribute('aria-current');
-          b.setAttribute('aria-current', 'true');
-          show(name);
-        });
-        buttons.push(b);
-        li.append(b);
-      }
+      } else li.append(fileButton(name));
       list.append(li);
+    }
+    return list;
+  };
+  // The tree and the flat list each have a button per file: select marks both, and opens the
+  // tree's folders around it in case the reader closed one before picking it in the flat list.
+  const select = (name) => {
+    for (const [b, path] of buttons) {
+      if (path !== name) {
+        b.removeAttribute('aria-current');
+        continue;
+      }
+      b.setAttribute('aria-current', 'true');
+      for (let d = b.closest('details'); d; d = d.parentElement.closest('details')) d.open = true;
+    }
+  };
+  const fileButton = (name) => {
+    const count = counts.get(name);
+    const b = el('button', 'tree-file');
+    b.type = 'button';
+    b.title = name;
+    const changed = status.has(name) ? `, ${status.get(name)[1]}` : '';
+    b.setAttribute('aria-label', `${name}, ${count} range${count === 1 ? '' : 's'}${changed}`);
+    // A cited folder (`skills/`) sits inside its own folder row, so it has no name of its own.
+    b.append(el('span', null, name.split('/').pop() || 'whole folder'));
+    if (status.has(name)) b.append(mark(name));
+    b.append(el('span', 'count', count));
+    b.addEventListener('click', () => {
+      select(name);
+      show(name);
+    });
+    buttons.push([b, name]);
+    return b;
+  };
+  // Without "Show all changed files", the panel's files sit under their full folder path, unindented.
+  const flat = () => {
+    // Root files first, so none reads as part of the folder above it.
+    const dirs = new Map([['', []]]);
+    for (const f of counts.keys()) {
+      const dir = f.slice(0, f.lastIndexOf('/') + 1);
+      if (!dirs.has(dir)) dirs.set(dir, []);
+      dirs.get(dir).push(f);
+    }
+    const list = el('ul', 'tree-flat');
+    for (const [dir, files] of dirs) {
+      if (dir) list.append(el('li', 'tree-dir', dir));
+      for (const f of files) {
+        const li = el('li');
+        li.append(fileButton(f));
+        list.append(li);
+      }
     }
     return list;
   };
@@ -251,9 +283,9 @@ function fileSplit(counts, others, status, node, pane, show) {
   };
   const tree = el('nav', 'file-tree');
   tree.setAttribute('aria-label', 'Files');
-  tree.append(branch(root));
+  tree.append(branch(root), flat());
   const split = el('div', counts.size === 1 ? 'file-split single' : 'file-split');
   split.append(tree, treeResize(split), pane);
-  buttons[0].setAttribute('aria-current', 'true');
+  select(buttons[0][1]);
   return split;
 }
