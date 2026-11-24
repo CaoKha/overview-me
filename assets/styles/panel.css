@@ -71,3 +71,5 @@
   .file-tree { max-height: 30vh; }
   .detail, .detail.before, .detail:has(pre.code, .file-split) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
 }
+.ranges .site { padding: 0; border: 0; background: none; color: var(--link); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.ranges .site:focus-visible { outline: 2px solid var(--hl); outline-offset: 2px; border-radius: 2px; }

@@ -207,9 +207,10 @@ function drawFlow(arch, spec) {
     const paths = Array.isArray(n.paths) ? n.paths : [];
     const pane = el('div', 'file-pane');
     pane.setAttribute('aria-live', 'off');
+    const at = cfg.base && before ? cfg.base : cfg.head || sha;
+    const buttons = [];
     if (!paths.length) body.append(el('p', 'none', 'No file given for this box.'));
     else {
-      const at = cfg.base && before ? cfg.base : cfg.head || sha;
       const file = (q) => q.match(PATH_RE)?.[1] ?? q;
       // Each file's indexes into `paths`, in first-seen order.
       const files = new Map();
@@ -261,7 +262,6 @@ function drawFlow(arch, spec) {
           }
           dir.set(f, null);
         }
-        const buttons = [];
         const branch = (dir) => {
           const list = el('ul');
           for (let [name, sub] of dir) {
@@ -329,7 +329,35 @@ function drawFlow(arch, spec) {
           if (!files.has(path)) files.set(path, []);
           if (from) files.get(path).push(to ? `${from}-${to}` : from);
         }
-        for (const [path, lines] of files) li.append(el('code', null, path), el('span', 'ranges', lines.join(', ')));
+        for (const [path, lines] of files) {
+          const ranges = el('span', 'ranges');
+          lines.forEach((line, i) => {
+            if (i) ranges.append(', ');
+            const site = `${path}:${line}`;
+            const preview = codePreview(site, at);
+            if (!preview) return ranges.append(line);
+            // A line shows its call in the pane, so the reader can check the arrow.
+            const b = el('button', 'site', line);
+            b.type = 'button';
+            b.setAttribute('aria-label', `Show ${site}`);
+            b.addEventListener('click', () => {
+              for (const other of buttons) other.removeAttribute('aria-current');
+              const bar = el('div', 'file-bar');
+              bar.append(el('code', null, site));
+              const c = iconButton(COPY, 'Copy path');
+              c.addEventListener('click', () => copy(site, c, CHECK));
+              bar.append(c);
+              const href = forgeHref(site, arch);
+              if (href) bar.append(openLink(href));
+              const code = codePre(preview);
+              pane.replaceChildren(bar, code);
+              if (!pane.isConnected) body.append(pane);
+              scrollCode(code);
+            });
+            ranges.append(b);
+          });
+          li.append(el('code', null, path), ranges);
+        }
         list.append(li);
       }
       body.append(list);

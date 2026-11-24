@@ -45,7 +45,7 @@ The code shows every cited range of the file in one view, scrolled to the cited 
 
 In a Before box changed by the branch, the code is a unified diff of the base code against the head code. Removed lines are red, with a `−` and the base line number. Added lines are green, with a `+` and the head line number. If the page holds both whole files, the diff covers the whole file and scrolls to the cited lines. Otherwise it compares only the cited lines. If the head code is missing or the diff is too large, the panel shows plain base code.
 
-Under the files, **Arrows come from these references** lists each arrow of the box with the files and lines of the imports or calls behind it.
+Under the files, **Arrows come from these references** lists each arrow of the box with the files and lines of the imports or calls behind it. Click a line number to show that line in the code view.
 
 ![PR #40 with both panels open: Preview diff in the Before panel and the page box's code in the After panel](images/before-after-panels.png)
 
