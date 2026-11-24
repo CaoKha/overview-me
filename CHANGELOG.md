@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/CaoKha/overview-me/compare/v0.20.0...v0.21.0) (2026-11-24)
+
+
+### Features
+
+* **page:** resize the folder tree, link file ranges, drop Copy all ([#87](https://github.com/CaoKha/overview-me/issues/87)) ([f441ae8](https://github.com/CaoKha/overview-me/commit/f441ae8346f3df4940c8fccdbea0319dc9f54720))
+
 ## [0.20.0](https://github.com/CaoKha/overview-me/compare/v0.19.0...v0.20.0) (2026-11-24)
 
 
