@@ -284,7 +284,8 @@ function drawFlow(arch, spec) {
               b.type = 'button';
               b.title = name;
               b.setAttribute('aria-label', `${name}, ${count} range${count === 1 ? '' : 's'}`);
-              b.append(el('span', null, name.split('/').pop()), el('span', 'count', count));
+              // A cited folder (`skills/`) sits inside its own folder row, so it has no name of its own.
+              b.append(el('span', null, name.split('/').pop() || 'whole folder'), el('span', 'count', count));
               b.addEventListener('click', () => {
                 for (const other of buttons) other.removeAttribute('aria-current');
                 b.setAttribute('aria-current', 'true');
