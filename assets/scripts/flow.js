@@ -210,12 +210,14 @@ function drawFlow(arch, spec) {
     const at = cfg.base && before ? cfg.base : cfg.head || sha;
     const status = changeStatus(before);
     let others = [];
+    let many = false;
     if (!paths.length) body.append(el('p', 'none', 'No file given for this box.'));
     else {
       const file = (q) => q.match(PATH_RE)?.[1] ?? q;
       // Each file's indexes into `paths`, in first-seen order.
       const files = new Map();
       paths.forEach((p, i) => files.set(file(p), [...files.get(file(p)) || [], i]));
+      many = files.size > 1;
       const pair = (i) => {
         const preview = codePreview(paths[i], at);
         if (!preview) return null;
@@ -339,7 +341,7 @@ function drawFlow(arch, spec) {
       }
       body.append(list);
     }
-    const close = showPanel({ before, label: `${n.label} files`, title, tree: others.length > 0, wrap: previews || found.some((f) => f.start), live: true, body: [body], onClose: unpinned });
+    const close = showPanel({ before, label: `${n.label} files`, title, tree: others.length ? 'Show all changed files' : many && 'Show folder tree', wrap: previews || found.some((f) => f.start), live: true, body: [body], onClose: unpinned });
     const pre = pane.querySelector('pre.code');
     if (pre) scrollCode(pre);
     return close;

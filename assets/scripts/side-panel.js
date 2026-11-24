@@ -25,9 +25,9 @@ addEventListener('resize', () => {
   if (innerWidth > 640 || !closePanel.before || !closePanel.after) return;
   closePanel[sidePanels.before.style.zIndex === '10' ? 'after' : 'before']();
 });
-// Opens the side panel with `title` and its tools in the head (copy when there is a path, all
-// changed files when its folder tree can show more, wrap when it can show code, open when there is
-// a link, close) and `body` below. `onClose` runs while the panel is still open. Returns the close
+// Opens the side panel with `title` and its tools in the head (copy when there is a path, the
+// folder tree toggle labelled `tree` when the tree can show more, wrap when it can show code, open
+// when there is a link, close) and `body` below. `onClose` runs while the panel is still open. Returns the close
 // button.
 function showPanel({ before = false, label, title, path, href, tree, wrap, live, body, onClose }) {
   const side = before ? 'before' : 'after';
@@ -46,7 +46,7 @@ function showPanel({ before = false, label, title, path, href, tree, wrap, live,
     tools.append(b);
   }
   if (tree) {
-    const b = iconButton(TREE, 'Show all changed files');
+    const b = iconButton(TREE, tree);
     b.classList.add('tree-toggle');
     b.setAttribute('aria-pressed', String(document.documentElement.classList.contains('tree-all')));
     b.addEventListener('click', () => {
