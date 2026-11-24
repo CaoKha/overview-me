@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/CaoKha/overview-me/compare/v0.26.1...v0.27.0) (2026-11-24)
+
+
+### Features
+
+* **page:** color code previews with tree-sitter ([#102](https://github.com/CaoKha/overview-me/issues/102)) ([701de94](https://github.com/CaoKha/overview-me/commit/701de94dd4ca7a76dc646cc876ff3afa24ee6515))
+
 ## [0.26.1](https://github.com/CaoKha/overview-me/compare/v0.26.0...v0.26.1) (2026-11-24)
 
 
