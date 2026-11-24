@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.0](https://github.com/CaoKha/overview-me/compare/v0.23.0...v0.24.0) (2026-11-24)
+
+
+### Features
+
+* **page:** color palettes with a picker, Catppuccin and custom --theme files ([#93](https://github.com/CaoKha/overview-me/issues/93)) ([95c3882](https://github.com/CaoKha/overview-me/commit/95c3882cd693944e3cc7dfbf39e1b2421258cbc1))
+* **page:** show the change's files in a code preview's folder tree ([#95](https://github.com/CaoKha/overview-me/issues/95)) ([da3d685](https://github.com/CaoKha/overview-me/commit/da3d68586ac727853ca69a1e1c89570f696f9109))
+
 ## [0.23.0](https://github.com/CaoKha/overview-me/compare/v0.22.0...v0.23.0) (2026-11-24)
 
 
