@@ -40,7 +40,7 @@
 .detail ul.paths { list-style: none; padding: 0; gap: 6px; }
 .detail ul.paths li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
 /* A box's files: a folder tree beside the selected file's code. */
-.file-split { display: grid; grid-template-columns: var(--tree-width, 190px) 12px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); flex-shrink: 0; }
+.file-split { display: grid; grid-template-columns: clamp(120px, var(--tree-width, 190px), calc(100% - 252px)) 12px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); flex-shrink: 0; }
 /* The bar between the tree and the code: drag it (or arrow keys) to set the tree's width. */
 .tree-resize { position: relative; cursor: ew-resize; touch-action: none; user-select: none; border-radius: var(--r); }
 .tree-resize::after { content: ''; position: absolute; left: 5px; top: calc(50% - 16px); width: 3px; height: 32px; border-radius: var(--r); background: var(--edge); }

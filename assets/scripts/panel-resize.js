@@ -177,8 +177,8 @@ function treeResize(split) {
   grip.setAttribute('aria-label', 'Resize folder tree');
   grip.setAttribute('aria-valuemin', min);
   const tree = () => split.querySelector('.file-tree');
-  // The code keeps at least 240px.
-  const max = () => Math.max(min, split.clientWidth - 240);
+  // The code keeps at least 240px beside the 12px bar, as `.file-split` clamps it in panel.css.
+  const max = () => Math.max(min, split.clientWidth - 252);
   const report = () => {
     grip.setAttribute('aria-valuemax', max());
     grip.setAttribute('aria-valuenow', Math.round(tree().getBoundingClientRect().width));
