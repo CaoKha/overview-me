@@ -39,6 +39,7 @@
 .detail-note { color: var(--accent); font-size: 14px; }
 .detail ul.paths { list-style: none; padding: 0; gap: 6px; }
 .detail ul.paths li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.detail ul.paths li > pre.code { flex-basis: 100%; width: 0; max-height: 240px; }
 /* A box's files: a folder tree beside the selected file's code. */
 .file-split { display: grid; grid-template-columns: clamp(120px, var(--tree-width, 190px), calc(100% - 252px)) 12px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); flex-shrink: 0; }
 /* The bar between the tree and the code: drag it (or arrow keys) to set the tree's width. */
@@ -56,7 +57,7 @@
 .tree-file[aria-current="true"] { font-weight: 600; }
 .tree-file:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
 .tree-file .count { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 400; }
-.file-pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.file-pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; flex-shrink: 0; }
 .file-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
 .file-bar code { min-width: 0; overflow-wrap: anywhere; user-select: all; }
 :is(.file-bar, .detail ul.paths) .ranges { color: var(--muted); font-size: 12px; }

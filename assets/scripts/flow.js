@@ -345,23 +345,24 @@ function drawFlow(arch, spec) {
             const site = `${path}:${line}`;
             const preview = codePreview(site, at);
             if (!preview) return ranges.append(line);
-            // A line shows its call in the pane, so the reader can check the arrow.
+            // A line opens its call under the reference, so the reader can check the arrow without
+            // losing the file above. Clicking it again closes it; another line of the row replaces it.
             const b = el('button', 'site', line);
             b.type = 'button';
             b.setAttribute('aria-label', `Show ${site}`);
+            b.setAttribute('aria-expanded', 'false');
             b.addEventListener('click', () => {
-              for (const other of buttons) other.removeAttribute('aria-current');
-              const bar = el('div', 'file-bar');
-              bar.append(el('code', null, site));
-              const c = iconButton(COPY, 'Copy path');
-              c.addEventListener('click', () => copy(site, c, CHECK));
-              bar.append(c);
-              const href = forgeHref(site, arch);
-              if (href) bar.append(openLink(href));
+              const open = li.querySelector(':scope > pre.code');
+              const same = open?.dataset.site === site;
+              open?.remove();
+              for (const other of li.querySelectorAll('.site')) other.setAttribute('aria-expanded', 'false');
+              if (same) return;
               const code = codePre(preview);
-              pane.replaceChildren(bar, code);
-              if (!pane.isConnected) body.append(pane);
+              code.dataset.site = site;
+              li.append(code);
+              b.setAttribute('aria-expanded', 'true');
               scrollCode(code);
+              code.scrollIntoView({ block: 'nearest' });
             });
             ranges.append(b);
           });
