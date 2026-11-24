@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0](https://github.com/CaoKha/overview-me/compare/v0.21.0...v0.22.0) (2026-11-24)
+
+
+### Features
+
+* **page:** show the change's other files in a box's folder tree ([#89](https://github.com/CaoKha/overview-me/issues/89)) ([71f4937](https://github.com/CaoKha/overview-me/commit/71f4937332e5d15dc50b29252e7d56a3bb9fc290))
+
 ## [0.21.0](https://github.com/CaoKha/overview-me/compare/v0.20.0...v0.21.0) (2026-11-24)
 
 
