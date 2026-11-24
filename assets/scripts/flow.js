@@ -302,7 +302,7 @@ function drawFlow(arch, spec) {
         tree.setAttribute('aria-label', 'Files');
         tree.append(branch(root));
         const split = el('div', 'file-split');
-        split.append(tree, pane);
+        split.append(tree, treeResize(split), pane);
         body.append(split);
         buttons[0].setAttribute('aria-current', 'true');
       }

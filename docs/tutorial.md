@@ -38,7 +38,7 @@ Click a box to open its panel. The Before flow opens a panel on the left; the Af
 
 The panel shows the box's note, then its files: a folder tree on the left and the selected file's code on the right, like a pull request's file list. Each file appears once in the tree, with the number of ranges the box cites in it. The first file opens with the panel; click another file to show it. A box with one file shows only the code.
 
-The code shows every cited range of the file in one view, scrolled to the cited lines, which are highlighted. A `⋯ N lines not embedded ⋯` row stands for the lines between two ranges. In a removed box the cited lines are red with a `−`; in an added box they are green with a `+`. Resize the panel to see more code. Above the code:
+The code shows every cited range of the file in one view, scrolled to the cited lines, which are highlighted. A `⋯ N lines not embedded ⋯` row stands for the lines between two ranges. In a removed box the cited lines are red with a `−`; in an added box they are green with a `+`. Resize the panel to see more code. Drag the bar between the tree and the code to make the tree wider or narrower, or focus the bar and use the arrow keys. Double-click the bar to go back to the default width. The page remembers the width for every box. Above the code:
 
 - The copy icon puts the file's path on your clipboard, ready for your editor's file search. **Copy all** under the files copies every `path:line`.
 - The arrow icon opens the file's first range on GitHub at the commit the page describes.

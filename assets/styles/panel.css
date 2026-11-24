@@ -40,7 +40,12 @@
 .detail ul.paths { list-style: none; padding: 0; gap: 6px; }
 .detail ul.paths li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
 /* A box's files: a folder tree beside the selected file's code. */
-.file-split { display: grid; grid-template-columns: 190px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 12px; flex-shrink: 0; }
+.file-split { display: grid; grid-template-columns: var(--tree-width, 190px) 12px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); flex-shrink: 0; }
+/* The bar between the tree and the code: drag it (or arrow keys) to set the tree's width. */
+.tree-resize { position: relative; cursor: ew-resize; touch-action: none; user-select: none; border-radius: var(--r); }
+.tree-resize::after { content: ''; position: absolute; left: 5px; top: calc(50% - 16px); width: 3px; height: 32px; border-radius: var(--r); background: var(--edge); }
+.tree-resize:hover::after, .tree-resize:focus-visible::after { background: var(--accent); }
+.tree-resize:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
 .file-tree { min-width: 0; overflow: auto; font-size: 13px; }
 .file-tree ul { list-style: none; margin: 0; padding: 0; }
 .file-tree ul ul { padding-left: 12px; }
@@ -68,6 +73,7 @@
 @media (max-width: 640px) {
   .panel-resize { display: none; }
   .file-split { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
+  .tree-resize { display: none; }
   .file-tree { max-height: 30vh; }
   .detail, .detail.before, .detail:has(pre.code, .file-split) { left: 0; right: 0; bottom: 0; top: auto; width: auto; height: var(--sheet-height, 60vh); max-height: var(--sheet-height, 60vh); border-radius: var(--r) var(--r) 0 0; }
 }
