@@ -203,9 +203,11 @@ pub fn run(
     }
     let cache = cache.into_inner();
     let mut snippets = serde_json::json!({});
+    let mut highlights = crate::highlight::Highlights::new();
     for ((at, path), ranges) in ranges {
         if let Some(Some(text)) = cache.get(&(at.clone(), path.clone())) {
-            snippets[format!("{at}:{path}")] = preview_windows(text, &ranges);
+            let hl = highlights.lines(&path, text);
+            snippets[format!("{at}:{path}")] = preview_windows(text, &ranges, hl.as_deref());
         }
     }
     let snippets = budget_previews(snippets, PREVIEW_BUDGET);
@@ -268,7 +270,8 @@ fn changed_files(git: &Git, base: &str, head: &str) -> Value {
 }
 
 // Keep citations before context, merging adjacent windows so each source line appears once.
-fn preview_windows(text: &str, ranges: &[(usize, usize)]) -> Value {
+// `hl` holds each line's syntax spans (see `crate::highlight`); a window carries its own lines'.
+fn preview_windows(text: &str, ranges: &[(usize, usize)], hl: Option<&[Value]>) -> Value {
     const CAP: usize = 5000;
     let lines: Vec<_> = text.lines().collect();
     let mut windows = vec![(1, lines.len())];
@@ -309,7 +312,13 @@ fn preview_windows(text: &str, ranges: &[(usize, usize)]) -> Value {
         let count = (end - start + 1).min(remaining);
         remaining -= count;
         // `whole` tells the page a window is the entire file, so it may diff whole files.
-        (count > 0).then(|| serde_json::json!({"start": start, "lines": &lines[start - 1..start - 1 + count], "whole": count == lines.len()}))
+        (count > 0).then(|| {
+            let mut window = serde_json::json!({"start": start, "lines": &lines[start - 1..start - 1 + count], "whole": count == lines.len()});
+            if let Some(hl) = hl.and_then(|hl| hl.get(start - 1..start - 1 + count)) {
+                window["hl"] = hl.into();
+            }
+            window
+        })
     }).collect())
 }
 
@@ -882,8 +891,18 @@ mod tests {
             .expect("closed data block")
             .0;
         assert!(!json.contains('<'));
-        let snippets: Value = serde_json::from_str(json).expect("snippet JSON");
+        let mut snippets: Value = serde_json::from_str(json).expect("snippet JSON");
         assert_eq!(snippets.as_object().expect("snippet map").len(), 5);
+        // Syntax spans ride along with each window; this test is about the windows.
+        assert_eq!(
+            snippets[format!("{head}:a.rs")][0]["hl"][0],
+            serde_json::json!([2, 6, "t"])
+        );
+        for windows in snippets.as_object_mut().expect("snippet map").values_mut() {
+            for window in windows.as_array_mut().expect("windows") {
+                window.as_object_mut().expect("window").remove("hl");
+            }
+        }
         assert_eq!(
             snippets[format!("{head}:a.rs")],
             serde_json::json!([{"start": 1, "lines":
@@ -915,12 +934,12 @@ mod tests {
             serde_json::json!({"a": 0, "c": 0})
         );
         // Exhaust context before truncating a citation that itself exceeds the line cap.
-        let capped = preview_windows(&large, &[(1, 5001), (6000, 6000)]);
+        let capped = preview_windows(&large, &[(1, 5001), (6000, 6000)], None);
         assert_eq!(
             capped[0]["lines"].as_array().expect("capped lines").len(),
             5000
         );
-        let crowded = preview_windows(&large, &[(100, 2599), (3500, 5999)]);
+        let crowded = preview_windows(&large, &[(100, 2599), (3500, 5999)], None);
         assert_eq!(crowded[0]["start"], 100);
         assert_eq!(crowded[1]["start"], 3500);
         assert!(page.contains(&format!("\"head\":\"{head}\"")));
@@ -975,7 +994,8 @@ mod tests {
         assert_eq!(keys, want);
         assert_eq!(
             snippets[format!("{head}:cli.rs")],
-            serde_json::json!([{"start": 1, "lines": ["fn main() { run() }"], "whole": true}])
+            serde_json::json!([{"start": 1, "lines": ["fn main() { run() }"], "whole": true,
+                "hl": [[0, 2, "k", 3, 4, "f", 12, 3, "f"]]}])
         );
         assert_eq!(
             snippets[format!("{head}:web.rs")][0]["lines"]

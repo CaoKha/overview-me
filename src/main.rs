@@ -7,6 +7,7 @@ mod facts;
 mod findings;
 mod flow;
 mod git;
+mod highlight;
 mod map;
 mod page;
 mod render;

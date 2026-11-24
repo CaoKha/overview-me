@@ -11,12 +11,15 @@ pre.code .line-number { display: inline-block; width: 4.5em; padding-right: 12px
 /* Word wrap: wrapped rows hang under the code, not the line number. */
 :root.code-wrap pre.code .code-line { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 4.5em; text-indent: -4.5em; }
 :root.code-wrap pre.code .line-number { text-indent: 0; }
-pre.code :is(.hljs-keyword, .hljs-built_in, .hljs-selector-tag) { color: var(--link); }
-pre.code :is(.hljs-string, .hljs-regexp, .hljs-addition) { color: var(--ok); }
-pre.code :is(.hljs-comment, .hljs-quote) { color: var(--muted); font-style: italic; }
-pre.code :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-variable.constant_) { color: var(--id); }
-pre.code :is(.hljs-title, .hljs-section) { color: var(--warn); }
-pre.code :is(.hljs-type, .hljs-meta, .hljs-attr, .hljs-attribute, .hljs-params) { color: var(--accent); }
+/* .tok-* come from tree-sitter (src/highlight.rs): keyword, string, comment, number, type, function, attribute,
+   and p, a key in a data file (JSON, TOML, YAML).
+   Types share --id with constants, as GitHub colors both alike. */
+pre.code :is(.hljs-keyword, .hljs-built_in, .hljs-selector-tag, .tok-k, .tok-p) { color: var(--link); }
+pre.code :is(.hljs-string, .hljs-regexp, .hljs-addition, .tok-s) { color: var(--ok); }
+pre.code :is(.hljs-comment, .hljs-quote, .tok-c) { color: var(--muted); font-style: italic; }
+pre.code :is(.hljs-number, .hljs-literal, .hljs-symbol, .hljs-variable.constant_, .tok-n, .tok-t) { color: var(--id); }
+pre.code :is(.hljs-title, .hljs-section, .tok-f) { color: var(--warn); }
+pre.code :is(.hljs-type, .hljs-meta, .hljs-attr, .hljs-attribute, .hljs-params, .tok-a) { color: var(--accent); }
 pre.code .hljs-deletion { color: var(--bad); }
 pre.mermaid { background: var(--card); text-align: center; }
 pre.mermaid svg { max-width: none; }
