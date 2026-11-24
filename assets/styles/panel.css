@@ -90,3 +90,4 @@ html:not(.tree-all) .file-split.single > :is(.file-tree, .tree-resize) { display
 }
 .ranges .site { padding: 0; border: 0; background: none; color: var(--link); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .ranges .site:focus-visible { outline: 2px solid var(--hl); outline-offset: 2px; border-radius: 2px; }
+.ranges .site[aria-expanded="true"] { font-weight: 600; text-decoration: none; }

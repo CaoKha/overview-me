@@ -225,53 +225,68 @@ function drawFlow(arch, spec) {
       // Each file's indexes into `paths`, in first-seen order.
       const files = new Map();
       paths.forEach((p, i) => files.set(file(p), [...files.get(file(p)) || [], i]));
-      const pairs = (f) => files.get(f).map((i) => {
+      const pair = (i) => {
         const preview = codePreview(paths[i], at);
         if (!preview) return null;
+        const f = file(paths[i]);
         // The nth range of a file at base pairs with the nth range of that file at head.
         const nth = paths.slice(0, i).filter((q) => file(q) === f).length;
         const same = headPaths.filter((q) => file(q) === f);
         // Same index only for a file missing at head, such as a rename.
         const headPath = same.length ? same[nth] : headPaths[i];
         return [preview, headPath ? codePreview(headPath, cfg.head || sha) : null];
-      }).filter(Boolean);
+      };
+      const pairs = (f) => files.get(f).map(pair).filter(Boolean);
       previews = [...files.keys()].some((f) => pairs(f).length);
       const show = (f) => {
         const own = files.get(f).map((i) => paths[i]);
         const bar = el('div', 'file-bar');
         bar.append(el('code', null, f));
-        const ranges = own.map((p) => p.slice(f.length + 1)).filter(Boolean);
         const rangeList = el('span', 'ranges');
-        if (ranges.length) bar.append(rangeList);
+        if (own.some((p) => p.length > f.length)) bar.append(rangeList);
         const b = iconButton(COPY, 'Copy path');
         b.addEventListener('click', () => copy(f, b, CHECK));
         bar.append(b);
         const href = forgeHref(own[0], arch);
         if (href) bar.append(openLink(href));
-        const shown = pairs(f);
-        const code = !shown.length ? el('p', 'none', 'No preview')
-          : shown.some(([, head]) => head) ? codeDiffPre(shown) : codePre(...shown.map(([base]) => base));
-        // A removed or added box has no other side to diff, so its cited lines take the diff colors.
-        if (kind === 'removed' || kind === 'added') {
-          for (const row of code.querySelectorAll('.cited')) {
-            row.classList.add(kind);
-            row.querySelector('.line-number').append(` ${kind === 'added' ? '+' : '−'}`);
+        const render = (shown) => {
+          const code = !shown.length ? el('p', 'none', 'No preview')
+            : shown.some(([, head]) => head) ? codeDiffPre(shown) : codePre(...shown.map(([base]) => base));
+          // A removed or added box has no other side to diff, so its cited lines take the diff colors.
+          if (kind === 'removed' || kind === 'added') {
+            for (const row of code.querySelectorAll('.cited')) {
+              row.classList.add(kind);
+              row.querySelector('.line-number').append(` ${kind === 'added' ? '+' : '−'}`);
+            }
           }
-        }
-        // Each range scrolls the code to its first line. In a diff, base lines win over added head lines.
-        const rows = [...code.querySelectorAll('.code-line')];
-        const number = (row) => row.querySelector('.line-number')?.textContent.split(' ')[0];
-        ranges.forEach((range, i) => {
-          if (i) rangeList.append(', ');
-          const from = range.split('-')[0];
-          const row = rows.find((r) => !r.classList.contains('added') && number(r) === from) || rows.find((r) => number(r) === from);
-          if (!row) return rangeList.append(range);
+          return code;
+        };
+        const code = render(pairs(f));
+        // A range shows only its lines; clicking it again closes it and brings back every range.
+        // Another range of the file replaces it, like the lines under an arrow's reference.
+        for (const i of files.get(f)) {
+          const range = paths[i].slice(f.length + 1);
+          if (!range) continue;
+          if (rangeList.childNodes.length) rangeList.append(', ');
+          const p = pair(i);
+          if (!p) {
+            rangeList.append(range);
+            continue;
+          }
           const b = el('button', 'site', range);
           b.type = 'button';
-          b.setAttribute('aria-label', `Scroll to line ${from}`);
-          b.addEventListener('click', () => scrollCode(code, row));
+          b.setAttribute('aria-label', `Show ${paths[i]}`);
+          b.setAttribute('aria-expanded', 'false');
+          b.addEventListener('click', () => {
+            const open = b.getAttribute('aria-expanded') === 'true';
+            for (const other of rangeList.querySelectorAll('.site')) other.setAttribute('aria-expanded', 'false');
+            const shown = open ? code : render([p]);
+            pane.replaceChildren(bar, shown);
+            if (!open) b.setAttribute('aria-expanded', 'true');
+            scrollCode(shown);
+          });
           rangeList.append(b);
-        });
+        }
         pane.replaceChildren(bar, code);
         if (code.isConnected) scrollCode(code);
       };
