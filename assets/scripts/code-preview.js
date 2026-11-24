@@ -132,14 +132,18 @@ function showCode(text, preview, href, button, before) {
     parts.push(hits);
   }
   const pre = codePre(preview);
+  // The change's other files in a folder tree, like a box's, hidden until "Show all changed files".
+  const status = changeStatus(before);
+  const others = [...status.keys()].filter((f) => f !== preview.path).sort();
   const body = el('div', 'detail-body');
-  body.append(...parts, pre);
+  body.append(...parts, others.length ? fileSplit(new Map([[preview.path, 1]]), others, status, button, pre, () => {}) : pre);
   const close = showPanel({
     before,
     label: 'Code preview',
     title: [el('code', null, text)],
     path: text,
     href,
+    tree: others.length > 0,
     wrap: true,
     body: [body],
     onClose: () => {
@@ -156,4 +160,100 @@ function showCode(text, preview, href, button, before) {
 function scrollCode(pre, first = pre.querySelector('.cited')) {
   if (first) pre.scrollTop += first.getBoundingClientRect().top - pre.getBoundingClientRect().top
     - 3 * parseFloat(getComputedStyle(pre).lineHeight);
+}
+
+// `git diff --name-status` letters, as words for the folder tree's change marks.
+const CHANGE_WORDS = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'copied', T: 'type changed' };
+// The change's files on one side, with their status: Before has no added file, After no deleted one.
+function changeStatus(before) {
+  const status = new Map();
+  for (const [s, path, old] of cfg.changed || []) {
+    if (before ? s === 'A' || s === 'C' : s === 'D') continue;
+    const word = CHANGE_WORDS[s] || s;
+    status.set(before && s === 'R' ? old : path, [s, old ? `${word} ${before ? `to ${path}` : `from ${old}`}` : word]);
+  }
+  return status;
+}
+
+// A panel's folder tree beside `pane`: its files (path to range count) to pick from, then the
+// change's `others`, muted and hidden until "Show all changed files". `node` picks the forge side.
+function fileSplit(counts, others, status, node, pane, show) {
+  const buttons = [];
+  // Folders hold their children in first-seen order; a file is keyed by its full path.
+  const root = new Map();
+  for (const f of [...counts.keys(), ...others]) {
+    let dir = root;
+    for (const part of f.split('/').slice(0, -1)) {
+      if (!dir.has(`${part}/`)) dir.set(`${part}/`, new Map());
+      dir = dir.get(`${part}/`);
+    }
+    dir.set(f, null);
+  }
+  const branch = (dir) => {
+    const list = el('ul');
+    for (let [name, sub] of dir) {
+      const li = el('li');
+      if (sub) {
+        // A folder whose only child is a folder shows as one row, like `assets/scripts/`.
+        while (sub.size === 1) {
+          const [[child, grandchildren]] = sub;
+          if (!grandchildren) break;
+          name += child;
+          sub = grandchildren;
+        }
+        const folder = el('details');
+        // A folder with none of the panel's files is part of the hidden rest of the change.
+        folder.open = cites(sub);
+        if (!folder.open) li.classList.add('tree-other');
+        folder.append(el('summary', null, name), branch(sub));
+        li.append(folder);
+      } else if (!counts.has(name)) {
+        li.classList.add('tree-other');
+        const href = forgeHref(name, node);
+        const row = el(href ? 'a' : 'span', 'tree-file', name.split('/').pop());
+        row.title = name;
+        if (href) Object.assign(row, { href, target: '_blank', rel: 'noopener' });
+        row.append(mark(name));
+        li.append(row);
+      } else {
+        const count = counts.get(name);
+        const b = el('button', 'tree-file');
+        b.type = 'button';
+        b.title = name;
+        const changed = status.has(name) ? `, ${status.get(name)[1]}` : '';
+        b.setAttribute('aria-label', `${name}, ${count} range${count === 1 ? '' : 's'}${changed}`);
+        // A cited folder (`skills/`) sits inside its own folder row, so it has no name of its own.
+        b.append(el('span', null, name.split('/').pop() || 'whole folder'));
+        if (status.has(name)) b.append(mark(name));
+        b.append(el('span', 'count', count));
+        b.addEventListener('click', () => {
+          for (const other of buttons) other.removeAttribute('aria-current');
+          b.setAttribute('aria-current', 'true');
+          show(name);
+        });
+        buttons.push(b);
+        li.append(b);
+      }
+      list.append(li);
+    }
+    return list;
+  };
+  const cites = (dir) => [...dir].some(([name, sub]) => (sub ? cites(sub) : counts.has(name)));
+  const mark = (name) => {
+    const [s, words] = status.get(name);
+    const m = el('span', 'change');
+    m.title = words;
+    // Screen readers hear the words, not the letter.
+    const letter = el('span', null, s);
+    letter.setAttribute('aria-hidden', 'true');
+    m.append(letter, el('span', 'sr-only', `, ${words}`));
+    return m;
+  };
+  const tree = el('nav', 'file-tree');
+  tree.setAttribute('aria-label', 'Files');
+  tree.append(branch(root));
+  const split = el('div', counts.size === 1 ? 'file-split single' : 'file-split');
+  split.append(tree, treeResize(split), pane);
+  buttons[0].setAttribute('aria-current', 'true');
+  return split;
 }
