@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.0](https://github.com/CaoKha/overview-me/compare/v0.22.0...v0.23.0) (2026-11-24)
+
+
+### Features
+
+* **page:** toggle a file range's preview in a box's file pane ([#91](https://github.com/CaoKha/overview-me/issues/91)) ([3efdda0](https://github.com/CaoKha/overview-me/commit/3efdda0a8e2e687461beafee1400f6a232022ca8))
+
 ## [0.22.0](https://github.com/CaoKha/overview-me/compare/v0.21.0...v0.22.0) (2026-11-24)
 
 
