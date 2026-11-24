@@ -198,6 +198,10 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         .run(&["remote", "get-url", "origin"])
         .ok()
         .and_then(|r| forge_url(r.trim()));
+    let changed = match (base.as_deref(), sha) {
+        (Some(base), Some(head)) => changed_files(git, base, head),
+        _ => Value::Null,
+    };
     let out = out.unwrap_or_else(|| md.with_extension("html"));
     let page = render(
         &title,
@@ -206,11 +210,41 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         sha.filter(|_| !unpushed),
         base.as_deref(),
         cited_at.as_deref(),
+        &changed,
         &snippets,
         &findings,
     );
     std::fs::write(&out, page).with_context(|| format!("writing {}", out.display()))?;
     Ok(out)
+}
+
+/// The files `base...head` changes, as `[status, path]`, or `[status, new, old]` for a rename or
+/// copy. Null when git fails: the folder tree then shows only each box's own files.
+fn changed_files(git: &Git, base: &str, head: &str) -> Value {
+    let range = format!("{base}...{head}");
+    let Ok(out) = git.run(&[
+        "diff",
+        "--name-status",
+        "-z",
+        "--find-renames",
+        "--end-of-options",
+        &range,
+    ]) else {
+        return Value::Null;
+    };
+    let mut fields = out.split('\0').filter(|f| !f.is_empty());
+    let mut changed = Vec::new();
+    while let Some(status) = fields.next() {
+        let letter = &status[..1];
+        let Some(path) = fields.next() else { break };
+        if matches!(letter, "R" | "C") {
+            let Some(new) = fields.next() else { break };
+            changed.push(serde_json::json!([letter, new, path]));
+        } else {
+            changed.push(serde_json::json!([letter, path]));
+        }
+    }
+    Value::Array(changed)
 }
 
 // Keep citations before context, merging adjacent windows so each source line appears once.
@@ -309,6 +343,7 @@ fn guard(md: &str) -> String {
 /// The page for `md`. `sha` is the commit the `path:line` references point at (or `None` to read
 /// "sha <40 hex>" from the header line); `base` is the commit for references under Before.
 /// `head` remains available for embedded `snippets` even when forge links are disabled.
+/// `changed` is the files the change touches (see `changed_files`), or null.
 /// `findings` is the findings file shown on the flow boxes, or null.
 #[allow(clippy::too_many_arguments)]
 pub fn render(
@@ -318,11 +353,12 @@ pub fn render(
     sha: Option<&str>,
     base: Option<&str>,
     head: Option<&str>,
+    changed: &Value,
     snippets: &Value,
     findings: &Value,
 ) -> String {
-    let config =
-        serde_json::json!({ "forge": forge, "sha": sha, "base": base, "head": head }).to_string();
+    let config = serde_json::json!({ "forge": forge, "sha": sha, "base": base, "head": head, "changed": changed })
+        .to_string();
     let values = [
         ("TITLE", escape(title)),
         ("STYLE", STYLE.to_string()),
@@ -715,6 +751,7 @@ mod tests {
             None,
             None,
             None,
+            &Value::Null,
             &serde_json::json!({}),
             &serde_json::json!({"findings": [{"content": "</script>"}]}),
         );
@@ -727,6 +764,34 @@ mod tests {
         assert!(!page.contains("{{STYLE}}") && page.contains("<style>\n/* Color, font"));
         assert!(
             !page.contains("{{SCRIPT}}") && page.contains("<script type=\"module\">\n// Shared")
+        );
+    }
+
+    #[test]
+    fn changed_files_lists_status_and_rename_source() {
+        let repo = crate::testutil::TempRepo::new("changed-files");
+        repo.write("kept.rs", "a\n");
+        repo.write("gone.rs", "b\n");
+        repo.write("old.rs", "one\ntwo\nthree\nfour\n");
+        let base = repo.commit("base");
+        repo.write("kept.rs", "a2\n");
+        repo.git(&["rm", "-q", "gone.rs"]);
+        repo.git(&["rm", "-q", "old.rs"]);
+        repo.write("dir/new.rs", "one\ntwo\nthree\nfour\n");
+        repo.write("added.rs", "c\n");
+        let head = repo.commit("head");
+        assert_eq!(
+            changed_files(&Git::new(repo.path()), &base, &head),
+            serde_json::json!([
+                ["A", "added.rs"],
+                ["R", "dir/new.rs", "old.rs"],
+                ["D", "gone.rs"],
+                ["M", "kept.rs"]
+            ])
+        );
+        assert_eq!(
+            changed_files(&Git::new(repo.path()), "nope", &head),
+            Value::Null
         );
     }
 
