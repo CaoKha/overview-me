@@ -13,11 +13,27 @@ function codePreview(text, at) {
   const file = codeFiles[key]?.find((window) => from >= window.start && to >= from && to < window.start + window.lines.length);
   return file ? { key: `${key}:${file.start}`, file, from, to, path: m[1], whole: !!file.whole } : null;
 }
+const escapeHtml = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+// One line from its tree-sitter spans: [column, length, class] triples in UTF-16 units, colored as .tok-<class>.
+function spannedLine(line, spans) {
+  let html = '', at = 0;
+  for (let i = 0; i + 2 < spans.length; i += 3) {
+    const [from, len, cls] = spans.slice(i, i + 3);
+    if (from < at) continue;
+    html += `${escapeHtml(line.slice(at, from))}<span class="tok-${cls}">${escapeHtml(line.slice(from, from + len))}</span>`;
+    at = from + len;
+  }
+  return html + escapeHtml(line.slice(at)) || ' ';
+}
 const highlightedFiles = new Map();
+// Tree-sitter spans when the page embeds them (see src/highlight.rs for the languages); highlight.js otherwise.
 function highlightedLines({ key, file, path }) {
   const ext = path.match(/\.([\w]+)$/)?.[1].toLowerCase();
   let highlighted = highlightedFiles.get(key);
-  if (!highlightedFiles.has(key) && window.hljs && ext && hljs.getLanguage(ext)) {
+  if (!highlightedFiles.has(key) && file.hl) {
+    highlighted = file.lines.map((line, i) => spannedLine(line, file.hl[i] || []));
+    highlightedFiles.set(key, highlighted);
+  } else if (!highlightedFiles.has(key) && window.hljs && ext && hljs.getLanguage(ext)) {
     const open = [];
     highlighted = hljs.highlight(file.lines.join('\n'), { language: ext }).value.split('\n').map((line, i) => {
       const prefix = open.join('');

@@ -19,16 +19,16 @@ code highlighting and mermaid diagrams included, follows it.
 | `--popover` | Detail panel, inline code |
 | `--border` | Borders and dividers |
 | `--fg` | Body text |
-| `--accent` | Secondary text, icons |
+| `--accent` | Secondary text, icons; attributes in code |
 | `--muted` | Hints, comments, line numbers |
 | `--edge` | Flow diagram edges, resize handles |
 | `--hl` | Highlight: focus rings, active controls, highlighted edges |
 | `--on-hl` | Text and icons on `--hl` |
 | `--ok`, `--ok-bg` | Added, passing; strings in code |
-| `--warn`, `--warn-bg` | Warnings, located flow boxes; titles in code |
+| `--warn`, `--warn-bg` | Warnings, located flow boxes; functions and titles in code |
 | `--bad`, `--bad-bg` | Removed, failing, high-severity findings |
-| `--id`, `--id-bg` | Node ids, note chips; numbers in code |
-| `--link` | Links; keywords in code |
+| `--id`, `--id-bg` | Node ids, note chips; numbers, constants and types in code |
+| `--link` | Links; keywords in code, keys in data files |
 | `--secondary` | Button fill, hovered and current tree rows |
 
 ## Palettes

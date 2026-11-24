@@ -128,8 +128,8 @@ impl Parsed {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Lang {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum Lang {
     TypeScript,
     Tsx,
     Rust,
@@ -138,7 +138,7 @@ enum Lang {
 }
 
 impl Lang {
-    fn of(path: &str) -> Option<Self> {
+    pub(crate) fn of(path: &str) -> Option<Self> {
         let ext = path.rsplit_once('.').map(|(_, e)| e)?;
         match ext {
             "ts" | "mts" | "cts" | "js" | "mjs" | "cjs" => Some(Self::TypeScript),
@@ -150,7 +150,7 @@ impl Lang {
         }
     }
 
-    fn language(self) -> Language {
+    pub(crate) fn language(self) -> Language {
         match self {
             Self::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
             Self::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
