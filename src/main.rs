@@ -123,6 +123,9 @@ enum Command {
         /// The head is not on the remote: link only Before references (at the base commit).
         #[arg(long)]
         unpushed: bool,
+        /// A palette stylesheet to add to the page's palette picker; repeatable. See DESIGN.md.
+        #[arg(long = "theme", value_name = "CSS")]
+        themes: Vec<PathBuf>,
     },
     /// Print a commit holding HEAD plus all uncommitted and untracked files (HEAD when clean),
     /// made without touching the branch, the index or the files.
@@ -190,8 +193,16 @@ fn main() -> Result<ExitCode> {
         } => {
             findings::run(&git, &map, &review, head.as_deref(), out)?;
         }
-        Command::Page { md, out, unpushed } => {
-            println!("{}", page::run(&git, &md, out, unpushed)?.display());
+        Command::Page {
+            md,
+            out,
+            unpushed,
+            themes,
+        } => {
+            println!(
+                "{}",
+                page::run(&git, &md, out, unpushed, &themes)?.display()
+            );
         }
         Command::Snapshot => println!("{}", snapshot::run(&git)?),
         Command::Path { head } => println!("{}", git.map_path(&head)?.display()),

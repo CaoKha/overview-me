@@ -21,6 +21,7 @@ const TEMPLATE: &str = include_str!("../assets/overview.html");
 /// The page stylesheet, in cascade order.
 const STYLE: &str = concat!(
     include_str!("../assets/styles/tokens.css"),
+    include_str!("../assets/themes/catppuccin.css"),
     include_str!("../assets/styles/base.css"),
     include_str!("../assets/styles/lists.css"),
     include_str!("../assets/styles/tables.css"),
@@ -36,6 +37,7 @@ const STYLE: &str = concat!(
 const SCRIPT: &str = concat!(
     include_str!("../assets/scripts/core.js"),
     include_str!("../assets/scripts/header.js"),
+    include_str!("../assets/scripts/palette.js"),
     include_str!("../assets/scripts/sections.js"),
     include_str!("../assets/scripts/toc.js"),
     include_str!("../assets/scripts/compare.js"),
@@ -63,9 +65,16 @@ const EDGE_STYLES: [&str; 3] = ["dashed", "added", "removed"];
 /// map's base) link to the forge.
 ///
 /// # Errors
-/// When a ```` ```flow ```` block is invalid (every problem is listed), or a file cannot be read
-/// or written.
-pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result<PathBuf> {
+/// When a ```` ```flow ```` block is invalid (every problem is listed), a theme holds
+/// `</style`, or a file cannot be read or written.
+pub fn run(
+    git: &Git,
+    md: &Path,
+    out: Option<PathBuf>,
+    unpushed: bool,
+    themes: &[PathBuf],
+) -> Result<PathBuf> {
+    let themes = read_themes(themes)?;
     let text = std::fs::read_to_string(md).with_context(|| format!("reading {}", md.display()))?;
     let name = md.file_name().and_then(|n| n.to_str()).unwrap_or_default();
     let head = name
@@ -213,6 +222,7 @@ pub fn run(git: &Git, md: &Path, out: Option<PathBuf>, unpushed: bool) -> Result
         &changed,
         &snippets,
         &findings,
+        &themes,
     );
     std::fs::write(&out, page).with_context(|| format!("writing {}", out.display()))?;
     Ok(out)
@@ -340,11 +350,28 @@ fn guard(md: &str) -> String {
     out
 }
 
+/// Joins the palette stylesheets given with `--theme`. A file that could close the page's
+/// `<style>` is refused, so a theme cannot add markup or scripts.
+fn read_themes(paths: &[PathBuf]) -> Result<String> {
+    let mut css = String::new();
+    for path in paths {
+        let text = std::fs::read_to_string(path)
+            .with_context(|| format!("reading theme {}", path.display()))?;
+        if text.to_ascii_lowercase().contains("</style") {
+            bail!("theme {} contains `</style`", path.display());
+        }
+        css.push_str(&text);
+        css.push('\n');
+    }
+    Ok(css)
+}
+
 /// The page for `md`. `sha` is the commit the `path:line` references point at (or `None` to read
 /// "sha <40 hex>" from the header line); `base` is the commit for references under Before.
 /// `head` remains available for embedded `snippets` even when forge links are disabled.
 /// `changed` is the files the change touches (see `changed_files`), or null.
 /// `findings` is the findings file shown on the flow boxes, or null.
+/// `themes` is extra palette CSS, added after the page stylesheet (see `read_themes`).
 #[allow(clippy::too_many_arguments)]
 pub fn render(
     title: &str,
@@ -356,12 +383,13 @@ pub fn render(
     changed: &Value,
     snippets: &Value,
     findings: &Value,
+    themes: &str,
 ) -> String {
     let config = serde_json::json!({ "forge": forge, "sha": sha, "base": base, "head": head, "changed": changed })
         .to_string();
     let values = [
         ("TITLE", escape(title)),
-        ("STYLE", STYLE.to_string()),
+        ("STYLE", format!("{STYLE}{themes}")),
         ("SCRIPT", SCRIPT.to_string()),
         ("MD", guard(md)),
         ("CONFIG", config.replace('<', "\\u003c")),
@@ -754,6 +782,7 @@ mod tests {
             &Value::Null,
             &serde_json::json!({}),
             &serde_json::json!({"findings": [{"content": "</script>"}]}),
+            ":root[data-palette=\"mine\"] { --bg: red; }\n",
         );
         assert!(page.contains("<title>a&lt;b</title>"));
         assert!(page.contains(r#"{"findings":[{"content":"\u003c/script>"}]}"#));
@@ -762,9 +791,22 @@ mod tests {
         assert!(page.contains(r#""forge":"https://h/o/r""#));
         assert!(!page.contains("{{MD}}") && !page.contains("{{TITLE}}"));
         assert!(!page.contains("{{STYLE}}") && page.contains("<style>\n/* Color, font"));
+        assert!(page.contains(":root[data-palette=\"mine\"] { --bg: red; }\n</style>"));
         assert!(
             !page.contains("{{SCRIPT}}") && page.contains("<script type=\"module\">\n// Shared")
         );
+    }
+
+    #[test]
+    fn read_themes_refuses_a_style_end_tag() {
+        let repo = crate::testutil::TempRepo::new("themes");
+        repo.write("ok.css", ":root[data-palette=\"ok\"] { --bg: red; }");
+        repo.write("bad.css", "a {}</STYLE><script>alert(1)</script>");
+        let (ok, bad) = (repo.path().join("ok.css"), repo.path().join("bad.css"));
+        let css = read_themes(std::slice::from_ref(&ok)).expect("read ok theme");
+        assert!(css.contains("data-palette=\"ok\""));
+        let err = read_themes(&[ok, bad]).expect_err("refuse </style");
+        assert!(format!("{err}").contains("bad.css"), "{err}");
     }
 
     #[test]
@@ -820,7 +862,7 @@ mod tests {
             &format!("{head}.json"),
             &serde_json::json!({"base": base}).to_string(),
         );
-        let out = run(&Git::new(repo.path()), &md, None, true).expect("render page");
+        let out = run(&Git::new(repo.path()), &md, None, true, &[]).expect("render page");
         let page = std::fs::read_to_string(out).expect("read page");
         let json = page
             .split_once("id=\"code\">")

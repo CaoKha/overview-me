@@ -3,6 +3,7 @@
 `overview-me page` builds one self-contained HTML page from these files. `src/page.rs` compiles them into the binary.
 
 - `overview.html`: the page shell, with `{{PLACEHOLDER}}` slots that `src/page.rs` fills.
+- `themes/`: built-in color palettes, joined right after `styles/tokens.css`. See `DESIGN.md`.
 - `styles/`: the stylesheet, one file per part of the page. They are joined into one `<style>` in the order `STYLES` in `src/page.rs` lists.
 - `scripts/`: the page script, one file per feature. They are joined into one `<script type="module">` in the order `SCRIPTS` in `src/page.rs` lists.
 

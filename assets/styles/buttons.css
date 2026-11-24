@@ -1,7 +1,10 @@
-/* Text buttons and quiet icon buttons (the preview eye and the panel tools). */
+/* Text buttons, the palette picker and quiet icon buttons (the preview eye and the panel tools). */
 button.btn { font: 500 12px/1.5 var(--font-sans); padding: 3px 10px; border: 0; border-radius: var(--r); background: var(--secondary); color: var(--fg); cursor: pointer; white-space: nowrap; }
 button.btn:hover { opacity: 0.85; }
 button.btn:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+/* The palette picker in the header, styled as a text button. */
+select.palette { align-self: flex-start; font: 500 12px/1.5 var(--font-sans); padding: 3px 6px; border: 0; border-radius: var(--r); background: var(--secondary); color: var(--fg); cursor: pointer; }
+select.palette:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
 /* Quiet icon buttons: the preview eye in the text (so long paragraphs and tables stay readable)
    and the panel tools. Ghost until hovered, filled while on. */
 .peek, .icon-btn { display: inline-grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--accent); cursor: pointer; transition: color 120ms, background-color 120ms; }
