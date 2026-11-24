@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/CaoKha/overview-me/compare/v0.25.0...v0.26.0) (2026-11-24)
+
+
+### Features
+
+* **page:** list a box's files under their folder path when the tree is off ([#98](https://github.com/CaoKha/overview-me/issues/98)) ([a40e3c1](https://github.com/CaoKha/overview-me/commit/a40e3c19cb6aa0fa9d92de16b12f2f3568c10f33))
+
 ## [0.25.0](https://github.com/CaoKha/overview-me/compare/v0.24.0...v0.25.0) (2026-11-24)
 
 
