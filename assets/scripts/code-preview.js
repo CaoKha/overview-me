@@ -33,13 +33,24 @@ function codeLine(preview, i, highlighted, classes, marker = '') {
   row.prepend(el('span', 'line-number', `${preview.file.start + i}${marker ? ` ${marker}` : ''}`));
   return row;
 }
-function codePre(preview) {
+// Stands for the lines between two shown parts of a file; `lines` is unknown when the parts overlap.
+function codeGap(lines) {
+  const row = el('span', 'code-line gap');
+  row.append(el('span', 'line-number'), `⋯ ${lines > 0 ? `${lines} line${lines === 1 ? '' : 's'} ` : ''}not embedded ⋯`);
+  return row;
+}
+// Previews of one file share a pre in line order: overlapping windows merge, gaps between them get a row.
+function codePre(...previews) {
   const pre = el('pre', 'code');
-  const highlighted = highlightedLines(preview);
-  preview.file.lines.forEach((line, i) => {
-    const n = preview.file.start + i;
-    pre.append(codeLine(preview, i, highlighted, n >= preview.from && n <= preview.to ? ' cited' : ''));
-  });
+  const rows = new Map();
+  for (const p of previews) p.file.lines.forEach((_, i) => rows.has(p.file.start + i) || rows.set(p.file.start + i, [p, i]));
+  let last = null;
+  for (const n of [...rows.keys()].sort((a, b) => a - b)) {
+    if (last !== null && n > last + 1) pre.append(codeGap(n - last - 1));
+    const [preview, i] = rows.get(n);
+    pre.append(codeLine(preview, i, highlightedLines(preview), previews.some((p) => n >= p.from && n <= p.to) ? ' cited' : ''));
+    last = n;
+  }
   return pre;
 }
 function lineDiff(base, head) {
@@ -71,21 +82,30 @@ function lineDiff(base, head) {
   for (let i = base.length - end; i < base.length; i++) rows.push(['', i]);
   return rows;
 }
-function codeDiffPre(base, head) {
-  const whole = base.whole && head.whole;
+// `pairs` holds [base, head or null] previews of one file. Whole files diff once; otherwise each pair
+// diffs its cited lines in base line order, and a pair without a diff shows its base lines.
+function codeDiffPre(pairs) {
+  const bases = pairs.map(([base]) => base);
+  const whole = pairs.every(([base, head]) => base.whole && head?.whole);
   const lines = (p) => whole ? p.file.lines : p.file.lines.slice(p.from - p.file.start, p.to - p.file.start + 1);
-  const rows = lineDiff(lines(base), lines(head));
-  if (!rows) return codePre(base);
+  const parts = whole ? [pairs[0]] : [...pairs].sort(([a], [b]) => a.from - b.from);
+  const diffs = parts.map(([base, head]) => head && lineDiff(lines(base), lines(head)));
+  if (!diffs.some(Boolean)) return codePre(...bases);
   const pre = el('pre', 'code');
-  const highlighted = [highlightedLines(base), highlightedLines(head)];
-  for (const [kind, i] of rows) {
-    const added = kind === 'added';
-    const preview = added ? head : base;
-    const index = (whole ? 0 : preview.from - preview.file.start) + i;
-    const n = preview.file.start + index;
-    pre.append(codeLine(preview, index, highlighted[added ? 1 : 0],
-      `${kind ? ` ${kind}` : ''}${!added && n >= base.from && n <= base.to ? ' cited' : ''}`, kind ? added ? '+' : '−' : ''));
-  }
+  let last = null;
+  parts.forEach(([base, head], k) => {
+    if (last !== null && base.from !== last + 1) pre.append(codeGap(base.from - last - 1));
+    last = base.to;
+    const highlighted = [highlightedLines(base), head && highlightedLines(head)];
+    for (const [kind, i] of diffs[k] || lines(base).map((_, i) => ['', i])) {
+      const added = kind === 'added';
+      const preview = added ? head : base;
+      const index = (whole ? 0 : preview.from - preview.file.start) + i;
+      const n = preview.file.start + index;
+      pre.append(codeLine(preview, index, highlighted[added ? 1 : 0],
+        `${kind ? ` ${kind}` : ''}${!added && bases.some((p) => n >= p.from && n <= p.to) ? ' cited' : ''}`, kind ? added ? '+' : '−' : ''));
+    }
+  });
   return pre;
 }
 
@@ -137,57 +157,4 @@ function scrollCode(pre) {
   const first = pre.querySelector('.cited');
   if (first) pre.scrollTop += first.getBoundingClientRect().top - pre.getBoundingClientRect().top
     - 3 * parseFloat(getComputedStyle(pre).lineHeight);
-}
-// A preview in a box's file list opens at its default height. The bar under it sets the height, up to
-// the panel's scroll area however long the list; double-click restores the default.
-function filePreview(li, pre) {
-  const min = 120;
-  const grip = el('div', 'preview-resize');
-  grip.tabIndex = 0;
-  grip.setAttribute('role', 'separator');
-  grip.setAttribute('aria-orientation', 'horizontal');
-  grip.setAttribute('aria-label', 'Resize preview height');
-  grip.setAttribute('aria-valuemin', min);
-  li.append(pre, grip);
-  const body = li.closest('.detail-body');
-  // Grows the preview past the panel first, so a panel without a set height reaches its tallest.
-  const tallest = () => {
-    const height = pre.style.height;
-    pre.style.height = '100vh';
-    const scroller = getComputedStyle(body).display === 'contents' ? li.closest('.detail') : body;
-    const style = getComputedStyle(scroller);
-    const room = scroller.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-    const max = Math.max(min, room - (li.offsetHeight - pre.offsetHeight));
-    pre.style.height = height;
-    return max;
-  };
-  const setHeight = (height, max = tallest()) => {
-    if (height !== null) pre.style.height = `${Math.round(Math.min(Math.max(min, height), max))}px`;
-    grip.setAttribute('aria-valuemax', max);
-    grip.setAttribute('aria-valuenow', pre.offsetHeight);
-  };
-  let drag = null;
-  grip.addEventListener('pointerdown', (ev) => {
-    if (ev.button !== 0) return;
-    ev.preventDefault();
-    grip.focus({ preventScroll: true });
-    grip.setPointerCapture(ev.pointerId);
-    drag = { id: ev.pointerId, y: ev.clientY, height: pre.offsetHeight, max: tallest() };
-  });
-  grip.addEventListener('pointermove', (ev) => {
-    if (drag?.id === ev.pointerId) setHeight(drag.height + ev.clientY - drag.y, drag.max);
-  });
-  grip.addEventListener('lostpointercapture', () => { drag = null; });
-  grip.addEventListener('keydown', (ev) => {
-    const step = { ArrowUp: -32, ArrowDown: 32 }[ev.key];
-    if (!step) return;
-    ev.preventDefault();
-    setHeight(pre.offsetHeight + step);
-  });
-  grip.addEventListener('dblclick', () => {
-    pre.style.height = '';
-    setHeight(null);
-  });
-  setHeight(null);
-  scrollCode(pre);
 }

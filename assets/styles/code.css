@@ -4,6 +4,7 @@ pre.code .code-line { display: block; min-width: max-content; padding-right: 12p
 pre.code .code-line.cited { background: color-mix(in srgb, var(--hl) 14%, transparent); }
 pre.code .code-line.removed { background: var(--bad-bg); }
 pre.code .code-line.added { background: var(--ok-bg); }
+pre.code .code-line.gap { color: var(--muted); user-select: none; }
 pre.code .code-line.removed .line-number { color: var(--bad); }
 pre.code .code-line.added .line-number { color: var(--ok); }
 pre.code .line-number { display: inline-block; width: 4.5em; padding-right: 12px; text-align: right; color: var(--muted); user-select: none; }
