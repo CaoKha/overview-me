@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.0](https://github.com/CaoKha/overview-me/compare/v0.24.0...v0.25.0) (2026-11-24)
+
+
+### Features
+
+* **page:** add Catppuccin Macchiato and Frappé, Gruvbox, Rosé Pine and Solarized palettes ([#96](https://github.com/CaoKha/overview-me/issues/96)) ([b8e8ec6](https://github.com/CaoKha/overview-me/commit/b8e8ec6866e076cd67a7d186957d9df655a09826))
+
 ## [0.24.0](https://github.com/CaoKha/overview-me/compare/v0.23.0...v0.24.0) (2026-11-24)
 
 
