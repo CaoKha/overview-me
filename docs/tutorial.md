@@ -47,9 +47,9 @@ In a Before box changed by the branch, the code is a unified diff of the base co
 
 Under the files, **Arrows come from these references** lists each arrow of the box with the files and lines of the imports or calls behind it. Click a line number to show that line in the code view.
 
-![PR #40 with both panels open: Preview diff in the Before panel and the page box's code in the After panel](images/before-after-panels.png)
+![PR #85 in dark mode with both panels open: the diff of codeDiffPre in the Before panel, and the folder tree with panel.css in the After panel](images/before-after-panels.png)
 
-![A close-up of PR #40's Preview diff, with red removed lines and green added lines](images/preview-diff.png)
+![A close-up of PR #85's Before diff, with red removed lines and green added lines](images/preview-diff.png)
 
 The wrap icon in the panel's title bar wraps long lines in every preview. The page remembers this choice.
 
@@ -98,7 +98,7 @@ The sections after the flow tell you what to trust and where to look:
 
 A codebase overview draws the whole repo as modules and how they call each other. It works like the flow: hover a module to trace it, click it for its folder and entry points. PR overviews use this map to say where a change sits.
 
-![The architecture of overview-me itself, with the CLI module pinned and its panel open](images/architecture.png)
+![The architecture of overview-me itself in dark mode, with the map module pinned and its panel open: src/ and schema/ in the folder tree, map.rs in the code view](images/architecture.png)
 
 ## 9. Light, dark and phone
 

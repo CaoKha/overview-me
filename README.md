@@ -4,7 +4,7 @@ Review a PR with the code and its flow side by side.
 
 overview-me is a set of agent skills for [Claude Code](https://claude.com/claude-code) and [pi](https://pi.dev). Ask your agent about a PR, your uncommitted changes or a whole codebase, and it writes a one-page overview you can click through.
 
-![Click a box in the flow to read its code; click an eye icon to find that code in the flow](docs/images/demo.gif)
+![Click a box in the flow to see its files in a folder tree beside the code; click an eye icon to find that code in the flow](docs/images/demo.gif)
 
 ## Why I made this
 
