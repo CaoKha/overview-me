@@ -25,10 +25,11 @@ addEventListener('resize', () => {
   if (innerWidth > 640 || !closePanel.before || !closePanel.after) return;
   closePanel[sidePanels.before.style.zIndex === '10' ? 'after' : 'before']();
 });
-// Opens the side panel with `title` and its tools in the head (copy when there is a path, wrap when
-// it can show code, open when there is a link, close) and `body` below. `onClose` runs while the
-// panel is still open. Returns the close button.
-function showPanel({ before = false, label, title, path, href, wrap, live, body, onClose }) {
+// Opens the side panel with `title` and its tools in the head (copy when there is a path, all
+// changed files when its folder tree can show more, wrap when it can show code, open when there is
+// a link, close) and `body` below. `onClose` runs while the panel is still open. Returns the close
+// button.
+function showPanel({ before = false, label, title, path, href, tree, wrap, live, body, onClose }) {
   const side = before ? 'before' : 'after';
   closePanel[side]?.();
   const other = before ? 'after' : 'before';
@@ -44,12 +45,24 @@ function showPanel({ before = false, label, title, path, href, wrap, live, body,
     b.addEventListener('click', () => copy(path, b, CHECK));
     tools.append(b);
   }
+  if (tree) {
+    const b = iconButton(TREE, 'Show all changed files');
+    b.classList.add('tree-toggle');
+    b.setAttribute('aria-pressed', String(document.documentElement.classList.contains('tree-all')));
+    b.addEventListener('click', () => {
+      const on = document.documentElement.classList.toggle('tree-all');
+      document.querySelectorAll('.detail .tree-toggle').forEach((b) => b.setAttribute('aria-pressed', String(on)));
+      try { localStorage.setItem(treeAllKey, on ? '1' : '0'); } catch {}
+    });
+    tools.append(b);
+  }
   if (wrap) {
     const b = iconButton(WRAP, 'Wrap long lines');
+    b.classList.add('wrap-toggle');
     b.setAttribute('aria-pressed', String(document.documentElement.classList.contains('code-wrap')));
     b.addEventListener('click', () => {
       const on = document.documentElement.classList.toggle('code-wrap');
-      document.querySelectorAll('.detail button[aria-pressed]').forEach((b) => b.setAttribute('aria-pressed', String(on)));
+      document.querySelectorAll('.detail .wrap-toggle').forEach((b) => b.setAttribute('aria-pressed', String(on)));
       try { localStorage.setItem(codeWrapKey, on ? '1' : '0'); } catch {}
       document.querySelectorAll('.detail pre.code').forEach(scrollCode);
     });

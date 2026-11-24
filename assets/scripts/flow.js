@@ -4,6 +4,8 @@
 const NS = 'http://www.w3.org/2000/svg';
 let uid = 0;
 const nodeKind = (n) => ['removed', 'added', 'existing'].find((k) => (n.kind || '').split(/\s+/).includes(k)) || 'changed';
+// `git diff --name-status` letters, as words for the folder tree's change marks.
+const CHANGE_WORDS = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed', C: 'copied', T: 'type changed' };
 // One { before, spec, locate } per flow diagram; `before` when it sits in a Before panel.
 const flows = [];
 // How well a box path holds path:from-to: 3 its lines, 2 its file, 1 its folder, 0 not at all.
@@ -209,6 +211,14 @@ function drawFlow(arch, spec) {
     pane.setAttribute('aria-live', 'off');
     const at = cfg.base && before ? cfg.base : cfg.head || sha;
     const buttons = [];
+    // The change's files on this side, with their status: Before has no added file, After no deleted one.
+    const status = new Map();
+    for (const [s, path, old] of cfg.changed || []) {
+      if (before ? s === 'A' || s === 'C' : s === 'D') continue;
+      const word = CHANGE_WORDS[s] || s;
+      status.set(before && s === 'R' ? old : path, [s, old ? `${word} ${before ? `to ${path}` : `from ${old}`}` : word]);
+    }
+    let others = [];
     if (!paths.length) body.append(el('p', 'none', 'No file given for this box.'));
     else {
       const file = (q) => q.match(PATH_RE)?.[1] ?? q;
@@ -265,11 +275,14 @@ function drawFlow(arch, spec) {
         pane.replaceChildren(bar, code);
         if (code.isConnected) scrollCode(code);
       };
-      if (files.size === 1) body.append(pane);
+      // The change's other files join the tree after the box's own, hidden until the reader asks.
+      const folders = [...files.keys()].filter((f) => f.endsWith('/'));
+      others = [...status.keys()].filter((f) => !files.has(f) && !folders.some((d) => f.startsWith(d))).sort();
+      if (files.size === 1 && !others.length) body.append(pane);
       else {
         // Folders hold their children in first-seen order; a file is keyed by its full path.
         const root = new Map();
-        for (const f of files.keys()) {
+        for (const f of [...files.keys(), ...others]) {
           let dir = root;
           for (const part of f.split('/').slice(0, -1)) {
             if (!dir.has(`${part}/`)) dir.set(`${part}/`, new Map());
@@ -290,17 +303,30 @@ function drawFlow(arch, spec) {
                 sub = grandchildren;
               }
               const folder = el('details');
-              folder.open = true;
+              // A folder with none of the box's files is part of the hidden rest of the change.
+              folder.open = cites(sub);
+              if (!folder.open) li.classList.add('tree-other');
               folder.append(el('summary', null, name), branch(sub));
               li.append(folder);
+            } else if (!files.has(name)) {
+              li.classList.add('tree-other');
+              const href = forgeHref(name, arch);
+              const row = el(href ? 'a' : 'span', 'tree-file', name.split('/').pop());
+              row.title = name;
+              if (href) Object.assign(row, { href, target: '_blank', rel: 'noopener' });
+              row.append(mark(name));
+              li.append(row);
             } else {
               const count = files.get(name).length;
               const b = el('button', 'tree-file');
               b.type = 'button';
               b.title = name;
-              b.setAttribute('aria-label', `${name}, ${count} range${count === 1 ? '' : 's'}`);
+              const changed = status.has(name) ? `, ${status.get(name)[1]}` : '';
+              b.setAttribute('aria-label', `${name}, ${count} range${count === 1 ? '' : 's'}${changed}`);
               // A cited folder (`skills/`) sits inside its own folder row, so it has no name of its own.
-              b.append(el('span', null, name.split('/').pop() || 'whole folder'), el('span', 'count', count));
+              b.append(el('span', null, name.split('/').pop() || 'whole folder'));
+              if (status.has(name)) b.append(mark(name));
+              b.append(el('span', 'count', count));
               b.addEventListener('click', () => {
                 for (const other of buttons) other.removeAttribute('aria-current');
                 b.setAttribute('aria-current', 'true');
@@ -313,10 +339,21 @@ function drawFlow(arch, spec) {
           }
           return list;
         };
+        const cites = (dir) => [...dir].some(([name, sub]) => (sub ? cites(sub) : files.has(name)));
+        const mark = (name) => {
+          const [s, words] = status.get(name);
+          const m = el('span', 'change');
+          m.title = words;
+          // Screen readers hear the words, not the letter.
+          const letter = el('span', null, s);
+          letter.setAttribute('aria-hidden', 'true');
+          m.append(letter, el('span', 'sr-only', `, ${words}`));
+          return m;
+        };
         const tree = el('nav', 'file-tree');
         tree.setAttribute('aria-label', 'Files');
         tree.append(branch(root));
-        const split = el('div', 'file-split');
+        const split = el('div', files.size === 1 ? 'file-split single' : 'file-split');
         split.append(tree, treeResize(split), pane);
         body.append(split);
         buttons[0].setAttribute('aria-current', 'true');
@@ -372,7 +409,7 @@ function drawFlow(arch, spec) {
       }
       body.append(list);
     }
-    const close = showPanel({ before, label: `${n.label} files`, title, wrap: previews || found.some((f) => f.start), live: true, body: [body], onClose: unpinned });
+    const close = showPanel({ before, label: `${n.label} files`, title, tree: others.length > 0, wrap: previews || found.some((f) => f.start), live: true, body: [body], onClose: unpinned });
     const pre = pane.querySelector('pre.code');
     if (pre) scrollCode(pre);
     return close;

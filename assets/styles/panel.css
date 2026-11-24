@@ -57,6 +57,16 @@
 .tree-file[aria-current="true"] { font-weight: 600; }
 .tree-file:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
 .tree-file .count { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 400; }
+/* A changed file's git status letter, before its count. */
+.tree-file .change { margin-left: auto; color: var(--muted); font: 400 11px var(--font-mono); }
+.tree-file .change + .count { margin-left: 0; }
+/* The change's files outside this box: muted, and shown only with "Show all changed files". */
+.file-tree .tree-other > .tree-file { color: var(--muted); text-decoration: none; }
+.file-tree .tree-other > span.tree-file { cursor: default; background: none; }
+.file-tree .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+html:not(.tree-all) .file-tree .tree-other { display: none; }
+html:not(.tree-all) .file-split.single { grid-template-columns: minmax(0, 1fr); }
+html:not(.tree-all) .file-split.single > :is(.file-tree, .tree-resize) { display: none; }
 .file-pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; flex-shrink: 0; }
 .file-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
 .file-bar code { min-width: 0; overflow-wrap: anywhere; user-select: all; }

@@ -38,6 +38,8 @@ Click a box to open its panel. The Before flow opens a panel on the left; the Af
 
 The panel shows the box's note, then its files: a folder tree on the left and the selected file's code on the right, like a pull request's file list. Each file appears once in the tree, with the number of ranges the box cites in it. The first file opens with the panel; click another file to show it. A box with one file shows only the code.
 
+In a PR or change overview, the panel head has a **Show all changed files** button. It adds the change's other files to the tree, muted, so you can see where the box's files sit among everything the change touches. Folders that hold none of the box's files start closed, and each changed file shows its git status letter (`A`, `M`, `D`, `R`). When the commit is pushed, click a muted file to open it on the forge. The page remembers the choice for every box.
+
 The code shows every cited range of the file in one view, scrolled to the cited lines, which are highlighted. A `⋯ N lines not embedded ⋯` row stands for the lines between two ranges. In a removed box the cited lines are red with a `−`; in an added box they are green with a `+`. The ranges beside the path are links: click one to scroll the code to its first line. Resize the panel to see more code. Drag the bar between the tree and the code to make the tree wider or narrower, or focus the bar and use the arrow keys. Double-click the bar to go back to the default width. The page remembers the width for every box. Above the code:
 
 - The copy icon puts the file's path on your clipboard, ready for your editor's file search.
