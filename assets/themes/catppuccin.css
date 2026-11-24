@@ -1,4 +1,4 @@
-/* Catppuccin palette: Latte in light mode, Mocha in dark mode. https://catppuccin.com/palette */
+/* Catppuccin palettes: Latte in light mode; Mocha, Macchiato or Frappé in dark mode. https://catppuccin.com/palette */
 :root[data-palette="catppuccin"] {
   --bg: light-dark(#E6E9EF, #181825); --card: light-dark(#EFF1F5, #1E1E2E);
   --popover: light-dark(#CCD0DA, #313244); --border: light-dark(#BCC0CC, #45475A);
@@ -14,5 +14,39 @@
   --id: light-dark(#FE640B, #FAB387);
   --id-bg: light-dark(color-mix(in srgb, #FE640B 15%, #EFF1F5), color-mix(in srgb, #FAB387 15%, #1E1E2E));
   --link: light-dark(#1E66F5, #89B4FA);
-  --secondary: light-dark(#CCD0DA, #313244);
+  --secondary: light-dark(#BCC0CC, #45475A);
+}
+:root[data-palette="catppuccin-macchiato"] {
+  --bg: light-dark(#E6E9EF, #1E2030); --card: light-dark(#EFF1F5, #24273A);
+  --popover: light-dark(#CCD0DA, #363A4F); --border: light-dark(#BCC0CC, #494D64);
+  --fg: light-dark(#4C4F69, #CAD3F5); --accent: light-dark(#6C6F85, #A5ADCB);
+  --muted: light-dark(#8C8FA1, #8087A2); --edge: light-dark(#9CA0B0, #6E738D);
+  --hl: light-dark(#8839EF, #C6A0F6); --on-hl: light-dark(#EFF1F5, #24273A);
+  --ok: light-dark(#40A02B, #A6DA95);
+  --ok-bg: light-dark(color-mix(in srgb, #40A02B 15%, #EFF1F5), color-mix(in srgb, #A6DA95 15%, #24273A));
+  --warn: light-dark(#DF8E1D, #EED49F);
+  --warn-bg: light-dark(color-mix(in srgb, #DF8E1D 15%, #EFF1F5), color-mix(in srgb, #EED49F 15%, #24273A));
+  --bad: light-dark(#D20F39, #ED8796);
+  --bad-bg: light-dark(color-mix(in srgb, #D20F39 15%, #EFF1F5), color-mix(in srgb, #ED8796 15%, #24273A));
+  --id: light-dark(#FE640B, #F5A97F);
+  --id-bg: light-dark(color-mix(in srgb, #FE640B 15%, #EFF1F5), color-mix(in srgb, #F5A97F 15%, #24273A));
+  --link: light-dark(#1E66F5, #8AADF4);
+  --secondary: light-dark(#BCC0CC, #494D64);
+}
+:root[data-palette="catppuccin-frappe"] {
+  --bg: light-dark(#E6E9EF, #292C3C); --card: light-dark(#EFF1F5, #303446);
+  --popover: light-dark(#CCD0DA, #414559); --border: light-dark(#BCC0CC, #51576D);
+  --fg: light-dark(#4C4F69, #C6D0F5); --accent: light-dark(#6C6F85, #A5ADCE);
+  --muted: light-dark(#8C8FA1, #838BA7); --edge: light-dark(#9CA0B0, #737994);
+  --hl: light-dark(#8839EF, #CA9EE6); --on-hl: light-dark(#EFF1F5, #303446);
+  --ok: light-dark(#40A02B, #A6D189);
+  --ok-bg: light-dark(color-mix(in srgb, #40A02B 15%, #EFF1F5), color-mix(in srgb, #A6D189 15%, #303446));
+  --warn: light-dark(#DF8E1D, #E5C890);
+  --warn-bg: light-dark(color-mix(in srgb, #DF8E1D 15%, #EFF1F5), color-mix(in srgb, #E5C890 15%, #303446));
+  --bad: light-dark(#D20F39, #E78284);
+  --bad-bg: light-dark(color-mix(in srgb, #D20F39 15%, #EFF1F5), color-mix(in srgb, #E78284 15%, #303446));
+  --id: light-dark(#FE640B, #EF9F76);
+  --id-bg: light-dark(color-mix(in srgb, #FE640B 15%, #EFF1F5), color-mix(in srgb, #EF9F76 15%, #303446));
+  --link: light-dark(#1E66F5, #8CAAEE);
+  --secondary: light-dark(#BCC0CC, #51576D);
 }

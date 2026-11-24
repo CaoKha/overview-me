@@ -22,6 +22,9 @@ const TEMPLATE: &str = include_str!("../assets/overview.html");
 const STYLE: &str = concat!(
     include_str!("../assets/styles/tokens.css"),
     include_str!("../assets/themes/catppuccin.css"),
+    include_str!("../assets/themes/gruvbox.css"),
+    include_str!("../assets/themes/rose-pine.css"),
+    include_str!("../assets/themes/solarized.css"),
     include_str!("../assets/styles/base.css"),
     include_str!("../assets/styles/lists.css"),
     include_str!("../assets/styles/tables.css"),

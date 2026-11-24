@@ -45,10 +45,20 @@ A palette is one rule that overrides any of the color tokens:
 
 Tokens it leaves out keep their Default value.
 
-- Built-in palettes live in `assets/themes/` and are listed in `STYLES` in `src/page.rs`:
-  `catppuccin` (Latte in light mode, Mocha in dark mode).
+- Built-in palettes live in `assets/themes/` and are listed in `STYLE` in `src/page.rs`.
+  Each pairs a light variant with a dark one:
+
+  | Palette | Light | Dark |
+  |---|---|---|
+  | `catppuccin` | Latte | Mocha |
+  | `catppuccin-macchiato` | Latte | Macchiato |
+  | `catppuccin-frappe` | Latte | Frappé |
+  | `gruvbox` | Gruvbox light | Gruvbox dark |
+  | `rose-pine` | Dawn | Main |
+  | `rose-pine-moon` | Dawn | Moon |
+  | `solarized` | Solarized light | Solarized dark |
 - Add your own with `overview-me page <file.md> --theme ocean.css` (repeatable).
   The file is inlined into the page. A file holding `</style` is refused.
 - The picker in the page header lists Default plus every `data-palette` name in
-  the page's styles. It saves the reader's choice in `localStorage`
+  the page's styles, with dashes shown as spaces (`rose-pine-moon` reads Rose Pine Moon). It saves the reader's choice in `localStorage`
   (`overview-me:palette`).

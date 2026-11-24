@@ -1,0 +1,20 @@
+/* Solarized palette, light and dark. https://ethanschoonover.com/solarized/
+   Mixes stand in for tones Solarized lacks: popover and border, and a violet --hl that
+   keeps 4.5:1 with --on-hl. */
+:root[data-palette="solarized"] {
+  --bg: light-dark(#EEE8D5, #002B36); --card: light-dark(#FDF6E3, #073642);
+  --popover: light-dark(color-mix(in srgb, #93A1A1 25%, #EEE8D5), color-mix(in srgb, #586E75 30%, #073642)); --border: light-dark(color-mix(in srgb, #93A1A1 50%, #FDF6E3), color-mix(in srgb, #586E75 60%, #073642));
+  --fg: light-dark(#586E75, #93A1A1); --accent: light-dark(#657B83, #839496);
+  --muted: light-dark(#93A1A1, #657B83); --edge: light-dark(#93A1A1, #586E75);
+  --hl: light-dark(color-mix(in srgb, #6C71C4 85%, #002B36), color-mix(in srgb, #6C71C4 80%, #FDF6E3)); --on-hl: light-dark(#FDF6E3, #002B36);
+  --ok: light-dark(#859900, #859900);
+  --ok-bg: light-dark(color-mix(in srgb, #859900 15%, #FDF6E3), color-mix(in srgb, #859900 15%, #073642));
+  --warn: light-dark(#B58900, #B58900);
+  --warn-bg: light-dark(color-mix(in srgb, #B58900 15%, #FDF6E3), color-mix(in srgb, #B58900 15%, #073642));
+  --bad: light-dark(#DC322F, #DC322F);
+  --bad-bg: light-dark(color-mix(in srgb, #DC322F 15%, #FDF6E3), color-mix(in srgb, #DC322F 15%, #073642));
+  --id: light-dark(#CB4B16, #CB4B16);
+  --id-bg: light-dark(color-mix(in srgb, #CB4B16 15%, #FDF6E3), color-mix(in srgb, #CB4B16 15%, #073642));
+  --link: light-dark(#268BD2, #268BD2);
+  --secondary: light-dark(color-mix(in srgb, #93A1A1 50%, #FDF6E3), color-mix(in srgb, #586E75 15%, #073642));
+}
