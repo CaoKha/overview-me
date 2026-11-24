@@ -231,7 +231,8 @@ function drawFlow(arch, spec) {
         const bar = el('div', 'file-bar');
         bar.append(el('code', null, f));
         const ranges = own.map((p) => p.slice(f.length + 1)).filter(Boolean);
-        if (ranges.length) bar.append(el('span', 'ranges', ranges.join(', ')));
+        const rangeList = el('span', 'ranges');
+        if (ranges.length) bar.append(rangeList);
         const b = iconButton(COPY, 'Copy path');
         b.addEventListener('click', () => copy(f, b, CHECK));
         bar.append(b);
@@ -247,6 +248,20 @@ function drawFlow(arch, spec) {
             row.querySelector('.line-number').append(` ${kind === 'added' ? '+' : '−'}`);
           }
         }
+        // Each range scrolls the code to its first line. In a diff, base lines win over added head lines.
+        const rows = [...code.querySelectorAll('.code-line')];
+        const number = (row) => row.querySelector('.line-number')?.textContent.split(' ')[0];
+        ranges.forEach((range, i) => {
+          if (i) rangeList.append(', ');
+          const from = range.split('-')[0];
+          const row = rows.find((r) => !r.classList.contains('added') && number(r) === from) || rows.find((r) => number(r) === from);
+          if (!row) return rangeList.append(range);
+          const b = el('button', 'site', range);
+          b.type = 'button';
+          b.setAttribute('aria-label', `Scroll to line ${from}`);
+          b.addEventListener('click', () => scrollCode(code, row));
+          rangeList.append(b);
+        });
         pane.replaceChildren(bar, code);
         if (code.isConnected) scrollCode(code);
       };

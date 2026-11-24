@@ -153,8 +153,7 @@ function showCode(text, preview, href, button, before) {
   close.focus({ preventScroll: true });
   scrollCode(pre);
 }
-function scrollCode(pre) {
-  const first = pre.querySelector('.cited');
+function scrollCode(pre, first = pre.querySelector('.cited')) {
   if (first) pre.scrollTop += first.getBoundingClientRect().top - pre.getBoundingClientRect().top
     - 3 * parseFloat(getComputedStyle(pre).lineHeight);
 }
