@@ -307,13 +307,6 @@ function drawFlow(arch, spec) {
         buttons[0].setAttribute('aria-current', 'true');
       }
       show(files.keys().next().value);
-      if (paths.length > 1) {
-        const all = el('button', 'btn', 'Copy all');
-        all.type = 'button';
-        all.style.alignSelf = 'flex-start';
-        all.addEventListener('click', () => copy(paths.join('\n'), all));
-        body.append(all);
-      }
     }
     // The references behind this box's arrows, for readers who cannot hover.
     const linked = edges.filter((e) => (e[0] === k || e[1] === k) && sites(e).length);
