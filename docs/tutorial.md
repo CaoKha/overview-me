@@ -63,7 +63,7 @@ Click the × icon or click the box again to close only its panel. Escape closes 
 
 Every `path:line` in the text has an eye button next to it. Click it to open the file in a code panel, scrolled to the cited lines. A code link in a Before step opens in the Before panel. All other code links open in the After panel. Opening a link replaces only that side's panel.
 
-The preview also finds that code in the flow. The boxes that hold those lines get a yellow ring, and the panel lists them under **In the flow**. Click one to scroll to its box. Click the eye again, or the × icon, to close the preview and clear the rings. The title bar also has a copy icon for the `path:line`, the wrap icon and an arrow icon that opens the lines on GitHub.
+The preview also finds that code in the flow. The boxes that hold those lines get a yellow ring, and the panel lists them under **In the flow**. Click one to scroll to its box. Click the eye again, or the × icon, to close the preview and clear the rings. The title bar also has a copy icon for the `path:line`, the wrap icon and an arrow icon that opens the lines on GitHub. In a PR or change overview it also has the **Show all changed files** button: the change's files appear in a folder tree beside the code, as in a box's panel, with the previewed file selected.
 
 If the panel covers the box you are looking for, drag the panel aside or make it narrower.
 
