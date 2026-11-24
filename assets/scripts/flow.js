@@ -205,46 +205,108 @@ function drawFlow(arch, spec) {
     const found = boxFindings(n, arch);
     if (found.length) body.append(findingsList(found, arch));
     const paths = Array.isArray(n.paths) ? n.paths : [];
+    const pane = el('div', 'file-pane');
+    pane.setAttribute('aria-live', 'off');
+    const at = cfg.base && before ? cfg.base : cfg.head || sha;
+    const buttons = [];
     if (!paths.length) body.append(el('p', 'none', 'No file given for this box.'));
     else {
-      const list = el('ul', 'paths');
-      for (const [i, p] of paths.entries()) {
-        const li = el('li');
-        li.append(el('code', null, p));
+      const file = (q) => q.match(PATH_RE)?.[1] ?? q;
+      // Each file's indexes into `paths`, in first-seen order.
+      const files = new Map();
+      paths.forEach((p, i) => files.set(file(p), [...files.get(file(p)) || [], i]));
+      const pairs = (f) => files.get(f).map((i) => {
+        const preview = codePreview(paths[i], at);
+        if (!preview) return null;
+        // The nth range of a file at base pairs with the nth range of that file at head.
+        const nth = paths.slice(0, i).filter((q) => file(q) === f).length;
+        const same = headPaths.filter((q) => file(q) === f);
+        // Same index only for a file missing at head, such as a rename.
+        const headPath = same.length ? same[nth] : headPaths[i];
+        return [preview, headPath ? codePreview(headPath, cfg.head || sha) : null];
+      }).filter(Boolean);
+      previews = [...files.keys()].some((f) => pairs(f).length);
+      const show = (f) => {
+        const own = files.get(f).map((i) => paths[i]);
+        const bar = el('div', 'file-bar');
+        bar.append(el('code', null, f));
+        const ranges = own.map((p) => p.slice(f.length + 1)).filter(Boolean);
+        if (ranges.length) bar.append(el('span', 'ranges', ranges.join(', ')));
         const b = iconButton(COPY, 'Copy path');
-        b.addEventListener('click', () => copy(p, b, CHECK));
-        li.append(b);
-        const at = cfg.base && before ? cfg.base : cfg.head || sha;
-        const preview = codePreview(p, at);
-        if (preview) {
-          previews = true;
-          // The nth range of a file at base pairs with the nth range of that file at head.
-          const file = (q) => q.match(PATH_RE)?.[1];
-          const nth = paths.slice(0, i).filter((q) => file(q) === preview.path).length;
-          const same = headPaths.filter((q) => file(q) === preview.path);
-          // Same index only for a file missing at head, such as a rename.
-          const headPath = same.length ? same[nth] : headPaths[i];
-          const headPreview = headPath ? codePreview(headPath, cfg.head || sha) : null;
-          const label = headPreview ? 'Preview diff' : 'Preview';
-          const button = iconButton(EYE, label);
-          button.setAttribute('aria-label', `${label} ${p}`);
-          button.setAttribute('aria-expanded', 'false');
-          button.addEventListener('click', () => {
-            const pre = li.querySelector('pre.code');
-            if (pre) {
-              pre.remove();
-              li.querySelector('.preview-resize').remove();
-            } else filePreview(li, headPreview ? codeDiffPre(preview, headPreview) : codePre(preview));
-            button.title = pre ? label : 'Hide preview';
-            button.setAttribute('aria-expanded', String(!pre));
-          });
-          li.append(button);
+        b.addEventListener('click', () => copy(f, b, CHECK));
+        bar.append(b);
+        const href = forgeHref(own[0], arch);
+        if (href) bar.append(openLink(href));
+        const shown = pairs(f);
+        const code = !shown.length ? el('p', 'none', 'No preview')
+          : shown.some(([, head]) => head) ? codeDiffPre(shown) : codePre(...shown.map(([base]) => base));
+        // A removed or added box has no other side to diff, so its cited lines take the diff colors.
+        if (kind === 'removed' || kind === 'added') {
+          for (const row of code.querySelectorAll('.cited')) {
+            row.classList.add(kind);
+            row.querySelector('.line-number').append(` ${kind === 'added' ? '+' : '−'}`);
+          }
         }
-        const href = forgeHref(p, arch);
-        if (href) li.append(openLink(href));
-        list.append(li);
+        pane.replaceChildren(bar, code);
+        if (code.isConnected) scrollCode(code);
+      };
+      if (files.size === 1) body.append(pane);
+      else {
+        // Folders hold their children in first-seen order; a file is keyed by its full path.
+        const root = new Map();
+        for (const f of files.keys()) {
+          let dir = root;
+          for (const part of f.split('/').slice(0, -1)) {
+            if (!dir.has(`${part}/`)) dir.set(`${part}/`, new Map());
+            dir = dir.get(`${part}/`);
+          }
+          dir.set(f, null);
+        }
+        const branch = (dir) => {
+          const list = el('ul');
+          for (let [name, sub] of dir) {
+            const li = el('li');
+            if (sub) {
+              // A folder whose only child is a folder shows as one row, like `assets/scripts/`.
+              while (sub.size === 1) {
+                const [[child, grandchildren]] = sub;
+                if (!grandchildren) break;
+                name += child;
+                sub = grandchildren;
+              }
+              const folder = el('details');
+              folder.open = true;
+              folder.append(el('summary', null, name), branch(sub));
+              li.append(folder);
+            } else {
+              const count = files.get(name).length;
+              const b = el('button', 'tree-file');
+              b.type = 'button';
+              b.title = name;
+              b.setAttribute('aria-label', `${name}, ${count} range${count === 1 ? '' : 's'}`);
+              // A cited folder (`skills/`) sits inside its own folder row, so it has no name of its own.
+              b.append(el('span', null, name.split('/').pop() || 'whole folder'), el('span', 'count', count));
+              b.addEventListener('click', () => {
+                for (const other of buttons) other.removeAttribute('aria-current');
+                b.setAttribute('aria-current', 'true');
+                show(name);
+              });
+              buttons.push(b);
+              li.append(b);
+            }
+            list.append(li);
+          }
+          return list;
+        };
+        const tree = el('nav', 'file-tree');
+        tree.setAttribute('aria-label', 'Files');
+        tree.append(branch(root));
+        const split = el('div', 'file-split');
+        split.append(tree, pane);
+        body.append(split);
+        buttons[0].setAttribute('aria-current', 'true');
       }
-      body.append(list);
+      show(files.keys().next().value);
       if (paths.length > 1) {
         const all = el('button', 'btn', 'Copy all');
         all.type = 'button';
@@ -260,12 +322,51 @@ function drawFlow(arch, spec) {
       const list = el('ul', 'paths');
       for (const e of linked) {
         const li = el('li');
-        li.append(el('span', null, arrowName(e)), el('code', null, sites(e).join(', ')));
+        li.append(el('span', null, arrowName(e)));
+        // Each file once, with its lines beside it.
+        const files = new Map();
+        for (const s of sites(e)) {
+          const [, path, from, to] = s.match(PATH_RE) || [, s];
+          if (!files.has(path)) files.set(path, []);
+          if (from) files.get(path).push(to ? `${from}-${to}` : from);
+        }
+        for (const [path, lines] of files) {
+          const ranges = el('span', 'ranges');
+          lines.forEach((line, i) => {
+            if (i) ranges.append(', ');
+            const site = `${path}:${line}`;
+            const preview = codePreview(site, at);
+            if (!preview) return ranges.append(line);
+            // A line shows its call in the pane, so the reader can check the arrow.
+            const b = el('button', 'site', line);
+            b.type = 'button';
+            b.setAttribute('aria-label', `Show ${site}`);
+            b.addEventListener('click', () => {
+              for (const other of buttons) other.removeAttribute('aria-current');
+              const bar = el('div', 'file-bar');
+              bar.append(el('code', null, site));
+              const c = iconButton(COPY, 'Copy path');
+              c.addEventListener('click', () => copy(site, c, CHECK));
+              bar.append(c);
+              const href = forgeHref(site, arch);
+              if (href) bar.append(openLink(href));
+              const code = codePre(preview);
+              pane.replaceChildren(bar, code);
+              if (!pane.isConnected) body.append(pane);
+              scrollCode(code);
+            });
+            ranges.append(b);
+          });
+          li.append(el('code', null, path), ranges);
+        }
         list.append(li);
       }
       body.append(list);
     }
-    return showPanel({ before, label: `${n.label} files`, title, wrap: previews || found.some((f) => f.start), live: true, body: [body], onClose: unpinned });
+    const close = showPanel({ before, label: `${n.label} files`, title, wrap: previews || found.some((f) => f.start), live: true, body: [body], onClose: unpinned });
+    const pre = pane.querySelector('pre.code');
+    if (pre) scrollCode(pre);
+    return close;
   }
   function unpinned() {
     const back = panelHasFocus(side) ? boxes[pinned] : null;

@@ -36,17 +36,20 @@ The Flow section draws how the code ran before the change and how it runs now, s
 
 Click a box to open its panel. The Before flow opens a panel on the left; the After flow opens one on the right. Each title bar has a **Before** or **After** tag. You can keep both panels open. Opening another box replaces only that side's panel.
 
-The panel shows the box's note and its files as `path:line`, each with three icon buttons:
+The panel shows the box's note, then its files: a folder tree on the left and the selected file's code on the right, like a pull request's file list. Each file appears once in the tree, with the number of ranges the box cites in it. The first file opens with the panel; click another file to show it. A box with one file shows only the code.
 
-- The copy icon puts the path on your clipboard, ready for your editor's file search. **Copy all** under the list copies every path.
-- The eye icon shows the file under its row, scrolled to the cited lines, which are highlighted. Click it again to hide the file. Drag the bar under the preview to make it taller or shorter, or focus the bar and use the arrow keys. Double-click the bar to go back to the default height.
-- The arrow icon opens the lines on GitHub at the commit the page describes.
+The code shows every cited range of the file in one view, scrolled to the cited lines, which are highlighted. A `⋯ N lines not embedded ⋯` row stands for the lines between two ranges. In a removed box the cited lines are red with a `−`; in an added box they are green with a `+`. Resize the panel to see more code. Above the code:
 
-In a Before box changed by the branch, **Preview diff** (the eye button) shows a unified diff of the base code against the head code. Removed lines are red, with a `−` and the base line number. Added lines are green, with a `+` and the head line number. If the page holds both whole files, the diff covers the whole file and scrolls to the cited lines. Otherwise it compares only the cited lines. If the head code is missing, the eye button shows plain base code; if the diff is too large, **Preview diff** falls back to plain base code.
+- The copy icon puts the file's path on your clipboard, ready for your editor's file search. **Copy all** under the files copies every `path:line`.
+- The arrow icon opens the file's first range on GitHub at the commit the page describes.
 
-![PR #40 with both panels open: Preview diff in the Before panel and the page box's code in the After panel](images/before-after-panels.png)
+In a Before box changed by the branch, the code is a unified diff of the base code against the head code. Removed lines are red, with a `−` and the base line number. Added lines are green, with a `+` and the head line number. If the page holds both whole files, the diff covers the whole file and scrolls to the cited lines. Otherwise it compares only the cited lines. If the head code is missing or the diff is too large, the panel shows plain base code.
 
-![A close-up of PR #40's Preview diff, with red removed lines and green added lines](images/preview-diff.png)
+Under the files, **Arrows come from these references** lists each arrow of the box with the files and lines of the imports or calls behind it. Click a line number to show that line in the code view.
+
+![PR #85 in dark mode with both panels open: the diff of codeDiffPre in the Before panel, and the folder tree with panel.css in the After panel](images/before-after-panels.png)
+
+![A close-up of PR #85's Before diff, with red removed lines and green added lines](images/preview-diff.png)
 
 The wrap icon in the panel's title bar wraps long lines in every preview. The page remembers this choice.
 
@@ -95,7 +98,7 @@ The sections after the flow tell you what to trust and where to look:
 
 A codebase overview draws the whole repo as modules and how they call each other. It works like the flow: hover a module to trace it, click it for its folder and entry points. PR overviews use this map to say where a change sits.
 
-![The architecture of overview-me itself, with the CLI module pinned and its panel open](images/architecture.png)
+![The architecture of overview-me itself in dark mode, with the map module pinned and its panel open: src/ and schema/ in the folder tree, map.rs in the code view](images/architecture.png)
 
 ## 9. Light, dark and phone
 

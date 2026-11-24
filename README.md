@@ -4,13 +4,13 @@ Review a PR with the code and its flow side by side.
 
 overview-me is a set of agent skills for [Claude Code](https://claude.com/claude-code) and [pi](https://pi.dev). Ask your agent about a PR, your uncommitted changes or a whole codebase, and it writes a one-page overview you can click through.
 
-![Click a box in the flow to read its code; click an eye icon to find that code in the flow](docs/images/demo.gif)
+![Click a box in the flow to see its files in a folder tree beside the code; click an eye icon to find that code in the flow](docs/images/demo.gif)
 
 ## Why I made this
 
 Reviewing code is hard. It is harder when you don't know the codebase.
 
-**The code is far from the explanation.** Ask Claude to explain a PR and you get paths to the code, not the code. To read each one, you open another browser tab, find the line, then come back. overview-me puts the code next to the explanation: click a box in the flow, or the eye icon next to any `path:line`, and the code opens in a side panel. No tab switching. The Before and After flows have separate panels, so you can keep both open. In a changed Before box, **Preview diff** shows what the branch changed.
+**The code is far from the explanation.** Ask Claude to explain a PR and you get paths to the code, not the code. To read each one, you open another browser tab, find the line, then come back. overview-me puts the code next to the explanation: click a box in the flow, or the eye icon next to any `path:line`, and the code opens in a side panel. No tab switching. The Before and After flows have separate panels, so you can keep both open. A box's files open as a folder tree beside the code, and in a changed Before box the code is a diff of what the branch changed.
 
 **A big PR doesn't fit in your head.** Halfway through, you forget where you came from and how the parts connect. The flow keeps the whole change on screen: how the code ran before, how it runs now, and which box the code you are reading belongs to.
 
