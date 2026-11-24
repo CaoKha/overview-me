@@ -20,7 +20,7 @@ if (palettes.size) {
   const picker = el('select', 'palette');
   picker.setAttribute('aria-label', 'Color palette');
   for (const name of ['', ...palettes]) {
-    const option = el('option', null, name ? name[0].toUpperCase() + name.slice(1) : 'Default');
+    const option = el('option', null, name ? name.replace(/(^|-)(.)/g, (_, dash, c) => (dash && ' ') + c.toUpperCase()) : 'Default');
     option.value = name;
     picker.append(option);
   }

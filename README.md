@@ -48,6 +48,8 @@ Ask in plain words, or run the command:
 
 In Claude Code the overview opens as a private Claude artifact; in pi and other agents it opens as an HTML file in your browser.
 
+The page follows your light or dark mode. A picker in its header switches the color palette: Catppuccin (Mocha, Macchiato, Frappé), Gruvbox, Rosé Pine (Main, Moon) and Solarized, each with a light variant. To add your own, see [palettes](DESIGN.md#palettes).
+
 The findings skill needs the `ocr` CLI. See [how to read findings on the flow](docs/tutorial.md#6-read-findings-on-the-flow).
 
 ## Update

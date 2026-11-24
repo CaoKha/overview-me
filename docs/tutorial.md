@@ -104,7 +104,7 @@ A codebase overview draws the whole repo as modules and how they call each other
 
 ## 9. Light, dark and phone
 
-The page follows your system light or dark mode. The picker in the header switches the color palette (Default or Catppuccin, plus any you add with `--theme`); the page remembers your choice. On a phone, the sections bar sits at the top and panels open as a bottom sheet you can drag taller or shorter. Only one sheet shows at a time; opening either side closes the other.
+The page follows your system light or dark mode. The picker in the header switches the color palette (Default, Catppuccin, Catppuccin Macchiato, Catppuccin Frappe, Gruvbox, Rose Pine, Rose Pine Moon or Solarized, plus any you add with `--theme`; see [DESIGN.md](../DESIGN.md#palettes) to write one); the page remembers your choice. On a phone, the sections bar sits at the top and panels open as a bottom sheet you can drag taller or shorter. Only one sheet shows at a time; opening either side closes the other.
 
 | Light | Phone |
 | --- | --- |

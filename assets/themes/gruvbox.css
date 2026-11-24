@@ -1,0 +1,18 @@
+/* Gruvbox palette, light and dark. https://github.com/morhetz/gruvbox */
+:root[data-palette="gruvbox"] {
+  --bg: light-dark(#F2E5BC, #1D2021); --card: light-dark(#FBF1C7, #282828);
+  --popover: light-dark(#EBDBB2, #3C3836); --border: light-dark(#D5C4A1, #504945);
+  --fg: light-dark(#3C3836, #EBDBB2); --accent: light-dark(#7C6F64, #A89984);
+  --muted: light-dark(#928374, #928374); --edge: light-dark(#A89984, #7C6F64);
+  --hl: light-dark(#8F3F71, #D3869B); --on-hl: light-dark(#FBF1C7, #282828);
+  --ok: light-dark(#79740E, #B8BB26);
+  --ok-bg: light-dark(color-mix(in srgb, #79740E 15%, #FBF1C7), color-mix(in srgb, #B8BB26 15%, #282828));
+  --warn: light-dark(#B57614, #FABD2F);
+  --warn-bg: light-dark(color-mix(in srgb, #B57614 15%, #FBF1C7), color-mix(in srgb, #FABD2F 15%, #282828));
+  --bad: light-dark(#9D0006, #FB4934);
+  --bad-bg: light-dark(color-mix(in srgb, #9D0006 15%, #FBF1C7), color-mix(in srgb, #FB4934 15%, #282828));
+  --id: light-dark(#AF3A03, #FE8019);
+  --id-bg: light-dark(color-mix(in srgb, #AF3A03 15%, #FBF1C7), color-mix(in srgb, #FE8019 15%, #282828));
+  --link: light-dark(#076678, #83A598);
+  --secondary: light-dark(#D5C4A1, #504945);
+}

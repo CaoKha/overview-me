@@ -1,0 +1,37 @@
+/* Rosé Pine palettes: Dawn in light mode; Main or Moon in dark mode. https://rosepinetheme.com/palette
+   Colors map as in its terminal themes (pine green, foam blue, rose cyan). Dawn --hl is pine:
+   iris is under 4.5:1 with --on-hl. */
+:root[data-palette="rose-pine"] {
+  --bg: light-dark(#FAF4ED, #191724); --card: light-dark(#FFFAF3, #1F1D2E);
+  --popover: light-dark(#F2E9E1, #26233A); --border: light-dark(#DFDAD9, #403D52);
+  --fg: light-dark(#575279, #E0DEF4); --accent: light-dark(#797593, #908CAA);
+  --muted: light-dark(#9893A5, #6E6A86); --edge: light-dark(#9893A5, #524F67);
+  --hl: light-dark(#286983, #C4A7E7); --on-hl: light-dark(#FAF4ED, #191724);
+  --ok: light-dark(#286983, #31748F);
+  --ok-bg: light-dark(color-mix(in srgb, #286983 15%, #FFFAF3), color-mix(in srgb, #31748F 15%, #1F1D2E));
+  --warn: light-dark(#EA9D34, #F6C177);
+  --warn-bg: light-dark(color-mix(in srgb, #EA9D34 15%, #FFFAF3), color-mix(in srgb, #F6C177 15%, #1F1D2E));
+  --bad: light-dark(#B4637A, #EB6F92);
+  --bad-bg: light-dark(color-mix(in srgb, #B4637A 15%, #FFFAF3), color-mix(in srgb, #EB6F92 15%, #1F1D2E));
+  --id: light-dark(#D7827E, #EBBCBA);
+  --id-bg: light-dark(color-mix(in srgb, #D7827E 15%, #FFFAF3), color-mix(in srgb, #EBBCBA 15%, #1F1D2E));
+  --link: light-dark(#56949F, #9CCFD8);
+  --secondary: light-dark(#DFDAD9, #403D52);
+}
+:root[data-palette="rose-pine-moon"] {
+  --bg: light-dark(#FAF4ED, #232136); --card: light-dark(#FFFAF3, #2A273F);
+  --popover: light-dark(#F2E9E1, #393552); --border: light-dark(#DFDAD9, #44415A);
+  --fg: light-dark(#575279, #E0DEF4); --accent: light-dark(#797593, #908CAA);
+  --muted: light-dark(#9893A5, #6E6A86); --edge: light-dark(#9893A5, #56526E);
+  --hl: light-dark(#286983, #C4A7E7); --on-hl: light-dark(#FAF4ED, #232136);
+  --ok: light-dark(#286983, #3E8FB0);
+  --ok-bg: light-dark(color-mix(in srgb, #286983 15%, #FFFAF3), color-mix(in srgb, #3E8FB0 15%, #2A273F));
+  --warn: light-dark(#EA9D34, #F6C177);
+  --warn-bg: light-dark(color-mix(in srgb, #EA9D34 15%, #FFFAF3), color-mix(in srgb, #F6C177 15%, #2A273F));
+  --bad: light-dark(#B4637A, #EB6F92);
+  --bad-bg: light-dark(color-mix(in srgb, #B4637A 15%, #FFFAF3), color-mix(in srgb, #EB6F92 15%, #2A273F));
+  --id: light-dark(#D7827E, #EA9A97);
+  --id-bg: light-dark(color-mix(in srgb, #D7827E 15%, #FFFAF3), color-mix(in srgb, #EA9A97 15%, #2A273F));
+  --link: light-dark(#56949F, #9CCFD8);
+  --secondary: light-dark(#DFDAD9, #44415A);
+}
