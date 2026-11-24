@@ -1,8 +1,14 @@
-// Code previews: find the embedded lines for a path:line, highlight them, show them in the panel.
+// Code previews: find the embedded lines for a path or path:line, highlight them, show them in the panel.
 function codePreview(text, at) {
   const m = text.match(PATH_RE);
-  if (!m || !m[2]) return null;
+  if (!m) return null;
   const key = `${at}:${m[1]}`;
+  // A file without lines previews its first embedded window, with no line cited.
+  if (!m[2]) {
+    const file = codeFiles[key]?.[0];
+    return file ? { key: `${key}:${file.start}`, file, from: file.start, to: file.start + file.lines.length - 1,
+      path: m[1], whole: !!file.whole, bare: true } : null;
+  }
   const from = Number(m[2]), to = Number(m[3] || m[2]);
   const file = codeFiles[key]?.find((window) => from >= window.start && to >= from && to < window.start + window.lines.length);
   return file ? { key: `${key}:${file.start}`, file, from, to, path: m[1], whole: !!file.whole } : null;
@@ -48,7 +54,7 @@ function codePre(...previews) {
   for (const n of [...rows.keys()].sort((a, b) => a - b)) {
     if (last !== null && n > last + 1) pre.append(codeGap(n - last - 1));
     const [preview, i] = rows.get(n);
-    pre.append(codeLine(preview, i, highlightedLines(preview), previews.some((p) => n >= p.from && n <= p.to) ? ' cited' : ''));
+    pre.append(codeLine(preview, i, highlightedLines(preview), previews.some((p) => !p.bare && n >= p.from && n <= p.to) ? ' cited' : ''));
     last = n;
   }
   return pre;
@@ -103,7 +109,7 @@ function codeDiffPre(pairs) {
       const index = (whole ? 0 : preview.from - preview.file.start) + i;
       const n = preview.file.start + index;
       pre.append(codeLine(preview, index, highlighted[added ? 1 : 0],
-        `${kind ? ` ${kind}` : ''}${!added && bases.some((p) => n >= p.from && n <= p.to) ? ' cited' : ''}`, kind ? added ? '+' : '−' : ''));
+        `${kind ? ` ${kind}` : ''}${!added && bases.some((p) => !p.bare && n >= p.from && n <= p.to) ? ' cited' : ''}`, kind ? added ? '+' : '−' : ''));
     }
   });
   return pre;
