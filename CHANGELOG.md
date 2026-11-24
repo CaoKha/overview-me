@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/CaoKha/overview-me/compare/v0.19.0...v0.20.0) (2026-11-24)
+
+
+### Features
+
+* **page:** show a box's files as a folder tree beside the code ([#85](https://github.com/CaoKha/overview-me/issues/85)) ([4c64949](https://github.com/CaoKha/overview-me/commit/4c64949425421c986b8f3dca61f9f209d02974dc))
+
 ## [0.19.0](https://github.com/CaoKha/overview-me/compare/v0.18.0...v0.19.0) (2026-11-23)
 
 
