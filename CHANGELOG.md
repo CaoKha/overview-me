@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.1](https://github.com/CaoKha/overview-me/compare/v0.26.0...v0.26.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **page:** preview arrow references and box files without lines ([#100](https://github.com/CaoKha/overview-me/issues/100)) ([ace736f](https://github.com/CaoKha/overview-me/commit/ace736fc5b661ee6c9671b55dee5778ba347e2cb))
+
 ## [0.26.0](https://github.com/CaoKha/overview-me/compare/v0.25.0...v0.26.0) (2026-11-24)
 
 
