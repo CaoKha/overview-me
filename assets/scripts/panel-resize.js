@@ -161,3 +161,58 @@ function panelResize(panel) {
   window.addEventListener('resize', () => { place(); updateAria(); });
   return grips;
 }
+// The bar between a box's folder tree and its code: drag it or use the arrow keys to set the tree's
+// width, double-click for the default. Both panels share the remembered width.
+const treeWidthKey = 'overview-me:tree-width';
+try {
+  const width = Number(localStorage.getItem(treeWidthKey));
+  if (Number.isFinite(width) && width >= 120) document.documentElement.style.setProperty('--tree-width', `${width}px`);
+} catch {}
+function treeResize(split) {
+  const min = 120;
+  const grip = el('div', 'tree-resize');
+  grip.tabIndex = 0;
+  grip.setAttribute('role', 'separator');
+  grip.setAttribute('aria-orientation', 'vertical');
+  grip.setAttribute('aria-label', 'Resize folder tree');
+  grip.setAttribute('aria-valuemin', min);
+  const tree = () => split.querySelector('.file-tree');
+  // The code keeps at least 240px beside the 12px bar, as `.file-split` clamps it in panel.css.
+  const max = () => Math.max(min, split.clientWidth - 252);
+  const report = () => {
+    grip.setAttribute('aria-valuemax', max());
+    grip.setAttribute('aria-valuenow', Math.round(tree().getBoundingClientRect().width));
+  };
+  grip.addEventListener('focus', report);
+  const setWidth = (width) => {
+    const style = document.documentElement.style;
+    if (width === null) style.removeProperty('--tree-width');
+    else style.setProperty('--tree-width', `${Math.round(Math.min(Math.max(min, width), max()))}px`);
+    report();
+    try {
+      if (width === null) localStorage.removeItem(treeWidthKey);
+      else localStorage.setItem(treeWidthKey, String(Math.round(tree().getBoundingClientRect().width)));
+    } catch {}
+  };
+  let drag = null;
+  grip.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    grip.focus({ preventScroll: true });
+    grip.setPointerCapture(ev.pointerId);
+    drag = { id: ev.pointerId, x: ev.clientX, width: tree().getBoundingClientRect().width };
+  });
+  grip.addEventListener('pointermove', (ev) => {
+    if (drag?.id === ev.pointerId) setWidth(drag.width + ev.clientX - drag.x);
+  });
+  grip.addEventListener('lostpointercapture', () => { drag = null; });
+  grip.addEventListener('keydown', (ev) => {
+    const step = { ArrowLeft: -16, ArrowRight: 16 }[ev.key];
+    if (!step) return;
+    ev.preventDefault();
+    setWidth(tree().getBoundingClientRect().width + step);
+  });
+  grip.addEventListener('dblclick', () => setWidth(null));
+  return grip;
+}

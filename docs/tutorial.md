@@ -38,14 +38,14 @@ Click a box to open its panel. The Before flow opens a panel on the left; the Af
 
 The panel shows the box's note, then its files: a folder tree on the left and the selected file's code on the right, like a pull request's file list. Each file appears once in the tree, with the number of ranges the box cites in it. The first file opens with the panel; click another file to show it. A box with one file shows only the code.
 
-The code shows every cited range of the file in one view, scrolled to the cited lines, which are highlighted. A `⋯ N lines not embedded ⋯` row stands for the lines between two ranges. In a removed box the cited lines are red with a `−`; in an added box they are green with a `+`. Resize the panel to see more code. Above the code:
+The code shows every cited range of the file in one view, scrolled to the cited lines, which are highlighted. A `⋯ N lines not embedded ⋯` row stands for the lines between two ranges. In a removed box the cited lines are red with a `−`; in an added box they are green with a `+`. The ranges beside the path are links: click one to scroll the code to its first line. Resize the panel to see more code. Drag the bar between the tree and the code to make the tree wider or narrower, or focus the bar and use the arrow keys. Double-click the bar to go back to the default width. The page remembers the width for every box. Above the code:
 
-- The copy icon puts the file's path on your clipboard, ready for your editor's file search. **Copy all** under the files copies every `path:line`.
+- The copy icon puts the file's path on your clipboard, ready for your editor's file search.
 - The arrow icon opens the file's first range on GitHub at the commit the page describes.
 
 In a Before box changed by the branch, the code is a unified diff of the base code against the head code. Removed lines are red, with a `−` and the base line number. Added lines are green, with a `+` and the head line number. If the page holds both whole files, the diff covers the whole file and scrolls to the cited lines. Otherwise it compares only the cited lines. If the head code is missing or the diff is too large, the panel shows plain base code.
 
-Under the files, **Arrows come from these references** lists each arrow of the box with the files and lines of the imports or calls behind it. Click a line number to show that line in the code view.
+Under the files, **Arrows come from these references** lists each arrow of the box with the files and lines of the imports or calls behind it. Click a line number to open that line's code under the reference, without leaving the file above; click it again to close it.
 
 ![PR #85 in dark mode with both panels open: the diff of codeDiffPre in the Before panel, and the folder tree with panel.css in the After panel](images/before-after-panels.png)
 

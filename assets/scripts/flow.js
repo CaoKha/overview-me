@@ -231,7 +231,8 @@ function drawFlow(arch, spec) {
         const bar = el('div', 'file-bar');
         bar.append(el('code', null, f));
         const ranges = own.map((p) => p.slice(f.length + 1)).filter(Boolean);
-        if (ranges.length) bar.append(el('span', 'ranges', ranges.join(', ')));
+        const rangeList = el('span', 'ranges');
+        if (ranges.length) bar.append(rangeList);
         const b = iconButton(COPY, 'Copy path');
         b.addEventListener('click', () => copy(f, b, CHECK));
         bar.append(b);
@@ -247,6 +248,20 @@ function drawFlow(arch, spec) {
             row.querySelector('.line-number').append(` ${kind === 'added' ? '+' : '−'}`);
           }
         }
+        // Each range scrolls the code to its first line. In a diff, base lines win over added head lines.
+        const rows = [...code.querySelectorAll('.code-line')];
+        const number = (row) => row.querySelector('.line-number')?.textContent.split(' ')[0];
+        ranges.forEach((range, i) => {
+          if (i) rangeList.append(', ');
+          const from = range.split('-')[0];
+          const row = rows.find((r) => !r.classList.contains('added') && number(r) === from) || rows.find((r) => number(r) === from);
+          if (!row) return rangeList.append(range);
+          const b = el('button', 'site', range);
+          b.type = 'button';
+          b.setAttribute('aria-label', `Scroll to line ${from}`);
+          b.addEventListener('click', () => scrollCode(code, row));
+          rangeList.append(b);
+        });
         pane.replaceChildren(bar, code);
         if (code.isConnected) scrollCode(code);
       };
@@ -302,18 +317,11 @@ function drawFlow(arch, spec) {
         tree.setAttribute('aria-label', 'Files');
         tree.append(branch(root));
         const split = el('div', 'file-split');
-        split.append(tree, pane);
+        split.append(tree, treeResize(split), pane);
         body.append(split);
         buttons[0].setAttribute('aria-current', 'true');
       }
       show(files.keys().next().value);
-      if (paths.length > 1) {
-        const all = el('button', 'btn', 'Copy all');
-        all.type = 'button';
-        all.style.alignSelf = 'flex-start';
-        all.addEventListener('click', () => copy(paths.join('\n'), all));
-        body.append(all);
-      }
     }
     // The references behind this box's arrows, for readers who cannot hover.
     const linked = edges.filter((e) => (e[0] === k || e[1] === k) && sites(e).length);
@@ -337,23 +345,24 @@ function drawFlow(arch, spec) {
             const site = `${path}:${line}`;
             const preview = codePreview(site, at);
             if (!preview) return ranges.append(line);
-            // A line shows its call in the pane, so the reader can check the arrow.
+            // A line opens its call under the reference, so the reader can check the arrow without
+            // losing the file above. Clicking it again closes it; another line of the row replaces it.
             const b = el('button', 'site', line);
             b.type = 'button';
             b.setAttribute('aria-label', `Show ${site}`);
+            b.setAttribute('aria-expanded', 'false');
             b.addEventListener('click', () => {
-              for (const other of buttons) other.removeAttribute('aria-current');
-              const bar = el('div', 'file-bar');
-              bar.append(el('code', null, site));
-              const c = iconButton(COPY, 'Copy path');
-              c.addEventListener('click', () => copy(site, c, CHECK));
-              bar.append(c);
-              const href = forgeHref(site, arch);
-              if (href) bar.append(openLink(href));
+              const open = li.querySelector(':scope > pre.code');
+              const same = open?.dataset.site === site;
+              open?.remove();
+              for (const other of li.querySelectorAll('.site')) other.setAttribute('aria-expanded', 'false');
+              if (same) return;
               const code = codePre(preview);
-              pane.replaceChildren(bar, code);
-              if (!pane.isConnected) body.append(pane);
+              code.dataset.site = site;
+              li.append(code);
+              b.setAttribute('aria-expanded', 'true');
               scrollCode(code);
+              code.scrollIntoView({ block: 'nearest' });
             });
             ranges.append(b);
           });
