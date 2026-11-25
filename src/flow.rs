@@ -424,13 +424,16 @@ fn side(
 ) -> Result<Graph> {
     // Names to search: what the boxes are called by, and what they call.
     let mut names: BTreeSet<String> = BTreeSet::new();
+    let mut local_names = HashMap::new();
     for (_, code) in boxes {
         for (_, d) in &code.decls {
             names.insert(d.ident.clone());
         }
         for (file, a, b) in &code.spans {
             let Some(p) = files.get(file) else { continue };
-            let local: HashSet<&str> = p.symbols.iter().map(|s| s.ident.as_str()).collect();
+            let local = local_names.entry(file.as_str()).or_insert_with(|| {
+                p.symbols.iter().map(|s| s.ident.as_str()).collect::<HashSet<_>>()
+            });
             for i in &p.identifiers {
                 if (a..=b).contains(&&i.line)
                     && (p.imports.contains(&i.name) || local.contains(i.name.as_str()))
