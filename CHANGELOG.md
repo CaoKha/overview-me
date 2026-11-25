@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.1](https://github.com/CaoKha/overview-me/compare/v0.28.0...v0.28.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **page:** keep the scroll position when a node id's panel closes ([#106](https://github.com/CaoKha/overview-me/issues/106)) ([b8ebbb3](https://github.com/CaoKha/overview-me/commit/b8ebbb30af0ee59b6eaa8e401720f97f03d0f099))
+
 ## [0.28.0](https://github.com/CaoKha/overview-me/compare/v0.27.0...v0.28.0) (2026-11-25)
 
 
