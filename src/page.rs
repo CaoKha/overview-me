@@ -330,19 +330,22 @@ fn script_json(s: String) -> String {
 
 // Count the actual escaped JSON bytes, including keys, separators and outer braces.
 fn budget_previews(snippets: Value, budget: usize) -> Value {
-    let mut entries: Vec<_> = snippets.as_object().expect("preview map").iter().collect();
-    entries.sort_unstable_by_key(|(key, _)| *key);
+    let Value::Object(snippets) = snippets else {
+        panic!("preview map");
+    };
+    let mut entries: Vec<_> = snippets.into_iter().collect();
+    entries.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
     let mut kept = serde_json::Map::new();
     let mut used = 2;
     for (key, value) in entries {
         let bytes = script_json(
-            serde_json::to_string(key).expect("preview key") + ":" + &value.to_string(),
+            serde_json::to_string(&key).expect("preview key") + ":" + &value.to_string(),
         )
         .len()
             + usize::from(!kept.is_empty());
         if used + bytes <= budget {
             used += bytes;
-            kept.insert(key.clone(), value.clone());
+            kept.insert(key, value);
         }
     }
     Value::Object(kept)
