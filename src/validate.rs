@@ -41,7 +41,7 @@ pub fn run(git: &Git, rules: &Rules, path: &Path) -> Result<bool> {
     let read_spec = |p: &Path| std::fs::read_to_string(p).ok();
     let read_head = |file: &str| git.show(&map.head, file);
     // Inline Rust test modules live in ordinary .rs files.
-    let is_test_file = |file: &str| rules.is_test(file) || file.ends_with(".rs");
+    let is_test_file = |file: &str| rules.is_test(file) || symbols::holds_inline_tests(file);
     let problems = check(
         &map,
         &changes,
@@ -371,6 +371,11 @@ pub fn check(
             ));
         }
     }
+    let mut check_owners = |subject: std::fmt::Arguments<'_>, owners: &[&str]| match owners {
+        [] => problems.push(format!("not covered: {subject} belongs to no node")),
+        [_] => {}
+        many => problems.push(format!("covered twice: {subject} is in {}", many.join(", "))),
+    };
     for r in &changes.renames {
         let owners: Vec<&str> = map
             .nodes
@@ -378,19 +383,7 @@ pub fn check(
             .filter(|n| n.renames.contains(r))
             .map(|n| n.id.as_str())
             .collect();
-        match owners.as_slice() {
-            [] => problems.push(format!(
-                "not covered: move {} -> {} belongs to no node",
-                r.from, r.to
-            )),
-            [_] => {}
-            many => problems.push(format!(
-                "covered twice: move {} -> {} is in {}",
-                r.from,
-                r.to,
-                many.join(", ")
-            )),
-        }
+        check_owners(format_args!("move {} -> {}", r.from, r.to), &owners);
     }
     for file in &changes.deleted {
         let owners: Vec<&str> = map
@@ -399,16 +392,7 @@ pub fn check(
             .filter(|n| n.deletions.iter().any(|d| &d.file == file))
             .map(|n| n.id.as_str())
             .collect();
-        match owners.as_slice() {
-            [] => problems.push(format!(
-                "not covered: deleted file {file} belongs to no node"
-            )),
-            [_] => {}
-            many => problems.push(format!(
-                "covered twice: deleted file {file} is in {}",
-                many.join(", ")
-            )),
-        }
+        check_owners(format_args!("deleted file {file}"), &owners);
     }
 
     for id in map.tour.iter().filter(|id| !node_ids.contains(id.as_str())) {

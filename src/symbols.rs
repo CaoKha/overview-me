@@ -177,6 +177,11 @@ impl Lang {
     }
 }
 
+/// Whether an ordinary source file can hold inline test modules.
+pub(crate) fn holds_inline_tests(path: &str) -> bool {
+    Lang::of(path) == Some(Lang::Rust)
+}
+
 /// Whether `path` is in a language this tool can parse.
 pub fn is_code(path: &str) -> bool {
     Lang::of(path).is_some()
