@@ -64,7 +64,7 @@ function showPanel({ before = false, label, title, path, href, tree, wrap, live,
       const on = document.documentElement.classList.toggle('code-wrap');
       document.querySelectorAll('.detail .wrap-toggle').forEach((b) => b.setAttribute('aria-pressed', String(on)));
       try { localStorage.setItem(codeWrapKey, on ? '1' : '0'); } catch {}
-      document.querySelectorAll('.detail pre.code').forEach(scrollCode);
+      document.querySelectorAll('.detail pre.code').forEach((pre) => scrollCode(pre));
     });
     tools.append(b);
   }
