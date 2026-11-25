@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/CaoKha/overview-me/compare/v0.27.0...v0.28.0) (2026-11-25)
+
+
+### Features
+
+* **page:** open a box's files from its node id, rename Read first to Read order ([#104](https://github.com/CaoKha/overview-me/issues/104)) ([7556c5f](https://github.com/CaoKha/overview-me/commit/7556c5f86fa19d15ea2803a95205df49efd863bb))
+
 ## [0.27.0](https://github.com/CaoKha/overview-me/compare/v0.26.1...v0.27.0) (2026-11-24)
 
 
