@@ -63,6 +63,10 @@ const SCRIPT: &str = concat!(
 const NODE_KINDS: [&str; 4] = ["existing", "added", "removed", "store"];
 const EDGE_STYLES: [&str; 3] = ["dashed", "added", "removed"];
 
+pub(crate) fn header_sha(text: &str) -> Option<&str> {
+    text.split_whitespace().skip_while(|w| *w != "sha").nth(1)
+}
+
 /// Writes the page for `md` to `out` (default: `md` with an `.html` extension) and returns it.
 /// With `unpushed`, the head is not on the remote, so only references under Before (at the
 /// map's base) link to the forge.
@@ -108,9 +112,7 @@ pub fn run(
     });
     // A codebase overview names its commit in the header: "sha <40 hex>".
     let cited_at = sha.map(str::to_owned).or_else(|| {
-        text.split_whitespace()
-            .skip_while(|w| *w != "sha")
-            .nth(1)
+        header_sha(&text)
             .filter(|s| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit()))
             .map(str::to_owned)
     });
@@ -322,6 +324,10 @@ fn preview_windows(text: &str, ranges: &[(usize, usize)], hl: Option<&[Value]>) 
     }).collect())
 }
 
+fn script_json(s: String) -> String {
+    s.replace('<', "\\u003c")
+}
+
 // Count the actual escaped JSON bytes, including keys, separators and outer braces.
 fn budget_previews(snippets: Value, budget: usize) -> Value {
     let mut entries: Vec<_> = snippets.as_object().expect("preview map").iter().collect();
@@ -329,9 +335,10 @@ fn budget_previews(snippets: Value, budget: usize) -> Value {
     let mut kept = serde_json::Map::new();
     let mut used = 2;
     for (key, value) in entries {
-        let bytes = (serde_json::to_string(key).expect("preview key") + ":" + &value.to_string())
-            .replace('<', "\\u003c")
-            .len()
+        let bytes = script_json(
+            serde_json::to_string(key).expect("preview key") + ":" + &value.to_string(),
+        )
+        .len()
             + usize::from(!kept.is_empty());
         if used + bytes <= budget {
             used += bytes;
@@ -411,9 +418,9 @@ pub fn render(
         ("STYLE", format!("{STYLE}{themes}")),
         ("SCRIPT", SCRIPT.to_string()),
         ("MD", guard(md)),
-        ("CONFIG", config.replace('<', "\\u003c")),
-        ("CODE", snippets.to_string().replace('<', "\\u003c")),
-        ("FINDINGS", findings.to_string().replace('<', "\\u003c")),
+        ("CONFIG", script_json(config)),
+        ("CODE", script_json(snippets.to_string())),
+        ("FINDINGS", script_json(findings.to_string())),
     ];
     // One pass over the template, so placeholder-like text inside the values is left alone.
     let mut out = String::with_capacity(TEMPLATE.len() + STYLE.len() + SCRIPT.len() + md.len());

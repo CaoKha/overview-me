@@ -641,11 +641,7 @@ fn context(store: &Path) -> String {
     let codebase = store.join("codebase.md");
     match std::fs::read_to_string(&codebase) {
         Ok(text) => {
-            let sha = text
-                .split_whitespace()
-                .skip_while(|w| *w != "sha")
-                .nth(1)
-                .map_or("?", |s| &s[..s.len().min(10)]);
+            let sha = crate::page::header_sha(&text).map_or("?", |s| &s[..s.len().min(10)]);
             format!("codebase overview: {} (at {sha})", codebase.display())
         }
         Err(_) => "codebase overview: none (suggest /codebase-overview at hand-off)".into(),
