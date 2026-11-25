@@ -129,19 +129,12 @@ enum Owner {
     Existing(String, Symbol),
 }
 
-/// Reads the map, writes `<store>/<head>.flow.json` (or `out`), prints a summary, and returns the path.
+/// Reads the map, writes `<store>/<head>.flow.json` (or `out`), prints a summary, and returns
+/// the path, the map and the flow file's content.
 ///
 /// # Errors
 /// When the map cannot be read or parsed, its shas are not commits, or git fails.
-pub fn run(git: &Git, rules: &Rules, map_path: &Path, out: Option<PathBuf>) -> Result<PathBuf> {
-    Ok(run_flow(git, rules, map_path, out)?.0)
-}
-
-/// [`run`], also returning the map and the flow file's content.
-///
-/// # Errors
-/// See [`run`].
-pub fn run_flow(
+pub fn run(
     git: &Git,
     rules: &Rules,
     map_path: &Path,
@@ -290,7 +283,8 @@ fn print_summary(out: &Path, flow: &FlowFile) {
     }
 }
 
-fn span_path(file: &str, a: usize, b: usize) -> String {
+/// `file:start-end`, or `file:line` when both ends are the same line.
+pub(crate) fn span_path(file: &str, a: usize, b: usize) -> String {
     if a == b {
         format!("{file}:{a}")
     } else {
@@ -2077,7 +2071,7 @@ mod tests {
         let out = repo.path().join("map.flow.json");
         let run = |map: &ChangeMap| {
             std::fs::write(&map_path, serde_json::to_string(map).expect("map")).expect("write");
-            run_flow(&git, &rules, &map_path, Some(out.clone())).expect("flow");
+            super::run(&git, &rules, &map_path, Some(out.clone())).expect("flow");
             serde_json::from_str::<Value>(&std::fs::read_to_string(&out).expect("read"))
                 .expect("json")
         };

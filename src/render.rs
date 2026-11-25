@@ -14,7 +14,7 @@ use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
 use crate::facts::{self, Changes, Unit};
-use crate::flow::{self, FlowFile};
+use crate::flow::{self, FlowFile, span_path};
 use crate::git::Git;
 use crate::map::{CalloutTag, ChangeMap, Node, Risk, Status};
 use crate::rules::Rules;
@@ -60,7 +60,7 @@ pub fn run(
     if !crate::validate::run(git, rules, map_path)? {
         bail!("the map has problems (listed above): fix them before rendering");
     }
-    let (_, map, flow) = flow::run_flow(git, rules, map_path, None)?;
+    let (_, map, flow) = flow::run(git, rules, map_path, None)?;
     let out = out.unwrap_or_else(|| map_path.with_file_name(format!("{}.review.md", map.head)));
     let section = if findings {
         let (_, file) = crate::findings::load(map_path, &map.head)?;
@@ -210,6 +210,10 @@ fn escape_outside_code(s: &str) -> String {
     out
 }
 
+fn plural(n: usize, word: &str) -> String {
+    format!("{n} {word}{}", if n == 1 { "" } else { "s" })
+}
+
 /// The Findings section: a summary line, the findings on stops, those outside the change, and
 /// how many were rejected.
 pub fn findings_section(map: &ChangeMap, file: &crate::findings::FindingsFile) -> String {
@@ -225,7 +229,6 @@ pub fn findings_section(map: &ChangeMap, file: &crate::findings::FindingsFile) -
         .iter()
         .filter(|f| matches!(f.severity, Severity::Critical | Severity::High))
         .count();
-    let plural = |n: usize, word: &str| format!("{n} {word}{}", if n == 1 { "" } else { "s" });
     let _ = writeln!(
         w,
         "{} at {} · {} · {severe} critical or high · {} on {} · {} outside this change · {} rejected\n",
@@ -285,20 +288,11 @@ pub fn findings_section(map: &ChangeMap, file: &crate::findings::FindingsFile) -
     md
 }
 
-/// `file:start-end`, or `file:line` when both ends are the same line.
-fn site(file: &str, start: u32, end: u32) -> String {
-    if start == end {
-        format!("{file}:{start}")
-    } else {
-        format!("{file}:{start}-{end}")
-    }
-}
-
 /// The node's main place: its main site, or the file it deletes or moves.
 fn main_place(n: &Node) -> String {
     n.sites
         .first()
-        .map(|s| site(&s.file, s.start, s.end))
+        .map(|s| span_path(&s.file, s.start as usize, s.end as usize))
         .or_else(|| n.deletions.first().map(|d| d.file.clone()))
         .or_else(|| n.renames.first().map(|r| r.to.clone()))
         .unwrap_or_default()
@@ -496,38 +490,41 @@ pub fn page(map: &ChangeMap, flow: &FlowFile, changes: &Changes, kind: &Kind<'_>
     if flow.callers.is_empty() && flow.depends_on.is_empty() {
         let _ = writeln!(w, "None.");
     }
-    if !flow.callers.is_empty() {
-        let _ = writeln!(w, "### Affected by the change");
-        let _ = writeln!(w, "| Code | Calls | What changes for it |");
-        let _ = writeln!(w, "| --- | --- | --- |");
-        for l in &flow.callers {
-            let _ = writeln!(
-                w,
-                "| `{}` `{}` | {} | {} |",
-                l.symbol.replace('|', "\\|"),
-                l.at,
-                l.nodes.join(", "),
-                slot("what is now different for it, or delete the row when nothing changes for it")
-            );
-        }
-    }
-    if !flow.depends_on.is_empty() {
-        if !flow.callers.is_empty() {
+    let tables = [
+        (
+            &flow.callers,
+            "Affected by the change",
+            "Calls",
+            "What changes for it",
+            "what is now different for it, or delete the row when nothing changes for it",
+        ),
+        (
+            &flow.depends_on,
+            "Used by the change",
+            "Used by",
+            "What for",
+            "what the change uses it for, or delete the row when the change does not use it",
+        ),
+    ];
+    for (index, (links, heading, column, third_column, hint)) in tables
+        .into_iter()
+        .filter(|(links, ..)| !links.is_empty())
+        .enumerate()
+    {
+        if index > 0 {
             let _ = writeln!(w);
         }
-        let _ = writeln!(w, "### Used by the change");
-        let _ = writeln!(w, "| Code | Used by | What for |");
+        let _ = writeln!(w, "### {heading}");
+        let _ = writeln!(w, "| Code | {column} | {third_column} |");
         let _ = writeln!(w, "| --- | --- | --- |");
-        for l in &flow.depends_on {
+        for l in links {
             let _ = writeln!(
                 w,
                 "| `{}` `{}` | {} | {} |",
                 l.symbol.replace('|', "\\|"),
                 l.at,
                 l.nodes.join(", "),
-                slot(
-                    "what the change uses it for, or delete the row when the change does not use it"
-                )
+                slot(hint)
             );
         }
     }
@@ -725,10 +722,9 @@ pub fn fact_questions(map: &ChangeMap, flow: &FlowFile, changes: &Changes) -> Ve
                 format!("{reason}: {}{more}", shown.join(", "))
             })
             .collect();
-        let n = changes.skipped.len();
         out.push(format!(
-            "Not covered: {n} skipped file{} ({}).",
-            if n == 1 { "" } else { "s" },
+            "Not covered: {} ({}).",
+            plural(changes.skipped.len(), "skipped file"),
             groups.join("; ")
         ));
     }
