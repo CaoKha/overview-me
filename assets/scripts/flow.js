@@ -437,7 +437,7 @@ for (const code of out.querySelectorAll('pre > code.language-flow')) {
   flow.append(scroll, legend(spec, before));
   pre.replaceWith(flow);
   // A raw HTML pre can itself mark Before. Its replacement only inherits the parent's side.
-  flows.push({ before, spec, locate: drawFlow(arch, spec, pre.matches('.panel.before') ? isBefore(arch) : before) });
+  flows.push({ before, spec, locate: drawFlow(arch, spec, isBefore(arch)) });
 }
 
 // Node id chips in the text open their box's files, as a click on the box does: the box in the
