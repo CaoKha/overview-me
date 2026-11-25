@@ -125,7 +125,7 @@ pub enum Status {
 }
 
 /// A group of changed code that reads as one stop: one symbol, or the same edit at several sites.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Node {
     #[schemars(pattern(r"^N[0-9]+$"))]
@@ -210,9 +210,10 @@ pub enum EdgeKind {
     Uses,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Risk {
+    #[default]
     Read,
     Skim,
 }

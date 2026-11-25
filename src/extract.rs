@@ -127,7 +127,6 @@ fn draft_nodes(units: &[Unit]) -> Vec<Draft<'_>> {
                 ),
             };
             let node = Node {
-                id: String::new(),
                 symbol,
                 lane: first.lane.clone(),
                 risk: if us.iter().any(|u| u.risk == Risk::Read) {
@@ -135,11 +134,6 @@ fn draft_nodes(units: &[Unit]) -> Vec<Draft<'_>> {
                 } else {
                     Risk::Skim
                 },
-                caption: String::new(),
-                criteria: Vec::new(),
-                touched_by_test: false,
-                deletions: Vec::new(),
-                renames: Vec::new(),
                 // Hunks inside one symbol share a site; top-level hunks are scattered across
                 // the file, so each keeps its own and no site spans a function between them.
                 sites: if first.span.is_some() {
@@ -157,6 +151,7 @@ fn draft_nodes(units: &[Unit]) -> Vec<Draft<'_>> {
                         })
                         .collect()
                 },
+                ..Node::default()
             };
             Draft { node, units: us }
         })
@@ -395,16 +390,9 @@ fn group_folders(
         let names: HashSet<String> = paths.map(|p| folder(p, options)).collect();
         for name in &names {
             let group = groups.entry(name.clone()).or_insert_with(|| Node {
-                id: String::new(),
                 symbol: name.clone(),
-                lane: String::new(),
                 risk: Risk::Skim,
-                caption: String::new(),
-                criteria: Vec::new(),
-                touched_by_test: false,
-                sites: Vec::new(),
-                deletions: Vec::new(),
-                renames: Vec::new(),
+                ..Node::default()
             });
             group.sites.extend(
                 node.sites
@@ -714,13 +702,8 @@ pub fn run(
             id: format!("N{}", nodes.len() + 1),
             symbol: format!("(deleted) {}", file.rsplit('/').next().unwrap_or(file)),
             lane: changes.lanes.lane(file),
-            risk: Risk::Read,
-            caption: String::new(),
-            criteria: Vec::new(),
-            touched_by_test: false,
-            sites: Vec::new(),
             deletions: vec![Deletion { file: file.clone() }],
-            renames: Vec::new(),
+            ..Node::default()
         });
     }
     // One draft node per listed move.
@@ -733,12 +716,8 @@ pub fn run(
             ),
             lane: changes.lanes.lane(&rename.to),
             risk: Risk::Skim,
-            caption: String::new(),
-            criteria: Vec::new(),
-            touched_by_test: false,
-            sites: Vec::new(),
-            deletions: Vec::new(),
             renames: vec![rename.clone()],
+            ..Node::default()
         });
     }
     let grouped = options.group_by == Some(GroupBy::Dir)

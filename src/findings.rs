@@ -664,7 +664,7 @@ fn print_summary(out: &Path, file: &FindingsFile) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Node, Risk, Site};
+    use crate::map::{Node, Site};
     use serde_json::json;
 
     const BASE: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -675,10 +675,7 @@ mod tests {
             id: id.into(),
             symbol: id.into(),
             lane: "core".into(),
-            risk: Risk::Read,
             caption: "c".into(),
-            criteria: vec![],
-            touched_by_test: false,
             sites: sites
                 .iter()
                 .map(|(f, s, e)| Site {
@@ -687,8 +684,7 @@ mod tests {
                     end: *e,
                 })
                 .collect(),
-            deletions: vec![],
-            renames: vec![],
+            ..Node::default()
         }
     }
 

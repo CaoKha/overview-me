@@ -626,7 +626,6 @@ mod tests {
             id: id.into(),
             symbol: id.into(),
             lane: "services".into(),
-            risk: Risk::Read,
             caption: "does a thing".into(),
             criteria: criteria.iter().map(|&c| c.into()).collect(),
             touched_by_test,
@@ -638,8 +637,7 @@ mod tests {
                     end,
                 })
                 .collect(),
-            deletions: Vec::new(),
-            renames: Vec::new(),
+            ..Node::default()
         }
     }
 

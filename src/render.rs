@@ -771,14 +771,12 @@ mod tests {
             risk,
             caption: "does it".into(),
             criteria: criteria.iter().map(|c| (*c).into()).collect(),
-            touched_by_test: false,
             sites: vec![Site {
                 file: file.into(),
                 start,
                 end: start + 2,
             }],
-            deletions: Vec::new(),
-            renames: Vec::new(),
+            ..Node::default()
         }
     }
 
