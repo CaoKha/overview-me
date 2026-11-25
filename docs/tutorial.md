@@ -90,7 +90,7 @@ The badges appear only on the After flow because findings refer to the head code
 The sections after the flow tell you what to trust and where to look:
 
 - **Claims and proof** lists each criterion with the code that implements it and the tests that prove it. A green badge means implemented and proved by a test. A yellow one means untested, or partial when part of the logic lives outside the diff. A red one means missing. Each untested criterion also shows up under Open questions.
-- **Read first** names the few places that hold the decisions. Everything else is listed under Skim.
+- **Read order** lists every stop in the order to read it: the few places that hold the decisions first, then the rest under Skim. Click an id to open its files, as a click on its box in the flow does.
 - **Watch out** tags what is easy to miss: red for Breaking and Security, yellow for Migration, Race and Perf, orange for Subtle.
 - **Open questions** lists what the code cannot answer, each with the `path:line` it is about.
 

@@ -1,5 +1,5 @@
-// Lists: numbered lists are steps, except Read first; Entry points, Watch out, Open questions and Gaps are cards.
-const listKind = { 'entry points': 'cards', 'watch out': 'cards', 'open questions': 'cards', gaps: 'cards', findings: 'cards', 'read first': 'read' };
+// Lists: numbered lists are steps, except Read order; Entry points, Watch out, Open questions and Gaps are cards.
+const listKind = { 'entry points': 'cards', 'watch out': 'cards', 'open questions': 'cards', gaps: 'cards', findings: 'cards', 'read order': 'read', 'read first': 'read' };
 for (const list of out.querySelectorAll('section ul, section ol')) {
   if (list.parentElement.closest('li')) continue;
   const kind = listKind[list.closest('section').dataset.name];
