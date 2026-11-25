@@ -32,8 +32,7 @@ function legend(spec, before) {
   return box;
 }
 
-function drawFlow(arch, spec) {
-  const before = !!arch.closest('.panel.before');
+function drawFlow(arch, spec, before) {
   const side = before ? 'before' : 'after';
   uid += 1;
   const id = uid;
@@ -207,7 +206,7 @@ function drawFlow(arch, spec) {
     const paths = Array.isArray(n.paths) ? n.paths : [];
     const pane = el('div', 'file-pane');
     pane.setAttribute('aria-live', 'off');
-    const at = cfg.base && before ? cfg.base : cfg.head || sha;
+    const at = previewRev(before);
     const status = changeStatus(before);
     let others = [];
     let many = false;
@@ -227,7 +226,7 @@ function drawFlow(arch, spec) {
         const same = headPaths.filter((q) => file(q) === f);
         // Same index only for a file missing at head, such as a rename.
         const headPath = same.length ? same[nth] : headPaths[i];
-        return [preview, headPath ? codePreview(headPath, cfg.head || sha) : null];
+        return [preview, headPath ? codePreview(headPath, previewRev(false)) : null];
       };
       const pairs = (f) => files.get(f).map(pair).filter(Boolean);
       previews = [...files.keys()].some((f) => pairs(f).length);
@@ -432,20 +431,21 @@ for (const code of out.querySelectorAll('pre > code.language-flow')) {
   const flow = el('div', 'flow');
   const scroll = el('div', 'arch-scroll');
   const arch = el('div', 'arch');
-  const before = !!pre.closest('.panel.before');
+  const before = isBefore(pre);
   scroll.append(arch);
   flow.append(scroll, legend(spec, before));
   pre.replaceWith(flow);
-  flows.push({ before, spec, locate: drawFlow(arch, spec) });
+  // A raw HTML pre can itself mark Before. Its replacement only inherits the parent's side.
+  flows.push({ before, spec, locate: drawFlow(arch, spec, pre.matches('.panel.before') ? isBefore(arch) : before) });
 }
 
 // Node id chips in the text open their box's files, as a click on the box does: the box in the
 // flow on the same side (Before or After), or the other side when only that one has it.
 const boxFor = (id, before) => [...out.querySelectorAll('.arch .box')]
-  .find((b) => !!b.closest('.panel.before') === before && b.querySelector('.n')?.textContent === id);
+  .find((b) => isBefore(b) === before && b.querySelector('.n')?.textContent === id);
 for (const chip of out.querySelectorAll('span.n')) {
   if (chip.closest('.arch')) continue;
-  const before = !!chip.closest('.panel.before');
+  const before = isBefore(chip);
   const box = boxFor(chip.textContent, before) || boxFor(chip.textContent, !before);
   if (!box) continue;
   const b = el('button', 'n', chip.textContent);
