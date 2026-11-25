@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::git::Git;
 use crate::map::{Rename, Risk, TestRef};
 use crate::rules::{Lanes, Rules};
-use crate::symbols::{self, Parsed, Symbol};
+use crate::symbols::{self, Parsed, Symbol, TestDecl};
 
 /// One changed hunk inside one enclosing symbol. Lines are head-side, 1-based, inclusive.
 /// A deletion-only hunk is anchored on the line before the removed lines.
@@ -40,6 +40,10 @@ impl Unit {
     pub fn contains(&self, line: u32) -> bool {
         self.start <= line && line <= self.end
     }
+
+    pub(crate) fn tested(&self, tested: &HashSet<String>) -> bool {
+        self.exported && self.ident.as_ref().is_some_and(|i| tested.contains(i))
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -70,6 +74,16 @@ pub struct Changes {
     pub renames: Vec<Rename>,
     pub files: Vec<ChangedFile>,
     pub lanes: Lanes,
+}
+
+impl Changes {
+    pub(crate) fn exported(&self) -> HashSet<&str> {
+        self.units
+            .iter()
+            .filter(|u| u.exported)
+            .filter_map(|u| u.ident.as_deref())
+            .collect()
+    }
 }
 
 struct FileDiff {
@@ -480,7 +494,7 @@ pub fn changes_in(
             f.hunks = vec![Hunk {
                 old_start: 0,
                 new_start: 1,
-                new_count: u32::try_from(lines.len()).unwrap_or(u32::MAX),
+                new_count: to_u32(lines.len()),
                 lines: lines.iter().map(|l| format!("+{l}")).collect(),
             }];
         }
@@ -571,8 +585,16 @@ fn generated_paths(git: &Git, paths: &[&str]) -> Result<HashSet<String>> {
         .collect())
 }
 
-fn to_u32(n: usize) -> u32 {
+pub(crate) fn to_u32(n: usize) -> u32 {
     u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+fn test_ref(file: &str, test: &TestDecl) -> TestRef {
+    TestRef {
+        file: file.to_owned(),
+        line: to_u32(test.line),
+        name: test.name.clone(),
+    }
 }
 
 /// Test declarations in `source` (the content of `file`).
@@ -582,14 +604,7 @@ fn to_u32(n: usize) -> u32 {
 pub fn declarations_in(source: &str, file: &str) -> Result<Vec<TestRef>> {
     let parsed = symbols::parse(file, source)?;
     Ok(parsed.map_or_else(Vec::new, |p| {
-        p.tests
-            .into_iter()
-            .map(|t| TestRef {
-                file: file.to_owned(),
-                line: u32::try_from(t.line).unwrap_or(u32::MAX),
-                name: t.name,
-            })
-            .collect()
+        p.tests.iter().map(|t| test_ref(file, t)).collect()
     }))
 }
 
@@ -607,11 +622,7 @@ pub fn test_declarations(git: &Git, head: &str, changes: &Changes) -> Result<Vec
     }
     for f in &changes.files {
         if let Some(p) = &f.parsed {
-            out.extend(p.tests.iter().map(|t| TestRef {
-                file: f.path.clone(),
-                line: u32::try_from(t.line).unwrap_or(u32::MAX),
-                name: t.name.clone(),
-            }));
+            out.extend(p.tests.iter().map(|t| test_ref(&f.path, t)));
         }
     }
     Ok(out)

@@ -36,12 +36,7 @@ pub fn run(git: &Git, rules: &Rules, path: &Path) -> Result<bool> {
         }
     }
     let changes = facts::changes_in(git, rules, &map.base, &map.head, map.path.as_deref())?;
-    let exported: HashSet<&str> = changes
-        .units
-        .iter()
-        .filter(|u| u.exported)
-        .filter_map(|u| u.ident.as_deref())
-        .collect();
+    let exported = changes.exported();
     let tested = facts::tested_names(git, &map.head, &changes.test_files, &exported)?;
     let read_spec = |p: &Path| std::fs::read_to_string(p).ok();
     let read_head = |file: &str| git.show(&map.head, file);
@@ -475,9 +470,7 @@ pub fn check(
         .iter()
         .map(|n| {
             let units = owned.get(n.id.as_str()).map_or(&[][..], Vec::as_slice);
-            let t = units
-                .iter()
-                .any(|u| u.exported && u.ident.as_ref().is_some_and(|i| tested.contains(i)));
+            let t = units.iter().any(|u| u.tested(tested));
             (n.id.as_str(), t)
         })
         .collect();

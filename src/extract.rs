@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::facts::{self, Changes, Skipped, Unit};
+use crate::facts::{self, Changes, Skipped, Unit, to_u32};
 use crate::git::Git;
 use crate::map::{
     ChangeMap, Deletion, Edge, EdgeKind, Grouping, MAX_AT, Node, Risk, Site, TestRef,
@@ -200,10 +200,7 @@ fn import_only(unit: &Unit, changes: &Changes) -> bool {
     let names: Vec<&str> = parsed
         .identifiers
         .iter()
-        .filter(|i| {
-            unit.added
-                .contains(&u32::try_from(i.line).unwrap_or(u32::MAX))
-        })
+        .filter(|i| unit.added.contains(&to_u32(i.line)))
         .map(|i| i.name.as_str())
         .collect();
     !names.is_empty() && names.iter().all(|n| parsed.imports.contains(*n))
@@ -333,8 +330,7 @@ fn call_edges(
                 if !scope.reaches(path, parsed, r, def_file, sym) {
                     continue;
                 }
-                let Some(caller) = enclosing(path, u32::try_from(r.line).unwrap_or(u32::MAX))
-                else {
+                let Some(caller) = enclosing(path, to_u32(r.line)) else {
                     continue;
                 };
                 let (from, to) = if let Some(options) = folders {
@@ -678,18 +674,10 @@ pub fn run(
         d.node.id = format!("N{}", i + 1);
     }
 
-    let exported: HashSet<&str> = changes
-        .units
-        .iter()
-        .filter(|u| u.exported)
-        .filter_map(|u| u.ident.as_deref())
-        .collect();
+    let exported = changes.exported();
     let tested = facts::tested_names(git, &head, &changes.test_files, &exported)?;
     for d in &mut drafts {
-        d.node.touched_by_test = d
-            .units
-            .iter()
-            .any(|u| u.exported && u.ident.as_ref().is_some_and(|i| tested.contains(i)));
+        d.node.touched_by_test = d.units.iter().any(|u| u.tested(&tested));
     }
 
     let spec = spec
@@ -755,7 +743,7 @@ pub fn run(
         changes
             .units
             .iter()
-            .filter(|u| u.exported && u.ident.as_ref().is_some_and(|i| tested.contains(i)))
+            .filter(|u| u.tested(&tested))
             .map(|u| folder(&u.file, options))
             .collect()
     } else {
