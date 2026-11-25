@@ -436,3 +436,25 @@ for (const code of out.querySelectorAll('pre > code.language-flow')) {
   pre.replaceWith(flow);
   flows.push({ before, spec, locate: drawFlow(arch, spec) });
 }
+
+// Node id chips in the text open their box's files, as a click on the box does: the box in the
+// flow on the same side (Before or After), or the other side when only that one has it.
+const boxFor = (id, before) => [...out.querySelectorAll('.arch .box')]
+  .find((b) => !!b.closest('.panel.before') === before && b.querySelector('.n')?.textContent === id);
+for (const chip of out.querySelectorAll('span.n')) {
+  if (chip.closest('.arch')) continue;
+  const before = !!chip.closest('.panel.before');
+  const box = boxFor(chip.textContent, before) || boxFor(chip.textContent, !before);
+  if (!box) continue;
+  const b = el('button', 'n', chip.textContent);
+  b.type = 'button';
+  b.setAttribute('aria-label', box.getAttribute('aria-label'));
+  // A second click on a box closes its panel; a chip only opens it. From the keyboard (detail 0),
+  // Enter on the box also moves focus into the panel.
+  b.addEventListener('click', (ev) => {
+    if (box.classList.contains('pinned')) return;
+    if (ev.detail) box.click();
+    else box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+  });
+  chip.replaceWith(b);
+}

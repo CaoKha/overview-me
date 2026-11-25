@@ -21,7 +21,7 @@ use crate::rules::Rules;
 
 /// Steps under Before: only the parts the change touches.
 const MAX_BEFORE_STEPS: usize = 4;
-/// Stops under Read first.
+/// Stops read in full under Read order.
 const MAX_READ_FIRST: usize = 5;
 /// Module pages explain a bounded set of steps; every group remains in the map.
 const MAX_MODULE_STEPS: usize = 20;
@@ -568,7 +568,7 @@ pub fn page(map: &ChangeMap, flow: &FlowFile, changes: &Changes, kind: &Kind<'_>
         let _ = writeln!(w);
     }
 
-    let _ = writeln!(w, "## Read first");
+    let _ = writeln!(w, "## Read order");
     let mut first: Vec<&Node> = map
         .tour
         .iter()
@@ -1148,7 +1148,7 @@ mod tests {
 | REF-1 charges the fee | ✓ implemented | N1 | 1 |
 | REF-2 gives a discount | ⚠ untested | N2 | 0 |
 
-## Read first
+## Read order
 1. N2 `src/services/d.ts:5-7`: <!-- fill: why this one first: the decision it holds -->
 2. N1 `src/api/h.ts:4-6`: <!-- fill: why this one first: the decision it holds -->
 

@@ -1,4 +1,4 @@
-/* Lists: plain bullets; numbered steps; cards for entry points, open questions and gaps; read-first cards. */
+/* Lists: plain bullets; numbered steps; cards for entry points, open questions and gaps; read-order cards. */
 ul, ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 li > ul, li > ol { margin-top: 6px; }
 ol.steps, ul.cards, ol.read { padding: 0; list-style: none; gap: 10px; }
