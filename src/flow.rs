@@ -591,10 +591,7 @@ fn dangling(
 /// When git fails.
 pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     let changes = facts::changes_in(git, rules, &map.base, &map.head, map.path.as_deref())?;
-    let merge_base = git
-        .run(&["merge-base", "--end-of-options", &map.base, &map.head])?
-        .trim()
-        .to_owned();
+    let merge_base = changes.merge_base.as_str();
     let old_of: HashMap<String, String> = changes
         .files
         .iter()
@@ -615,7 +612,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         "-r",
         "--name-only",
         "--end-of-options",
-        &merge_base,
+        merge_base,
         "--",
     ];
     args.extend(wanted.iter().map(String::as_str));
@@ -628,7 +625,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     for p in &wanted {
         if at_base.contains(p)
             && symbols::is_code(p)
-            && let Some(parsed) = parse_at(git, &merge_base, p)?
+            && let Some(parsed) = parse_at(git, merge_base, p)?
         {
             base_files.insert(p.clone(), parsed);
         }
@@ -862,7 +859,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
             .collect()
     };
     let head_scope = Scope::load(git, &map.head)?;
-    let base_scope = Scope::load(git, &merge_base)?;
+    let base_scope = Scope::load(git, merge_base)?;
     let mut head_graph = side(
         git,
         rules,
@@ -882,7 +879,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     let mut base_graph = side(
         git,
         rules,
-        &merge_base,
+        merge_base,
         &base_scope,
         &boxes_at(false),
         &mut base_files,

@@ -215,6 +215,13 @@ impl Git {
             .to_owned())
     }
 
+    pub(crate) fn merge_base(&self, a: &str, b: &str) -> Result<String> {
+        Ok(self
+            .run(&["merge-base", "--end-of-options", a, b])?
+            .trim()
+            .to_owned())
+    }
+
     /// The text of each of `paths` at `rev`, in one `git cat-file --batch`; `None` for a path
     /// that is missing or not a file.
     ///

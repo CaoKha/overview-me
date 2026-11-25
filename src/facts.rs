@@ -59,6 +59,7 @@ pub struct ChangedFile {
 
 #[derive(Debug, Default)]
 pub struct Changes {
+    pub(crate) merge_base: String,
     pub units: Vec<Unit>,
     pub test_files: Vec<String>,
     pub skipped: Vec<Skipped>,
@@ -403,10 +404,7 @@ pub fn changes_in(
         args.push(p);
     }
     let diff = git.run_bytes(&args)?;
-    let merge_base = git
-        .run(&["merge-base", "--end-of-options", base, head])?
-        .trim()
-        .to_owned();
+    let merge_base = git.merge_base(base, head)?;
     let files = parse_diff(&diff);
     // Files marked `-diff` in .gitattributes are generated: one check-attr for all of them.
     let paths: Vec<&str> = files
@@ -416,6 +414,7 @@ pub fn changes_in(
         .collect();
     let generated = generated_paths(git, &paths)?;
     let mut out = Changes {
+        merge_base,
         // Lanes are looked up by head path, so only head paths build them.
         lanes: Lanes::new(
             files
@@ -492,7 +491,7 @@ pub fn changes_in(
             .collect();
         // The base side is only needed to judge removed lines.
         let base_source = if all_pieces.iter().any(|p| !p.removed.is_empty()) {
-            git.show(&merge_base, &f.old_path).unwrap_or_default()
+            git.show(&out.merge_base, &f.old_path).unwrap_or_default()
         } else {
             String::new()
         };

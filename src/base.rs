@@ -111,10 +111,7 @@ pub fn resolve(git: &Git, pr: Option<&str>) -> Result<Change> {
         }
         None => (head_now.clone(), default_branch(git)?, None),
     };
-    let base = git
-        .run(&["merge-base", "--end-of-options", &against, &head])?
-        .trim()
-        .to_owned();
+    let base = git.merge_base(&against, &head)?;
     let mut mode = if number.is_some() { "pr" } else { "branch" };
     if head == head_now {
         let ahead = git.run(&["rev-list", "--count", &format!("{base}..{head}")])?;
