@@ -92,10 +92,7 @@ pub struct TestDecl {
 impl Parsed {
     /// The innermost symbol that contains `line`.
     pub fn symbol_at(&self, line: usize) -> Option<&Symbol> {
-        self.symbols
-            .iter()
-            .filter(|s| s.start <= line && line <= s.end)
-            .min_by_key(|s| s.end - s.start)
+        symbol_at(&self.symbols, line)
     }
 
     /// Whether a line (1-based) holds only comment text: every non-blank byte lies inside a
@@ -131,6 +128,16 @@ impl Parsed {
             .iter()
             .any(|&(a, b)| a <= line && line <= b)
     }
+}
+
+pub(crate) fn symbol_at<'a>(
+    symbols: impl IntoIterator<Item = &'a Symbol>,
+    line: usize,
+) -> Option<&'a Symbol> {
+    symbols
+        .into_iter()
+        .filter(|s| s.start <= line && line <= s.end)
+        .min_by_key(|s| s.end - s.start)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

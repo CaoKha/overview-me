@@ -272,7 +272,6 @@ struct Piece<'p> {
 /// Splits one hunk at symbol boundaries and drops lines inside inline test modules.
 /// Blank added lines stay with the code before them; context lines end a piece.
 fn pieces<'p>(hunk: &Hunk, parsed: Option<&'p Parsed>) -> Vec<Piece<'p>> {
-    let at = |line: u32| parsed.and_then(|p| p.symbol_at(line as usize));
     let in_tests = |line: u32| parsed.is_some_and(|p| p.in_tests(line as usize));
     let mut out: Vec<Piece<'p>> = Vec::new();
     let mut new_line = hunk.new_start;
@@ -282,6 +281,25 @@ fn pieces<'p>(hunk: &Hunk, parsed: Option<&'p Parsed>) -> Vec<Piece<'p>> {
         hunk.new_start
     } else {
         hunk.new_start.saturating_sub(1)
+    };
+    let first = above as usize;
+    let last = hunk
+        .new_start
+        .saturating_add(hunk.new_count.saturating_sub(1))
+        .max(1) as usize;
+    let candidates: Vec<&Symbol> = parsed
+        .into_iter()
+        .flat_map(|p| &p.symbols)
+        .filter(|s| s.start <= last && first <= s.end)
+        .collect();
+    let at = |line: u32| {
+        let line = line as usize;
+        if (first..=last).contains(&line) {
+            symbols::symbol_at(candidates.iter().copied(), line)
+        } else {
+            // Use the full lookup if the hunk body goes beyond its header's line count.
+            parsed.and_then(|p| p.symbol_at(line))
+        }
     };
     let mut dels: Vec<(u32, String)> = Vec::new();
     let mut open = false;
@@ -844,6 +862,18 @@ mod tests {
             (got[0].start, got[0].end, got[0].removed.clone()),
             (7, 7, vec![8])
         );
+    }
+
+    #[test]
+    fn leading_removal_can_belong_to_the_symbol_above_the_hunk() {
+        let src = "fn preceding() {}\nfn following() {}\n";
+        let parsed = symbols::parse("lib.rs", src).expect("parses");
+        let got = pieces(
+            &hunk(2, 2, 1, &["-gone", " fn following() {}"]),
+            parsed.as_ref(),
+        );
+        assert_eq!(got[0].start, 1);
+        assert_eq!(got[0].sym.map(|s| s.name.as_str()), Some("preceding"));
     }
 
     #[test]
