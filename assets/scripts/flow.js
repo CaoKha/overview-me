@@ -349,14 +349,16 @@ function drawFlow(arch, spec) {
     return close;
   }
   function unpinned() {
-    const back = panelHasFocus(side) ? boxes[pinned] : null;
-    boxes[pinned].classList.remove('pinned');
+    const box = boxes[pinned];
+    const back = panelHasFocus(side) ? box.opener || box : null;
+    box.opener = null;
+    box.classList.remove('pinned');
     pinned = null;
     clear();
-    back?.focus();
+    back?.focus({ preventScroll: true });
   }
   // The card sits at the end of body, so a keyboard pin moves focus into it and closing it from
-  // inside returns focus to the box.
+  // inside returns focus to what opened it (the box, or a node id chip in the text), where it is.
   function pin(k, fromKey) {
     const close = showDetail(k);
     pinned = k;
@@ -453,6 +455,7 @@ for (const chip of out.querySelectorAll('span.n')) {
   // Enter on the box also moves focus into the panel.
   b.addEventListener('click', (ev) => {
     if (box.classList.contains('pinned')) return;
+    box.opener = b;
     if (ev.detail) box.click();
     else box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
   });
