@@ -37,6 +37,7 @@ pub struct Parsed {
     /// Test declarations: `test(`/`it(`/`describe(` calls, or `#[test]` functions.
     pub tests: Vec<TestDecl>,
     /// Comment nodes as (start row, start byte, end row, end byte), 0-based, end exclusive.
+    /// In document order and non-overlapping: collection skips children of each comment.
     pub comments: Vec<(usize, usize, usize, usize)>,
 }
 
@@ -102,9 +103,13 @@ impl Parsed {
     pub fn is_comment_line(&self, line: usize, text: &str) -> bool {
         let row = line.saturating_sub(1);
         let covered = |col: usize| {
+            let point = (row, col);
+            let next = self
+                .comments
+                .partition_point(|&(_, _, er, ec)| (er, ec) <= point);
             self.comments
-                .iter()
-                .any(|&(sr, sc, er, ec)| (sr, sc) <= (row, col) && (row, col) < (er, ec))
+                .get(next)
+                .is_some_and(|&(sr, sc, _, _)| (sr, sc) <= point)
         };
         // Every non-blank byte must be comment text: `/* a */ run() /* b */` is code.
         text.char_indices()
@@ -1234,6 +1239,18 @@ export * as all from './w'
         let parsed = parse("x.ts", ts).expect("parses").expect("typescript");
         assert!(!parsed.is_comment_line(1, "/* a */ deleteAllUsers() /* b */"));
         assert!(parsed.is_comment_line(2, "/* a */ /* b */"));
+    }
+
+    #[test]
+    fn multiline_comment_ends_before_following_code() {
+        let rs = "/* outer\n   /* nested */\n*/fn f() {}\n";
+        let parsed = parse("lib.rs", rs).expect("parses").expect("rust");
+        let got: Vec<bool> = rs
+            .lines()
+            .enumerate()
+            .map(|(i, text)| parsed.is_comment_line(i + 1, text))
+            .collect();
+        assert_eq!(got, [true, true, false]);
     }
 
     #[test]
