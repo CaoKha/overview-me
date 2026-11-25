@@ -15,10 +15,8 @@ for (const code of out.querySelectorAll(':not(pre) > code')) {
     reference = a;
   }
   if (preview) {
-    const button = el('button', 'peek');
-    button.type = 'button';
-    button.title = 'Preview';
-    button.innerHTML = EYE;
+    const button = iconButton(EYE, 'Preview');
+    button.className = 'peek';
     button.setAttribute('aria-label', `Preview ${code.textContent}`);
     button.setAttribute('aria-expanded', 'false');
     const before = !!code.closest('.panel.before');
