@@ -77,6 +77,13 @@ function drawFlow(arch, spec, before) {
   const restMarker = (e) => (e[3] === 'added' ? 'g' : e[3] === 'removed' ? 'r' : 'a');
   const sites = (e) => (Array.isArray(e[4]) ? e[4].filter((a) => typeof a === 'string') : []);
   const arrowName = (e) => `${spec.nodes[e[0]].label} → ${spec.nodes[e[1]].label}`;
+  const siteButton = (text, site) => {
+    const b = el('button', 'site', text);
+    b.type = 'button';
+    b.setAttribute('aria-label', `Show ${site}`);
+    b.setAttribute('aria-expanded', 'false');
+    return b;
+  };
   const paths = [];
   const labels = [];
   const hits = [];
@@ -267,10 +274,7 @@ function drawFlow(arch, spec, before) {
             rangeList.append(range);
             continue;
           }
-          const b = el('button', 'site', range);
-          b.type = 'button';
-          b.setAttribute('aria-label', `Show ${paths[i]}`);
-          b.setAttribute('aria-expanded', 'false');
+          const b = siteButton(range, paths[i]);
           b.addEventListener('click', () => {
             const open = b.getAttribute('aria-expanded') === 'true';
             for (const other of rangeList.querySelectorAll('.site')) other.setAttribute('aria-expanded', 'false');
@@ -317,10 +321,7 @@ function drawFlow(arch, spec, before) {
             if (!preview) return ranges.append(line);
             // A line opens its call under the reference, so the reader can check the arrow without
             // losing the file above. Clicking it again closes it; another line of the row replaces it.
-            const b = el('button', 'site', line);
-            b.type = 'button';
-            b.setAttribute('aria-label', `Show ${site}`);
-            b.setAttribute('aria-expanded', 'false');
+            const b = siteButton(line, site);
             b.addEventListener('click', () => {
               const open = li.querySelector(':scope > pre.code');
               const same = open?.dataset.site === site;
