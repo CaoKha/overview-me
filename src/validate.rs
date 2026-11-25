@@ -498,9 +498,12 @@ pub fn check(
                 problems.push(format!("{at}: not a test file"));
                 continue;
             }
-            let decls = test_decls.entry(t.file.as_str()).or_insert_with(|| {
-                read_head(&t.file).map(|src| facts::declarations_in(&src, &t.file))
-            });
+            // Only a file that was read is cached: a failed read is retried for the next test.
+            if !matches!(test_decls.get(t.file.as_str()), Some(Some(_))) {
+                let read = read_head(&t.file).map(|src| facts::declarations_in(&src, &t.file));
+                test_decls.insert(t.file.as_str(), read);
+            }
+            let decls = &test_decls[t.file.as_str()];
             match decls {
                 None => problems.push(format!("{at}: file not found at head")),
                 Some(Err(err)) => problems.push(format!("{at}: cannot parse: {err}")),
