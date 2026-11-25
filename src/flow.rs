@@ -426,7 +426,10 @@ fn side(
         for (file, a, b) in &code.spans {
             let Some(p) = files.get(file) else { continue };
             let local = local_names.entry(file.as_str()).or_insert_with(|| {
-                p.symbols.iter().map(|s| s.ident.as_str()).collect::<HashSet<_>>()
+                p.symbols
+                    .iter()
+                    .map(|s| s.ident.as_str())
+                    .collect::<HashSet<_>>()
             });
             for i in &p.identifiers {
                 if (a..=b).contains(&&i.line)

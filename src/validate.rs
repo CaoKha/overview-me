@@ -374,7 +374,10 @@ pub fn check(
     let mut check_owners = |subject: std::fmt::Arguments<'_>, owners: &[&str]| match owners {
         [] => problems.push(format!("not covered: {subject} belongs to no node")),
         [_] => {}
-        many => problems.push(format!("covered twice: {subject} is in {}", many.join(", "))),
+        many => problems.push(format!(
+            "covered twice: {subject} is in {}",
+            many.join(", ")
+        )),
     };
     for r in &changes.renames {
         let owners: Vec<&str> = map
