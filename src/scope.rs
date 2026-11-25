@@ -185,7 +185,7 @@ impl<'a> Scope<'a> {
     /// The repo file a relative specifier in `from` points to, with TypeScript's rules: `.js`
     /// stands for `.ts`, the extension can be left out, and a folder means its `index` file.
     fn resolve_path(&self, from: &str, spec: &str) -> Option<String> {
-        let dir = from.rsplit_once('/').map_or("", |(d, _)| d);
+        let dir = symbols::dir(from);
         let joined = join(dir, spec)?;
         let mut candidates = vec![joined.clone()];
         for (js, ts) in [

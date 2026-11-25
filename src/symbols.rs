@@ -194,10 +194,11 @@ pub fn tracks_imports(path: &str) -> bool {
 
 /// Two Go files in one directory share a package: they use each other's names without imports.
 pub fn same_go_package(a: &str, b: &str) -> bool {
-    fn dir(path: &str) -> &str {
-        path.rsplit_once('/').map_or("", |(d, _)| d)
-    }
     Lang::of(a) == Some(Lang::Go) && Lang::of(b) == Some(Lang::Go) && dir(a) == dir(b)
+}
+
+pub(crate) fn dir(path: &str) -> &str {
+    path.rsplit_once('/').map_or("", |(d, _)| d)
 }
 
 /// Parses `source`; `None` for languages without a grammar here (they map to whole-file nodes).
@@ -228,7 +229,11 @@ pub fn parse(path: &str, source: &str) -> Result<Option<Parsed>> {
         collect_qualified_refs(lang, tree.root_node(), src, &mut parsed.imports);
     }
     if lang.collects_tests(path) {
-        collect_tests(lang, tree.root_node(), src, &mut parsed.tests);
+        walk(tree.root_node(), &mut |node| {
+            if let Some(decl) = test_decl(lang, node, src) {
+                parsed.tests.push(decl);
+            }
+        });
     }
     collect_comments(lang, tree.root_node(), &mut parsed.comments);
     Ok(Some(parsed))
@@ -611,16 +616,6 @@ fn collect_comments(lang: Lang, node: Node<'_>, out: &mut Vec<(usize, usize, usi
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         collect_comments(lang, child, out);
-    }
-}
-
-fn collect_tests(lang: Lang, node: Node<'_>, src: &[u8], out: &mut Vec<TestDecl>) {
-    if let Some(decl) = test_decl(lang, node, src) {
-        out.push(decl);
-    }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        collect_tests(lang, child, src, out);
     }
 }
 

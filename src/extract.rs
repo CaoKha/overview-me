@@ -68,7 +68,7 @@ fn folder(file: &str, options: &Options) -> String {
     if let Some(prefix) = options.split.iter().find(|p| under(file, p)) {
         return prefix.trim_end_matches('/').to_owned();
     }
-    let dir = file.rsplit_once('/').map_or("", |(dir, _)| dir);
+    let dir = symbols::dir(file);
     let depth = options.depth as usize;
     let name = dir.split('/').take(depth).collect::<Vec<_>>().join("/");
     if name.is_empty() {
