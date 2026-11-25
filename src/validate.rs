@@ -475,6 +475,7 @@ pub fn check(
         }
     }
 
+    let mut test_decls = HashMap::new();
     for c in &map.criteria {
         if !is_numbered(&c.id, "REF-") {
             problems.push(format!("criterion id {:?} must look like REF-1", c.id));
@@ -494,7 +495,9 @@ pub fn check(
                 problems.push(format!("{at}: not a test file"));
                 continue;
             }
-            let decls = read_head(&t.file).map(|src| facts::declarations_in(&src, &t.file));
+            let decls = test_decls.entry(t.file.as_str()).or_insert_with(|| {
+                read_head(&t.file).map(|src| facts::declarations_in(&src, &t.file))
+            });
             match decls {
                 None => problems.push(format!("{at}: file not found at head")),
                 Some(Err(err)) => problems.push(format!("{at}: cannot parse: {err}")),
@@ -961,6 +964,34 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn criteria_sharing_a_test_file_read_it_once() {
+        let (mut map, changes, tested) = fixture();
+        let mut second = map.criteria[0].clone();
+        second.id = "REF-2".into();
+        second.tests[0].line = 4;
+        second.tests[0].name = "second".into();
+        map.nodes[0].criteria.push(second.id.clone());
+        map.criteria.push(second);
+
+        let reads = std::cell::Cell::new(0);
+        let read_head = |file: &str| {
+            assert_eq!(file, "a.test.ts");
+            reads.set(reads.get() + 1);
+            Some(TEST_FILE.to_owned())
+        };
+        let problems = check(
+            &map,
+            &changes,
+            &tested,
+            &|_| Some(SPEC.into()),
+            &read_head,
+            &|_| true,
+        );
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(reads.get(), 1);
     }
 
     #[test]
