@@ -442,8 +442,23 @@ for (const code of out.querySelectorAll('pre > code.language-flow')) {
 
 // Node id chips in the text open their box's files, as a click on the box does: the box in the
 // flow on the same side (Before or After), or the other side when only that one has it.
-const boxFor = (id, before) => [...out.querySelectorAll('.arch .box')]
-  .find((b) => isBefore(b) === before && b.querySelector('.n')?.textContent === id);
+const boxesById = new Map();
+for (const box of out.querySelectorAll('.arch .box')) {
+  const id = box.querySelector('.n')?.textContent;
+  if (id === undefined) continue;
+  const key = `${isBefore(box)}:${id}`;
+  if (!boxesById.has(key)) boxesById.set(key, box);
+}
+const boxFor = (id, before) => {
+  const key = `${before}:${id}`;
+  const box = boxesById.get(key);
+  if (!box || box.isConnected) return box;
+  // Replacing a raw HTML chip can remove a box nested inside it.
+  const next = [...out.querySelectorAll('.arch .box')]
+    .find((b) => isBefore(b) === before && b.querySelector('.n')?.textContent === id);
+  boxesById.set(key, next);
+  return next;
+};
 for (const chip of out.querySelectorAll('span.n')) {
   if (chip.closest('.arch')) continue;
   const before = isBefore(chip);
