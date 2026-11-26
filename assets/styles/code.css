@@ -1,7 +1,7 @@
 /* Code previews: line numbers, cited lines, word wrap, syntax colors; legacy mermaid blocks. */
 pre.code { max-height: calc(100vh - 120px); min-height: 0; padding: 8px 0; font: 12px/1.6 var(--font-mono); }
 pre.code .code-line { display: block; min-width: max-content; padding-right: 12px; }
-pre.code .code-line.cited { background: color-mix(in srgb, var(--hl) 14%, transparent); }
+pre.code .code-line.cited { background: color-mix(in srgb, var(--hl) 7%, transparent); }
 pre.code .code-line.removed { background: var(--bad-bg); }
 pre.code .code-line.added { background: var(--ok-bg); }
 pre.code .code-line.gap { color: var(--muted); user-select: none; }
