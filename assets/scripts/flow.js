@@ -351,6 +351,7 @@ function drawFlow(arch, spec, before) {
   function unpinned() {
     const box = boxes[pinned];
     const back = panelHasFocus(side) ? box.opener || box : null;
+    box.opener?.classList.remove('open');
     box.opener = null;
     box.classList.remove('pinned');
     pinned = null;
@@ -468,10 +469,13 @@ for (const chip of out.querySelectorAll('span.n')) {
   b.type = 'button';
   b.setAttribute('aria-label', box.getAttribute('aria-label'));
   // A second click on a box closes its panel; a chip only opens it. From the keyboard (detail 0),
-  // Enter on the box also moves focus into the panel.
+  // Enter on the box also moves focus into the panel. The chip that last opened the panel stays
+  // highlighted while it is open, so the reader can see where they were in the text.
   b.addEventListener('click', (ev) => {
-    if (box.classList.contains('pinned')) return;
+    box.opener?.classList.remove('open');
     box.opener = b;
+    b.classList.add('open');
+    if (box.classList.contains('pinned')) return;
     if (ev.detail) box.click();
     else box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
   });
