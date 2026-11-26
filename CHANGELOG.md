@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.28.2](https://github.com/CaoKha/overview-me/compare/v0.28.1...v0.28.2) (2026-11-26)
+
+
+### Bug Fixes
+
+* **deps:** bump clap from 4.6.7 to 4.6.8 in the cargo group ([#111](https://github.com/CaoKha/overview-me/issues/111)) ([8d3ec00](https://github.com/CaoKha/overview-me/commit/8d3ec00b8bdcc360b33e0766e63d7be4ac638e62))
+* **page:** scroll every code preview to its cited lines when wrap is toggled ([#109](https://github.com/CaoKha/overview-me/issues/109)) ([f760d94](https://github.com/CaoKha/overview-me/commit/f760d94a9e6d93b156c98559f00e639efc992a06))
+
+
+### Refactoring
+
+* share duplicated CLI and page code ([#108](https://github.com/CaoKha/overview-me/issues/108)) ([179dbfe](https://github.com/CaoKha/overview-me/commit/179dbfe0a93da374eb254cc9af5f142bde286ed3))
+
 ## [0.28.1](https://github.com/CaoKha/overview-me/compare/v0.28.0...v0.28.1) (2026-11-25)
 
 
