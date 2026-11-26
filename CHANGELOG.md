@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.3](https://github.com/CaoKha/overview-me/compare/v0.28.2...v0.28.3) (2026-11-26)
+
+
+### Bug Fixes
+
+* **page:** dim the cited-line highlight in code previews ([#113](https://github.com/CaoKha/overview-me/issues/113)) ([d18353b](https://github.com/CaoKha/overview-me/commit/d18353b1d2414f53ad776b61a1dd078f9739842b))
+* **page:** keep a node id highlighted while its panel is open ([#112](https://github.com/CaoKha/overview-me/issues/112)) ([0ffaae1](https://github.com/CaoKha/overview-me/commit/0ffaae1a85fe5bf9836e7aea99007dc22e069495))
+
 ## [0.28.2](https://github.com/CaoKha/overview-me/compare/v0.28.1...v0.28.2) (2026-11-26)
 
 
