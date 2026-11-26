@@ -1,3 +1,13 @@
+function savedNumber(key, ok) {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored === null) return null;
+    const value = Number(stored);
+    if (Number.isFinite(value) && ok(value)) return value;
+  } catch {}
+  return null;
+}
+
 // Drag, resize and remember the side panel (desktop), or the bottom sheet height (phones).
 function panelResize(panel) {
   const prefix = panel.classList.contains('before') ? 'overview-me:before-panel' : 'overview-me:panel';
@@ -5,26 +15,20 @@ function panelResize(panel) {
   const panelPositionKey = `${prefix}-position`;
   const panelHeightKey = `${prefix}-height`;
   const desktopHeightKey = `${prefix}-desktop-height`;
-  try {
-    const width = Number(localStorage.getItem(panelWidthKey));
-    if (Number.isFinite(width) && width >= 320) panel.style.setProperty('--panel-width', `${width}px`);
-  } catch {}
+  const width = savedNumber(panelWidthKey, (n) => n >= 320);
+  if (width !== null) panel.style.setProperty('--panel-width', `${width}px`);
   let panelPosition = null;
   try {
     const saved = JSON.parse(localStorage.getItem(panelPositionKey));
     if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) panelPosition = saved;
   } catch {}
-  try {
-    const height = Number(localStorage.getItem(panelHeightKey));
-    if (Number.isFinite(height) && height >= 25 && height <= 90) panel.style.setProperty('--sheet-height', `${height}vh`);
-  } catch {}
-  try {
-    const height = Number(localStorage.getItem(desktopHeightKey));
-    if (Number.isFinite(height) && height >= 200) {
-      panel.style.setProperty('--panel-height', `${height}px`);
-      panel.classList.add('panel-sized');
-    }
-  } catch {}
+  const sheetHeight = savedNumber(panelHeightKey, (n) => n >= 25 && n <= 90);
+  if (sheetHeight !== null) panel.style.setProperty('--sheet-height', `${sheetHeight}vh`);
+  const desktopHeight = savedNumber(desktopHeightKey, (n) => n >= 200);
+  if (desktopHeight !== null) {
+    panel.style.setProperty('--panel-height', `${desktopHeight}px`);
+    panel.classList.add('panel-sized');
+  }
   const place = () => {
     if (!panelPosition || panel.hidden || innerWidth <= 640) return;
     if (!panel.querySelector('.detail-head')) return;
@@ -164,10 +168,8 @@ function panelResize(panel) {
 // The bar between a box's folder tree and its code: drag it or use the arrow keys to set the tree's
 // width, double-click for the default. Both panels share the remembered width.
 const treeWidthKey = 'overview-me:tree-width';
-try {
-  const width = Number(localStorage.getItem(treeWidthKey));
-  if (Number.isFinite(width) && width >= 120) document.documentElement.style.setProperty('--tree-width', `${width}px`);
-} catch {}
+const treeWidth = savedNumber(treeWidthKey, (n) => n >= 120);
+if (treeWidth !== null) document.documentElement.style.setProperty('--tree-width', `${treeWidth}px`);
 function treeResize(split) {
   const min = 120;
   const grip = el('div', 'tree-resize');

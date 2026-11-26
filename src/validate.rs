@@ -36,17 +36,12 @@ pub fn run(git: &Git, rules: &Rules, path: &Path) -> Result<bool> {
         }
     }
     let changes = facts::changes_in(git, rules, &map.base, &map.head, map.path.as_deref())?;
-    let exported: HashSet<&str> = changes
-        .units
-        .iter()
-        .filter(|u| u.exported)
-        .filter_map(|u| u.ident.as_deref())
-        .collect();
+    let exported = changes.exported();
     let tested = facts::tested_names(git, &map.head, &changes.test_files, &exported)?;
     let read_spec = |p: &Path| std::fs::read_to_string(p).ok();
     let read_head = |file: &str| git.show(&map.head, file);
     // Inline Rust test modules live in ordinary .rs files.
-    let is_test_file = |file: &str| rules.is_test(file) || file.ends_with(".rs");
+    let is_test_file = |file: &str| rules.is_test(file) || symbols::holds_inline_tests(file);
     let problems = check(
         &map,
         &changes,
@@ -376,6 +371,14 @@ pub fn check(
             ));
         }
     }
+    let mut check_owners = |subject: std::fmt::Arguments<'_>, owners: &[&str]| match owners {
+        [] => problems.push(format!("not covered: {subject} belongs to no node")),
+        [_] => {}
+        many => problems.push(format!(
+            "covered twice: {subject} is in {}",
+            many.join(", ")
+        )),
+    };
     for r in &changes.renames {
         let owners: Vec<&str> = map
             .nodes
@@ -383,19 +386,7 @@ pub fn check(
             .filter(|n| n.renames.contains(r))
             .map(|n| n.id.as_str())
             .collect();
-        match owners.as_slice() {
-            [] => problems.push(format!(
-                "not covered: move {} -> {} belongs to no node",
-                r.from, r.to
-            )),
-            [_] => {}
-            many => problems.push(format!(
-                "covered twice: move {} -> {} is in {}",
-                r.from,
-                r.to,
-                many.join(", ")
-            )),
-        }
+        check_owners(format_args!("move {} -> {}", r.from, r.to), &owners);
     }
     for file in &changes.deleted {
         let owners: Vec<&str> = map
@@ -404,16 +395,7 @@ pub fn check(
             .filter(|n| n.deletions.iter().any(|d| &d.file == file))
             .map(|n| n.id.as_str())
             .collect();
-        match owners.as_slice() {
-            [] => problems.push(format!(
-                "not covered: deleted file {file} belongs to no node"
-            )),
-            [_] => {}
-            many => problems.push(format!(
-                "covered twice: deleted file {file} is in {}",
-                many.join(", ")
-            )),
-        }
+        check_owners(format_args!("deleted file {file}"), &owners);
     }
 
     for id in map.tour.iter().filter(|id| !node_ids.contains(id.as_str())) {
@@ -475,9 +457,7 @@ pub fn check(
         .iter()
         .map(|n| {
             let units = owned.get(n.id.as_str()).map_or(&[][..], Vec::as_slice);
-            let t = units
-                .iter()
-                .any(|u| u.exported && u.ident.as_ref().is_some_and(|i| tested.contains(i)));
+            let t = units.iter().any(|u| u.tested(tested));
             (n.id.as_str(), t)
         })
         .collect();
@@ -498,6 +478,7 @@ pub fn check(
         }
     }
 
+    let mut test_decls = HashMap::new();
     for c in &map.criteria {
         if !is_numbered(&c.id, "REF-") {
             problems.push(format!("criterion id {:?} must look like REF-1", c.id));
@@ -517,7 +498,12 @@ pub fn check(
                 problems.push(format!("{at}: not a test file"));
                 continue;
             }
-            let decls = read_head(&t.file).map(|src| facts::declarations_in(&src, &t.file));
+            // Only a file that was read is cached: a failed read is retried for the next test.
+            if !matches!(test_decls.get(t.file.as_str()), Some(Some(_))) {
+                let read = read_head(&t.file).map(|src| facts::declarations_in(&src, &t.file));
+                test_decls.insert(t.file.as_str(), read);
+            }
+            let decls = &test_decls[t.file.as_str()];
             match decls {
                 None => problems.push(format!("{at}: file not found at head")),
                 Some(Err(err)) => problems.push(format!("{at}: cannot parse: {err}")),
@@ -626,7 +612,6 @@ mod tests {
             id: id.into(),
             symbol: id.into(),
             lane: "services".into(),
-            risk: Risk::Read,
             caption: "does a thing".into(),
             criteria: criteria.iter().map(|&c| c.into()).collect(),
             touched_by_test,
@@ -638,8 +623,7 @@ mod tests {
                     end,
                 })
                 .collect(),
-            deletions: Vec::new(),
-            renames: Vec::new(),
+            ..Node::default()
         }
     }
 
@@ -986,6 +970,34 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn criteria_sharing_a_test_file_read_it_once() {
+        let (mut map, changes, tested) = fixture();
+        let mut second = map.criteria[0].clone();
+        second.id = "REF-2".into();
+        second.tests[0].line = 4;
+        second.tests[0].name = "second".into();
+        map.nodes[0].criteria.push(second.id.clone());
+        map.criteria.push(second);
+
+        let reads = std::cell::Cell::new(0);
+        let read_head = |file: &str| {
+            assert_eq!(file, "a.test.ts");
+            reads.set(reads.get() + 1);
+            Some(TEST_FILE.to_owned())
+        };
+        let problems = check(
+            &map,
+            &changes,
+            &tested,
+            &|_| Some(SPEC.into()),
+            &read_head,
+            &|_| true,
+        );
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(reads.get(), 1);
     }
 
     #[test]

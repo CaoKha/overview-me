@@ -15,7 +15,7 @@ use serde_json::{Map, Value, json};
 
 use crate::facts;
 use crate::git::Git;
-use crate::map::{ChangeMap, MAX_AT};
+use crate::map::{ChangeMap, MAX_AT, Node};
 use crate::rules::{LANE_MAX, MAX_LANES, Rules};
 use crate::scope::Scope;
 use crate::symbols::{self, Ident, Parsed, Symbol};
@@ -129,19 +129,12 @@ enum Owner {
     Existing(String, Symbol),
 }
 
-/// Reads the map, writes `<store>/<head>.flow.json` (or `out`), prints a summary, and returns the path.
+/// Reads the map, writes `<store>/<head>.flow.json` (or `out`), prints a summary, and returns
+/// the path, the map and the flow file's content.
 ///
 /// # Errors
 /// When the map cannot be read or parsed, its shas are not commits, or git fails.
-pub fn run(git: &Git, rules: &Rules, map_path: &Path, out: Option<PathBuf>) -> Result<PathBuf> {
-    Ok(run_flow(git, rules, map_path, out)?.0)
-}
-
-/// [`run`], also returning the map and the flow file's content.
-///
-/// # Errors
-/// See [`run`].
-pub fn run_flow(
+pub fn run(
     git: &Git,
     rules: &Rules,
     map_path: &Path,
@@ -290,7 +283,8 @@ fn print_summary(out: &Path, flow: &FlowFile) {
     }
 }
 
-fn span_path(file: &str, a: usize, b: usize) -> String {
+/// `file:start-end`, or `file:line` when both ends are the same line.
+pub(crate) fn span_path(file: &str, a: usize, b: usize) -> String {
     if a == b {
         format!("{file}:{a}")
     } else {
@@ -346,6 +340,53 @@ fn parse_at(git: &Git, rev: &str, path: &str) -> Result<Option<Parsed>> {
     }
 }
 
+fn load_naming<'a>(
+    git: &Git,
+    rules: &Rules,
+    rev: &str,
+    names: impl Iterator<Item = &'a str>,
+    files: &mut BTreeMap<String, Parsed>,
+) -> Result<()> {
+    let mut names = names.take(MAX_NAMES).peekable();
+    if names.peek().is_none() {
+        return Ok(());
+    }
+    let mut args = vec!["grep", "-l", "-w", "-F"];
+    for name in names {
+        args.extend(["-e", name]);
+    }
+    args.extend(["--end-of-options", rev, "--"]);
+    let listed = git.run_or_empty(&args)?;
+    let prefix = format!("{rev}:");
+    let mut paths: Vec<&str> = listed
+        .lines()
+        .filter_map(|l| l.strip_prefix(&prefix))
+        .filter(|p| symbols::is_code(p) && !rules.is_test(p) && !files.contains_key(*p))
+        .collect();
+    paths.sort_unstable();
+    paths.truncate(MAX_FILES);
+    for p in paths {
+        if let Some(parsed) = parse_at(git, rev, p)? {
+            files.insert(p.to_owned(), parsed);
+        }
+    }
+    Ok(())
+}
+
+type References<'a> = HashMap<&'a str, Vec<(&'a str, &'a Parsed, &'a Ident)>>;
+
+fn index_references(files: &BTreeMap<String, Parsed>) -> References<'_> {
+    let mut refs = References::new();
+    for (path, parsed) in files {
+        for ident in &parsed.identifiers {
+            refs.entry(ident.name.as_str())
+                .or_default()
+                .push((path, parsed, ident));
+        }
+    }
+    refs
+}
+
 /// Whether a reference to `sym` is a step in a flow: a call to a function, method, macro or
 /// constructor, or a read of a constant. Naming a type, trait, impl block or module is not.
 fn callable(sym: &Symbol) -> bool {
@@ -377,13 +418,19 @@ fn side(
 ) -> Result<Graph> {
     // Names to search: what the boxes are called by, and what they call.
     let mut names: BTreeSet<String> = BTreeSet::new();
+    let mut local_names = HashMap::new();
     for (_, code) in boxes {
         for (_, d) in &code.decls {
             names.insert(d.ident.clone());
         }
         for (file, a, b) in &code.spans {
             let Some(p) = files.get(file) else { continue };
-            let local: HashSet<&str> = p.symbols.iter().map(|s| s.ident.as_str()).collect();
+            let local = local_names.entry(file.as_str()).or_insert_with(|| {
+                p.symbols
+                    .iter()
+                    .map(|s| s.ident.as_str())
+                    .collect::<HashSet<_>>()
+            });
             for i in &p.identifiers {
                 if (a..=b).contains(&&i.line)
                     && (p.imports.contains(&i.name) || local.contains(i.name.as_str()))
@@ -393,27 +440,7 @@ fn side(
             }
         }
     }
-    if !names.is_empty() {
-        let mut args = vec!["grep", "-l", "-w", "-F"];
-        for n in names.iter().take(MAX_NAMES) {
-            args.extend(["-e", n.as_str()]);
-        }
-        args.extend(["--end-of-options", rev, "--"]);
-        let listed = git.run_or_empty(&args)?;
-        let prefix = format!("{rev}:");
-        let mut paths: Vec<&str> = listed
-            .lines()
-            .filter_map(|l| l.strip_prefix(&prefix))
-            .filter(|p| symbols::is_code(p) && !rules.is_test(p) && !files.contains_key(*p))
-            .collect();
-        paths.sort_unstable();
-        paths.truncate(MAX_FILES);
-        for p in paths {
-            if let Some(parsed) = parse_at(git, rev, p)? {
-                files.insert(p.to_owned(), parsed);
-            }
-        }
-    }
+    load_naming(git, rules, rev, names.iter().map(String::as_str), files)?;
     let files = &*files;
 
     let mut spans: HashMap<&str, Vec<(usize, usize, &str)>> = HashMap::new();
@@ -446,14 +473,9 @@ fn side(
         (!in_box(file, s.start, s.end)).then(|| Owner::Existing(file.to_owned(), s.clone()))
     };
 
-    let mut refs: HashMap<&str, Vec<(&str, &Parsed, &Ident)>> = HashMap::new();
+    let refs = index_references(files);
     let mut decls: HashMap<&str, Vec<(&str, &Symbol)>> = HashMap::new();
     for (path, p) in files {
-        for i in &p.identifiers {
-            refs.entry(i.name.as_str())
-                .or_default()
-                .push((path.as_str(), p, i));
-        }
         for s in &p.symbols {
             decls
                 .entry(s.ident.as_str())
@@ -532,35 +554,12 @@ fn dangling(
         return Ok(Vec::new());
     }
     let names: BTreeSet<&str> = removed.iter().map(|(_, s)| s.ident.as_str()).collect();
-    let mut args = vec!["grep", "-l", "-w", "-F"];
-    for n in names.iter().take(MAX_NAMES) {
-        args.extend(["-e", *n]);
-    }
-    args.extend(["--end-of-options", rev, "--"]);
-    let listed = git.run_or_empty(&args)?;
-    let prefix = format!("{rev}:");
-    let mut paths: Vec<&str> = listed
-        .lines()
-        .filter_map(|l| l.strip_prefix(&prefix))
-        .filter(|p| symbols::is_code(p) && !rules.is_test(p) && !files.contains_key(*p))
-        .collect();
-    paths.sort_unstable();
-    paths.truncate(MAX_FILES);
-    for p in paths {
-        if let Some(parsed) = parse_at(git, rev, p)? {
-            files.insert(p.to_owned(), parsed);
-        }
-    }
+    load_naming(git, rules, rev, names.into_iter(), files)?;
     let declared: HashSet<&str> = files
         .values()
         .flat_map(|p| p.symbols.iter().map(|s| s.ident.as_str()))
         .collect();
-    let mut refs: HashMap<&str, Vec<(&str, &Parsed, &Ident)>> = HashMap::new();
-    for (path, p) in files.iter() {
-        for r in &p.identifiers {
-            refs.entry(&r.name).or_default().push((path, p, r));
-        }
-    }
+    let refs = index_references(files);
     let mut out: Vec<Link> = Vec::new();
     for (file, sym) in removed {
         if declared.contains(sym.ident.as_str()) {
@@ -591,10 +590,7 @@ fn dangling(
 /// When git fails.
 pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     let changes = facts::changes_in(git, rules, &map.base, &map.head, map.path.as_deref())?;
-    let merge_base = git
-        .run(&["merge-base", "--end-of-options", &map.base, &map.head])?
-        .trim()
-        .to_owned();
+    let merge_base = changes.merge_base.as_str();
     let old_of: HashMap<String, String> = changes
         .files
         .iter()
@@ -615,7 +611,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         "-r",
         "--name-only",
         "--end-of-options",
-        &merge_base,
+        merge_base,
         "--",
     ];
     args.extend(wanted.iter().map(String::as_str));
@@ -628,7 +624,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     for p in &wanted {
         if at_base.contains(p)
             && symbols::is_code(p)
-            && let Some(parsed) = parse_at(git, &merge_base, p)?
+            && let Some(parsed) = parse_at(git, merge_base, p)?
         {
             base_files.insert(p.clone(), parsed);
         }
@@ -640,6 +636,21 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
         .enumerate()
         .map(|(i, id)| (id.as_str(), i))
         .collect();
+    let node_item = |node: &Node| Item {
+        key: node.id.clone(),
+        label: label(&node.symbol),
+        base_label: None,
+        n: Some(node.id.clone()),
+        note: Some(node.caption.clone()).filter(|c| !c.trim().is_empty()),
+        lane: node.lane.clone(),
+        store: false,
+        order: (0, tour.get(node.id.as_str()).copied().unwrap_or(usize::MAX)),
+        kind: Kind::Changed,
+        head: None,
+        base: None,
+        head_paths: Vec::new(),
+        base_paths: Vec::new(),
+    };
     let mut items: Vec<Item> = Vec::new();
     let mut not_drawn: Vec<String> = Vec::new();
     // Symbols the change removes, with the head path their callers would import them from.
@@ -727,19 +738,13 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
             }
         };
         items.push(Item {
-            key: node.id.clone(),
-            label: label(&node.symbol),
-            base_label: None,
-            n: Some(node.id.clone()),
-            note: Some(node.caption.clone()).filter(|c| !c.trim().is_empty()),
-            lane: node.lane.clone(),
             store: db,
-            order: (0, tour.get(node.id.as_str()).copied().unwrap_or(usize::MAX)),
             kind,
             head: (on_head && !top_level_only).then_some(head),
             base: on_base.then_some(base),
             head_paths,
             base_paths,
+            ..node_item(node)
         });
     }
 
@@ -787,19 +792,8 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
                     && let Some(node) = map.nodes.iter().find(|n| owners.contains(n.id.as_str()))
                 {
                     items.push(Item {
-                        key: node.id.clone(),
-                        label: label(&node.symbol),
-                        base_label: None,
-                        n: Some(node.id.clone()),
-                        note: Some(node.caption.clone()).filter(|c| !c.trim().is_empty()),
-                        lane: node.lane.clone(),
                         store: rules.is_store(&old_file),
-                        order: (0, tour.get(node.id.as_str()).copied().unwrap_or(usize::MAX)),
-                        kind: Kind::Changed,
-                        head: None,
-                        base: None,
-                        head_paths: Vec::new(),
-                        base_paths: Vec::new(),
+                        ..node_item(node)
                     });
                 }
                 if let Some(item) = items.iter_mut().find(|i| owners.contains(i.key.as_str())) {
@@ -862,7 +856,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
             .collect()
     };
     let head_scope = Scope::load(git, &map.head)?;
-    let base_scope = Scope::load(git, &merge_base)?;
+    let base_scope = Scope::load(git, merge_base)?;
     let mut head_graph = side(
         git,
         rules,
@@ -882,7 +876,7 @@ pub fn build(git: &Git, rules: &Rules, map: &ChangeMap) -> Result<FlowFile> {
     let mut base_graph = side(
         git,
         rules,
-        &merge_base,
+        merge_base,
         &base_scope,
         &boxes_at(false),
         &mut base_files,
@@ -2080,7 +2074,7 @@ mod tests {
         let out = repo.path().join("map.flow.json");
         let run = |map: &ChangeMap| {
             std::fs::write(&map_path, serde_json::to_string(map).expect("map")).expect("write");
-            run_flow(&git, &rules, &map_path, Some(out.clone())).expect("flow");
+            super::run(&git, &rules, &map_path, Some(out.clone())).expect("flow");
             serde_json::from_str::<Value>(&std::fs::read_to_string(&out).expect("read"))
                 .expect("json")
         };

@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::git::Git;
 use crate::map::{Rename, Risk, TestRef};
 use crate::rules::{Lanes, Rules};
-use crate::symbols::{self, Parsed, Symbol};
+use crate::symbols::{self, Parsed, Symbol, TestDecl};
 
 /// One changed hunk inside one enclosing symbol. Lines are head-side, 1-based, inclusive.
 /// A deletion-only hunk is anchored on the line before the removed lines.
@@ -40,6 +40,10 @@ impl Unit {
     pub fn contains(&self, line: u32) -> bool {
         self.start <= line && line <= self.end
     }
+
+    pub(crate) fn tested(&self, tested: &HashSet<String>) -> bool {
+        self.exported && self.ident.as_ref().is_some_and(|i| tested.contains(i))
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -59,6 +63,7 @@ pub struct ChangedFile {
 
 #[derive(Debug, Default)]
 pub struct Changes {
+    pub(crate) merge_base: String,
     pub units: Vec<Unit>,
     pub test_files: Vec<String>,
     pub skipped: Vec<Skipped>,
@@ -69,6 +74,16 @@ pub struct Changes {
     pub renames: Vec<Rename>,
     pub files: Vec<ChangedFile>,
     pub lanes: Lanes,
+}
+
+impl Changes {
+    pub(crate) fn exported(&self) -> HashSet<&str> {
+        self.units
+            .iter()
+            .filter(|u| u.exported)
+            .filter_map(|u| u.ident.as_deref())
+            .collect()
+    }
 }
 
 struct FileDiff {
@@ -257,7 +272,6 @@ struct Piece<'p> {
 /// Splits one hunk at symbol boundaries and drops lines inside inline test modules.
 /// Blank added lines stay with the code before them; context lines end a piece.
 fn pieces<'p>(hunk: &Hunk, parsed: Option<&'p Parsed>) -> Vec<Piece<'p>> {
-    let at = |line: u32| parsed.and_then(|p| p.symbol_at(line as usize));
     let in_tests = |line: u32| parsed.is_some_and(|p| p.in_tests(line as usize));
     let mut out: Vec<Piece<'p>> = Vec::new();
     let mut new_line = hunk.new_start;
@@ -267,6 +281,25 @@ fn pieces<'p>(hunk: &Hunk, parsed: Option<&'p Parsed>) -> Vec<Piece<'p>> {
         hunk.new_start
     } else {
         hunk.new_start.saturating_sub(1)
+    };
+    let first = above as usize;
+    let last = hunk
+        .new_start
+        .saturating_add(hunk.new_count.saturating_sub(1))
+        .max(1) as usize;
+    let candidates: Vec<&Symbol> = parsed
+        .into_iter()
+        .flat_map(|p| &p.symbols)
+        .filter(|s| s.start <= last && first <= s.end)
+        .collect();
+    let at = |line: u32| {
+        let line = line as usize;
+        if (first..=last).contains(&line) {
+            symbols::symbol_at(candidates.iter().copied(), line)
+        } else {
+            // Use the full lookup if the hunk body goes beyond its header's line count.
+            parsed.and_then(|p| p.symbol_at(line))
+        }
     };
     let mut dels: Vec<(u32, String)> = Vec::new();
     let mut open = false;
@@ -403,10 +436,7 @@ pub fn changes_in(
         args.push(p);
     }
     let diff = git.run_bytes(&args)?;
-    let merge_base = git
-        .run(&["merge-base", "--end-of-options", base, head])?
-        .trim()
-        .to_owned();
+    let merge_base = git.merge_base(base, head)?;
     let files = parse_diff(&diff);
     // Files marked `-diff` in .gitattributes are generated: one check-attr for all of them.
     let paths: Vec<&str> = files
@@ -416,6 +446,7 @@ pub fn changes_in(
         .collect();
     let generated = generated_paths(git, &paths)?;
     let mut out = Changes {
+        merge_base,
         // Lanes are looked up by head path, so only head paths build them.
         lanes: Lanes::new(
             files
@@ -481,7 +512,7 @@ pub fn changes_in(
             f.hunks = vec![Hunk {
                 old_start: 0,
                 new_start: 1,
-                new_count: u32::try_from(lines.len()).unwrap_or(u32::MAX),
+                new_count: to_u32(lines.len()),
                 lines: lines.iter().map(|l| format!("+{l}")).collect(),
             }];
         }
@@ -492,7 +523,7 @@ pub fn changes_in(
             .collect();
         // The base side is only needed to judge removed lines.
         let base_source = if all_pieces.iter().any(|p| !p.removed.is_empty()) {
-            git.show(&merge_base, &f.old_path).unwrap_or_default()
+            git.show(&out.merge_base, &f.old_path).unwrap_or_default()
         } else {
             String::new()
         };
@@ -572,8 +603,16 @@ fn generated_paths(git: &Git, paths: &[&str]) -> Result<HashSet<String>> {
         .collect())
 }
 
-fn to_u32(n: usize) -> u32 {
+pub(crate) fn to_u32(n: usize) -> u32 {
     u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+fn test_ref(file: &str, test: &TestDecl) -> TestRef {
+    TestRef {
+        file: file.to_owned(),
+        line: to_u32(test.line),
+        name: test.name.clone(),
+    }
 }
 
 /// Test declarations in `source` (the content of `file`).
@@ -583,14 +622,7 @@ fn to_u32(n: usize) -> u32 {
 pub fn declarations_in(source: &str, file: &str) -> Result<Vec<TestRef>> {
     let parsed = symbols::parse(file, source)?;
     Ok(parsed.map_or_else(Vec::new, |p| {
-        p.tests
-            .into_iter()
-            .map(|t| TestRef {
-                file: file.to_owned(),
-                line: u32::try_from(t.line).unwrap_or(u32::MAX),
-                name: t.name,
-            })
-            .collect()
+        p.tests.iter().map(|t| test_ref(file, t)).collect()
     }))
 }
 
@@ -608,11 +640,7 @@ pub fn test_declarations(git: &Git, head: &str, changes: &Changes) -> Result<Vec
     }
     for f in &changes.files {
         if let Some(p) = &f.parsed {
-            out.extend(p.tests.iter().map(|t| TestRef {
-                file: f.path.clone(),
-                line: u32::try_from(t.line).unwrap_or(u32::MAX),
-                name: t.name.clone(),
-            }));
+            out.extend(p.tests.iter().map(|t| test_ref(&f.path, t)));
         }
     }
     Ok(out)
@@ -834,6 +862,18 @@ mod tests {
             (got[0].start, got[0].end, got[0].removed.clone()),
             (7, 7, vec![8])
         );
+    }
+
+    #[test]
+    fn leading_removal_can_belong_to_the_symbol_above_the_hunk() {
+        let src = "fn preceding() {}\nfn following() {}\n";
+        let parsed = symbols::parse("lib.rs", src).expect("parses");
+        let got = pieces(
+            &hunk(2, 2, 1, &["-gone", " fn following() {}"]),
+            parsed.as_ref(),
+        );
+        assert_eq!(got[0].start, 1);
+        assert_eq!(got[0].sym.map(|s| s.name.as_str()), Some("preceding"));
     }
 
     #[test]

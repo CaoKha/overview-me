@@ -25,3 +25,5 @@ const el = (tag, cls, text) => {
   return e;
 };
 const shortSha = (s) => s.replace(/\b([0-9a-f]{10})[0-9a-f]{30}\b/g, '$1…');
+const isBefore = (node) => !!node.closest('.panel.before');
+const previewRev = (before) => cfg.base && before ? cfg.base : cfg.head || sha;

@@ -1,7 +1,7 @@
 // Review findings (`overview-me findings`): which box holds them, its badge, and the list in its panel.
 // The findings shown on a box: those of its map node, only in a diagram of head (not Before).
 function boxFindings(node, arch) {
-  return node.n && !arch.closest('.panel.before') ? findingsByNode.get(node.n) || [] : [];
+  return node.n && !isBefore(arch) ? findingsByNode.get(node.n) || [] : [];
 }
 function findingsSummary(list) {
   const by = {};
@@ -36,7 +36,7 @@ function findingsList(list, arch) {
       fix.append(el('summary', null, 'Suggested code'), el('pre', null, f.suggestion));
       li.append(fix);
     }
-    const preview = f.start ? codePreview(place, cfg.head || sha) : null;
+    const preview = f.start ? codePreview(place, previewRev(false)) : null;
     if (preview) {
       const pre = codePre(preview);
       pre.hidden = i > 0;

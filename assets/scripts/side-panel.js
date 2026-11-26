@@ -45,29 +45,22 @@ function showPanel({ before = false, label, title, path, href, tree, wrap, live,
     b.addEventListener('click', () => copy(path, b, CHECK));
     tools.append(b);
   }
-  if (tree) {
-    const b = iconButton(TREE, tree);
-    b.classList.add('tree-toggle');
-    b.setAttribute('aria-pressed', String(document.documentElement.classList.contains('tree-all')));
+  const prefToggle = (icon, label, buttonClass, prefClass, key, onToggle) => {
+    const b = iconButton(icon, label);
+    b.classList.add(buttonClass);
+    b.setAttribute('aria-pressed', String(document.documentElement.classList.contains(prefClass)));
     b.addEventListener('click', () => {
-      const on = document.documentElement.classList.toggle('tree-all');
-      document.querySelectorAll('.detail .tree-toggle').forEach((b) => b.setAttribute('aria-pressed', String(on)));
-      try { localStorage.setItem(treeAllKey, on ? '1' : '0'); } catch {}
+      const on = document.documentElement.classList.toggle(prefClass);
+      document.querySelectorAll(`.detail .${buttonClass}`).forEach((b) => b.setAttribute('aria-pressed', String(on)));
+      try { localStorage.setItem(key, on ? '1' : '0'); } catch {}
+      onToggle?.();
     });
-    tools.append(b);
-  }
-  if (wrap) {
-    const b = iconButton(WRAP, 'Wrap long lines');
-    b.classList.add('wrap-toggle');
-    b.setAttribute('aria-pressed', String(document.documentElement.classList.contains('code-wrap')));
-    b.addEventListener('click', () => {
-      const on = document.documentElement.classList.toggle('code-wrap');
-      document.querySelectorAll('.detail .wrap-toggle').forEach((b) => b.setAttribute('aria-pressed', String(on)));
-      try { localStorage.setItem(codeWrapKey, on ? '1' : '0'); } catch {}
-      document.querySelectorAll('.detail pre.code').forEach((pre) => scrollCode(pre));
-    });
-    tools.append(b);
-  }
+    return b;
+  };
+  if (tree) tools.append(prefToggle(TREE, tree, 'tree-toggle', 'tree-all', treeAllKey));
+  if (wrap) tools.append(prefToggle(WRAP, 'Wrap long lines', 'wrap-toggle', 'code-wrap', codeWrapKey, () => {
+    document.querySelectorAll('.detail pre.code').forEach((pre) => scrollCode(pre));
+  }));
   if (href) tools.append(openLink(href));
   if (tools.children.length) head.append(tools);
   const close = iconButton(CLOSE, 'Close (Esc)');

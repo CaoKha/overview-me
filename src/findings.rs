@@ -108,11 +108,15 @@ pub struct Finding {
 impl Finding {
     /// `file:start-end`, `file:line`, or `file`.
     pub fn place(&self) -> String {
-        match (self.start, self.end) {
-            (Some(s), Some(e)) if e > s => format!("{}:{s}-{e}", self.file),
-            (Some(s), _) => format!("{}:{s}", self.file),
-            _ => self.file.clone(),
-        }
+        format_place(&self.file, self.start, self.end)
+    }
+}
+
+fn format_place(file: &str, start: Option<u32>, end: Option<u32>) -> String {
+    match (start, end) {
+        (Some(s), Some(e)) if e > s => format!("{file}:{s}-{e}"),
+        (Some(s), _) => format!("{file}:{s}"),
+        _ => file.to_owned(),
     }
 }
 
@@ -652,11 +656,7 @@ fn print_summary(out: &Path, file: &FindingsFile) {
     println!("outside this change: {}", file.findings.len() - on.len());
     println!("rejected: {}", file.rejected.len());
     for r in &file.rejected {
-        let at = match (r.start, r.end) {
-            (Some(s), Some(e)) if e > s => format!("{}:{s}-{e}", r.file),
-            (Some(s), _) => format!("{}:{s}", r.file),
-            _ => r.file.clone(),
-        };
+        let at = format_place(&r.file, r.start, r.end);
         println!("  {at}: {}", r.reason);
     }
 }
@@ -664,7 +664,7 @@ fn print_summary(out: &Path, file: &FindingsFile) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::map::{Node, Risk, Site};
+    use crate::map::{Node, Site};
     use serde_json::json;
 
     const BASE: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -675,10 +675,7 @@ mod tests {
             id: id.into(),
             symbol: id.into(),
             lane: "core".into(),
-            risk: Risk::Read,
             caption: "c".into(),
-            criteria: vec![],
-            touched_by_test: false,
             sites: sites
                 .iter()
                 .map(|(f, s, e)| Site {
@@ -687,8 +684,7 @@ mod tests {
                     end: *e,
                 })
                 .collect(),
-            deletions: vec![],
-            renames: vec![],
+            ..Node::default()
         }
     }
 

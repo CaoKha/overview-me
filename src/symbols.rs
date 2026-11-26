@@ -37,6 +37,7 @@ pub struct Parsed {
     /// Test declarations: `test(`/`it(`/`describe(` calls, or `#[test]` functions.
     pub tests: Vec<TestDecl>,
     /// Comment nodes as (start row, start byte, end row, end byte), 0-based, end exclusive.
+    /// In document order and non-overlapping: collection skips children of each comment.
     pub comments: Vec<(usize, usize, usize, usize)>,
 }
 
@@ -91,10 +92,7 @@ pub struct TestDecl {
 impl Parsed {
     /// The innermost symbol that contains `line`.
     pub fn symbol_at(&self, line: usize) -> Option<&Symbol> {
-        self.symbols
-            .iter()
-            .filter(|s| s.start <= line && line <= s.end)
-            .min_by_key(|s| s.end - s.start)
+        symbol_at(&self.symbols, line)
     }
 
     /// Whether a line (1-based) holds only comment text: every non-blank byte lies inside a
@@ -102,9 +100,13 @@ impl Parsed {
     pub fn is_comment_line(&self, line: usize, text: &str) -> bool {
         let row = line.saturating_sub(1);
         let covered = |col: usize| {
+            let point = (row, col);
+            let next = self
+                .comments
+                .partition_point(|&(_, _, er, ec)| (er, ec) <= point);
             self.comments
-                .iter()
-                .any(|&(sr, sc, er, ec)| (sr, sc) <= (row, col) && (row, col) < (er, ec))
+                .get(next)
+                .is_some_and(|&(sr, sc, _, _)| (sr, sc) <= point)
         };
         // Every non-blank byte must be comment text: `/* a */ run() /* b */` is code.
         text.char_indices()
@@ -126,6 +128,16 @@ impl Parsed {
             .iter()
             .any(|&(a, b)| a <= line && line <= b)
     }
+}
+
+pub(crate) fn symbol_at<'a>(
+    symbols: impl IntoIterator<Item = &'a Symbol>,
+    line: usize,
+) -> Option<&'a Symbol> {
+    symbols
+        .into_iter()
+        .filter(|s| s.start <= line && line <= s.end)
+        .min_by_key(|s| s.end - s.start)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -177,6 +189,11 @@ impl Lang {
     }
 }
 
+/// Whether an ordinary source file can hold inline test modules.
+pub(crate) fn holds_inline_tests(path: &str) -> bool {
+    Lang::of(path) == Some(Lang::Rust)
+}
+
 /// Whether `path` is in a language this tool can parse.
 pub fn is_code(path: &str) -> bool {
     Lang::of(path).is_some()
@@ -189,10 +206,11 @@ pub fn tracks_imports(path: &str) -> bool {
 
 /// Two Go files in one directory share a package: they use each other's names without imports.
 pub fn same_go_package(a: &str, b: &str) -> bool {
-    fn dir(path: &str) -> &str {
-        path.rsplit_once('/').map_or("", |(d, _)| d)
-    }
     Lang::of(a) == Some(Lang::Go) && Lang::of(b) == Some(Lang::Go) && dir(a) == dir(b)
+}
+
+pub(crate) fn dir(path: &str) -> &str {
+    path.rsplit_once('/').map_or("", |(d, _)| d)
 }
 
 /// Parses `source`; `None` for languages without a grammar here (they map to whole-file nodes).
@@ -223,7 +241,11 @@ pub fn parse(path: &str, source: &str) -> Result<Option<Parsed>> {
         collect_qualified_refs(lang, tree.root_node(), src, &mut parsed.imports);
     }
     if lang.collects_tests(path) {
-        collect_tests(lang, tree.root_node(), src, &mut parsed.tests);
+        walk(tree.root_node(), &mut |node| {
+            if let Some(decl) = test_decl(lang, node, src) {
+                parsed.tests.push(decl);
+            }
+        });
     }
     collect_comments(lang, tree.root_node(), &mut parsed.comments);
     Ok(Some(parsed))
@@ -606,16 +628,6 @@ fn collect_comments(lang: Lang, node: Node<'_>, out: &mut Vec<(usize, usize, usi
     let mut cursor = node.walk();
     for child in node.named_children(&mut cursor) {
         collect_comments(lang, child, out);
-    }
-}
-
-fn collect_tests(lang: Lang, node: Node<'_>, src: &[u8], out: &mut Vec<TestDecl>) {
-    if let Some(decl) = test_decl(lang, node, src) {
-        out.push(decl);
-    }
-    let mut cursor = node.walk();
-    for child in node.named_children(&mut cursor) {
-        collect_tests(lang, child, src, out);
     }
 }
 
@@ -1234,6 +1246,18 @@ export * as all from './w'
         let parsed = parse("x.ts", ts).expect("parses").expect("typescript");
         assert!(!parsed.is_comment_line(1, "/* a */ deleteAllUsers() /* b */"));
         assert!(parsed.is_comment_line(2, "/* a */ /* b */"));
+    }
+
+    #[test]
+    fn multiline_comment_ends_before_following_code() {
+        let rs = "/* outer\n   /* nested */\n*/fn f() {}\n";
+        let parsed = parse("lib.rs", rs).expect("parses").expect("rust");
+        let got: Vec<bool> = rs
+            .lines()
+            .enumerate()
+            .map(|(i, text)| parsed.is_comment_line(i + 1, text))
+            .collect();
+        assert_eq!(got, [true, true, false]);
     }
 
     #[test]

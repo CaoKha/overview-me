@@ -5,7 +5,7 @@
 .panel-resize { position: absolute; z-index: 1; touch-action: none; user-select: none; }
 .panel-resize::after { content: ''; position: absolute; border-radius: var(--r); background: var(--accent); opacity: 0; }
 .panel-resize:hover::after, .panel-resize:focus-visible::after { opacity: 1; }
-.panel-resize:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
+.panel-resize:focus-visible, .tree-resize:focus-visible, .file-tree summary:focus-visible, .tree-file:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
 .panel-resize-n, .panel-resize-s { left: 16px; right: 16px; height: 6px; cursor: ns-resize; }
 .panel-resize-n { top: 0; }
 .panel-resize-s { bottom: 0; }
@@ -46,16 +46,13 @@
 .tree-resize { position: relative; cursor: ew-resize; touch-action: none; user-select: none; border-radius: var(--r); }
 .tree-resize::after { content: ''; position: absolute; left: 5px; top: calc(50% - 16px); width: 3px; height: 32px; border-radius: var(--r); background: var(--edge); }
 .tree-resize:hover::after, .tree-resize:focus-visible::after { background: var(--accent); }
-.tree-resize:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
 .file-tree { min-width: 0; overflow: auto; font-size: 13px; }
 .file-tree ul { list-style: none; margin: 0; padding: 0; }
 .file-tree ul ul { padding-left: 12px; }
 .file-tree summary { padding: 2px 6px; border-radius: 6px; color: var(--accent); cursor: pointer; overflow-wrap: anywhere; }
-.file-tree summary:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
 .tree-file { display: flex; align-items: baseline; gap: 6px; width: 100%; padding: 2px 6px; border: 0; border-radius: 6px; background: none; color: var(--fg); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .tree-file:hover, .tree-file[aria-current="true"] { background: var(--secondary); }
 .tree-file[aria-current="true"] { font-weight: 600; }
-.tree-file:focus-visible { outline: 2px solid var(--hl); outline-offset: -2px; }
 .tree-file .count { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 400; }
 /* A changed file's git status letter, before its count. */
 .tree-file .change { margin-left: auto; color: var(--muted); font: 400 11px var(--font-mono); }

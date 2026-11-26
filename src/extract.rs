@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::facts::{self, Changes, Skipped, Unit};
+use crate::facts::{self, Changes, Skipped, Unit, to_u32};
 use crate::git::Git;
 use crate::map::{
     ChangeMap, Deletion, Edge, EdgeKind, Grouping, MAX_AT, Node, Risk, Site, TestRef,
@@ -68,7 +68,7 @@ fn folder(file: &str, options: &Options) -> String {
     if let Some(prefix) = options.split.iter().find(|p| under(file, p)) {
         return prefix.trim_end_matches('/').to_owned();
     }
-    let dir = file.rsplit_once('/').map_or("", |(dir, _)| dir);
+    let dir = symbols::dir(file);
     let depth = options.depth as usize;
     let name = dir.split('/').take(depth).collect::<Vec<_>>().join("/");
     if name.is_empty() {
@@ -127,7 +127,6 @@ fn draft_nodes(units: &[Unit]) -> Vec<Draft<'_>> {
                 ),
             };
             let node = Node {
-                id: String::new(),
                 symbol,
                 lane: first.lane.clone(),
                 risk: if us.iter().any(|u| u.risk == Risk::Read) {
@@ -135,11 +134,6 @@ fn draft_nodes(units: &[Unit]) -> Vec<Draft<'_>> {
                 } else {
                     Risk::Skim
                 },
-                caption: String::new(),
-                criteria: Vec::new(),
-                touched_by_test: false,
-                deletions: Vec::new(),
-                renames: Vec::new(),
                 // Hunks inside one symbol share a site; top-level hunks are scattered across
                 // the file, so each keeps its own and no site spans a function between them.
                 sites: if first.span.is_some() {
@@ -157,6 +151,7 @@ fn draft_nodes(units: &[Unit]) -> Vec<Draft<'_>> {
                         })
                         .collect()
                 },
+                ..Node::default()
             };
             Draft { node, units: us }
         })
@@ -205,10 +200,7 @@ fn import_only(unit: &Unit, changes: &Changes) -> bool {
     let names: Vec<&str> = parsed
         .identifiers
         .iter()
-        .filter(|i| {
-            unit.added
-                .contains(&u32::try_from(i.line).unwrap_or(u32::MAX))
-        })
+        .filter(|i| unit.added.contains(&to_u32(i.line)))
         .map(|i| i.name.as_str())
         .collect();
     !names.is_empty() && names.iter().all(|n| parsed.imports.contains(*n))
@@ -338,8 +330,7 @@ fn call_edges(
                 if !scope.reaches(path, parsed, r, def_file, sym) {
                     continue;
                 }
-                let Some(caller) = enclosing(path, u32::try_from(r.line).unwrap_or(u32::MAX))
-                else {
+                let Some(caller) = enclosing(path, to_u32(r.line)) else {
                     continue;
                 };
                 let (from, to) = if let Some(options) = folders {
@@ -395,16 +386,9 @@ fn group_folders(
         let names: HashSet<String> = paths.map(|p| folder(p, options)).collect();
         for name in &names {
             let group = groups.entry(name.clone()).or_insert_with(|| Node {
-                id: String::new(),
                 symbol: name.clone(),
-                lane: String::new(),
                 risk: Risk::Skim,
-                caption: String::new(),
-                criteria: Vec::new(),
-                touched_by_test: false,
-                sites: Vec::new(),
-                deletions: Vec::new(),
-                renames: Vec::new(),
+                ..Node::default()
             });
             group.sites.extend(
                 node.sites
@@ -657,11 +641,7 @@ fn context(store: &Path) -> String {
     let codebase = store.join("codebase.md");
     match std::fs::read_to_string(&codebase) {
         Ok(text) => {
-            let sha = text
-                .split_whitespace()
-                .skip_while(|w| *w != "sha")
-                .nth(1)
-                .map_or("?", |s| &s[..s.len().min(10)]);
+            let sha = crate::page::header_sha(&text).map_or("?", |s| &s[..s.len().min(10)]);
             format!("codebase overview: {} (at {sha})", codebase.display())
         }
         Err(_) => "codebase overview: none (suggest /codebase-overview at hand-off)".into(),
@@ -690,18 +670,10 @@ pub fn run(
         d.node.id = format!("N{}", i + 1);
     }
 
-    let exported: HashSet<&str> = changes
-        .units
-        .iter()
-        .filter(|u| u.exported)
-        .filter_map(|u| u.ident.as_deref())
-        .collect();
+    let exported = changes.exported();
     let tested = facts::tested_names(git, &head, &changes.test_files, &exported)?;
     for d in &mut drafts {
-        d.node.touched_by_test = d
-            .units
-            .iter()
-            .any(|u| u.exported && u.ident.as_ref().is_some_and(|i| tested.contains(i)));
+        d.node.touched_by_test = d.units.iter().any(|u| u.tested(&tested));
     }
 
     let spec = spec
@@ -714,13 +686,8 @@ pub fn run(
             id: format!("N{}", nodes.len() + 1),
             symbol: format!("(deleted) {}", file.rsplit('/').next().unwrap_or(file)),
             lane: changes.lanes.lane(file),
-            risk: Risk::Read,
-            caption: String::new(),
-            criteria: Vec::new(),
-            touched_by_test: false,
-            sites: Vec::new(),
             deletions: vec![Deletion { file: file.clone() }],
-            renames: Vec::new(),
+            ..Node::default()
         });
     }
     // One draft node per listed move.
@@ -733,12 +700,8 @@ pub fn run(
             ),
             lane: changes.lanes.lane(&rename.to),
             risk: Risk::Skim,
-            caption: String::new(),
-            criteria: Vec::new(),
-            touched_by_test: false,
-            sites: Vec::new(),
-            deletions: Vec::new(),
             renames: vec![rename.clone()],
+            ..Node::default()
         });
     }
     let grouped = options.group_by == Some(GroupBy::Dir)
@@ -776,7 +739,7 @@ pub fn run(
         changes
             .units
             .iter()
-            .filter(|u| u.exported && u.ident.as_ref().is_some_and(|i| tested.contains(i)))
+            .filter(|u| u.tested(&tested))
             .map(|u| folder(&u.file, options))
             .collect()
     } else {

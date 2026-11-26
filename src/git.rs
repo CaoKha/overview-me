@@ -2,10 +2,10 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Output, Stdio};
 use std::sync::{Mutex, PoisonError};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 
 /// Settings that change output we parse; forced on every call.
 const IMMUNE_CONFIG: [&str; 6] = [
@@ -16,6 +16,14 @@ const IMMUNE_CONFIG: [&str; 6] = [
     "diff.relative=false",
     "color.ui=false",
 ];
+
+fn failed(args: &[&str], out: &Output) -> anyhow::Error {
+    anyhow!(
+        "git {} failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&out.stderr).trim()
+    )
+}
 
 pub struct Git {
     repo: PathBuf,
@@ -135,11 +143,7 @@ impl Git {
     pub fn run_bytes(&self, args: &[&str]) -> Result<Vec<u8>> {
         let out = self.command(args).output().context("running git")?;
         if !out.status.success() {
-            bail!(
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
+            return Err(failed(args, &out));
         }
         Ok(out.stdout)
     }
@@ -155,11 +159,7 @@ impl Git {
             .output()
             .context("running git")?;
         if !out.status.success() {
-            bail!(
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
+            return Err(failed(args, &out));
         }
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
@@ -181,11 +181,7 @@ impl Git {
         match out.status.code() {
             Some(0) => Ok(true),
             Some(1) => Ok(false),
-            _ => bail!(
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&out.stderr).trim()
-            ),
+            _ => Err(failed(args, &out)),
         }
     }
 
@@ -199,11 +195,7 @@ impl Git {
         match out.status.code() {
             Some(0) => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
             Some(1) => Ok(String::new()),
-            _ => bail!(
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&out.stderr).trim()
-            ),
+            _ => Err(failed(args, &out)),
         }
     }
 
@@ -219,6 +211,13 @@ impl Git {
                 "--end-of-options",
                 &format!("{rev}^{{commit}}"),
             ])?
+            .trim()
+            .to_owned())
+    }
+
+    pub(crate) fn merge_base(&self, a: &str, b: &str) -> Result<String> {
+        Ok(self
+            .run(&["merge-base", "--end-of-options", a, b])?
             .trim()
             .to_owned())
     }

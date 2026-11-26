@@ -32,8 +32,7 @@ function legend(spec, before) {
   return box;
 }
 
-function drawFlow(arch, spec) {
-  const before = !!arch.closest('.panel.before');
+function drawFlow(arch, spec, before) {
   const side = before ? 'before' : 'after';
   uid += 1;
   const id = uid;
@@ -78,6 +77,13 @@ function drawFlow(arch, spec) {
   const restMarker = (e) => (e[3] === 'added' ? 'g' : e[3] === 'removed' ? 'r' : 'a');
   const sites = (e) => (Array.isArray(e[4]) ? e[4].filter((a) => typeof a === 'string') : []);
   const arrowName = (e) => `${spec.nodes[e[0]].label} → ${spec.nodes[e[1]].label}`;
+  const siteButton = (text, site) => {
+    const b = el('button', 'site', text);
+    b.type = 'button';
+    b.setAttribute('aria-label', `Show ${site}`);
+    b.setAttribute('aria-expanded', 'false');
+    return b;
+  };
   const paths = [];
   const labels = [];
   const hits = [];
@@ -207,7 +213,7 @@ function drawFlow(arch, spec) {
     const paths = Array.isArray(n.paths) ? n.paths : [];
     const pane = el('div', 'file-pane');
     pane.setAttribute('aria-live', 'off');
-    const at = cfg.base && before ? cfg.base : cfg.head || sha;
+    const at = previewRev(before);
     const status = changeStatus(before);
     let others = [];
     let many = false;
@@ -227,7 +233,7 @@ function drawFlow(arch, spec) {
         const same = headPaths.filter((q) => file(q) === f);
         // Same index only for a file missing at head, such as a rename.
         const headPath = same.length ? same[nth] : headPaths[i];
-        return [preview, headPath ? codePreview(headPath, cfg.head || sha) : null];
+        return [preview, headPath ? codePreview(headPath, previewRev(false)) : null];
       };
       const pairs = (f) => files.get(f).map(pair).filter(Boolean);
       previews = [...files.keys()].some((f) => pairs(f).length);
@@ -268,10 +274,7 @@ function drawFlow(arch, spec) {
             rangeList.append(range);
             continue;
           }
-          const b = el('button', 'site', range);
-          b.type = 'button';
-          b.setAttribute('aria-label', `Show ${paths[i]}`);
-          b.setAttribute('aria-expanded', 'false');
+          const b = siteButton(range, paths[i]);
           b.addEventListener('click', () => {
             const open = b.getAttribute('aria-expanded') === 'true';
             for (const other of rangeList.querySelectorAll('.site')) other.setAttribute('aria-expanded', 'false');
@@ -318,10 +321,7 @@ function drawFlow(arch, spec) {
             if (!preview) return ranges.append(line);
             // A line opens its call under the reference, so the reader can check the arrow without
             // losing the file above. Clicking it again closes it; another line of the row replaces it.
-            const b = el('button', 'site', line);
-            b.type = 'button';
-            b.setAttribute('aria-label', `Show ${site}`);
-            b.setAttribute('aria-expanded', 'false');
+            const b = siteButton(line, site);
             b.addEventListener('click', () => {
               const open = li.querySelector(':scope > pre.code');
               const same = open?.dataset.site === site;
@@ -432,20 +432,36 @@ for (const code of out.querySelectorAll('pre > code.language-flow')) {
   const flow = el('div', 'flow');
   const scroll = el('div', 'arch-scroll');
   const arch = el('div', 'arch');
-  const before = !!pre.closest('.panel.before');
+  const before = isBefore(pre);
   scroll.append(arch);
   flow.append(scroll, legend(spec, before));
   pre.replaceWith(flow);
-  flows.push({ before, spec, locate: drawFlow(arch, spec) });
+  // A raw HTML pre can itself mark Before. Its replacement only inherits the parent's side.
+  flows.push({ before, spec, locate: drawFlow(arch, spec, isBefore(arch)) });
 }
 
 // Node id chips in the text open their box's files, as a click on the box does: the box in the
 // flow on the same side (Before or After), or the other side when only that one has it.
-const boxFor = (id, before) => [...out.querySelectorAll('.arch .box')]
-  .find((b) => !!b.closest('.panel.before') === before && b.querySelector('.n')?.textContent === id);
+const boxesById = new Map();
+for (const box of out.querySelectorAll('.arch .box')) {
+  const id = box.querySelector('.n')?.textContent;
+  if (id === undefined) continue;
+  const key = `${isBefore(box)}:${id}`;
+  if (!boxesById.has(key)) boxesById.set(key, box);
+}
+const boxFor = (id, before) => {
+  const key = `${before}:${id}`;
+  const box = boxesById.get(key);
+  if (!box || box.isConnected) return box;
+  // Replacing a raw HTML chip can remove a box nested inside it.
+  const next = [...out.querySelectorAll('.arch .box')]
+    .find((b) => isBefore(b) === before && b.querySelector('.n')?.textContent === id);
+  boxesById.set(key, next);
+  return next;
+};
 for (const chip of out.querySelectorAll('span.n')) {
   if (chip.closest('.arch')) continue;
-  const before = !!chip.closest('.panel.before');
+  const before = isBefore(chip);
   const box = boxFor(chip.textContent, before) || boxFor(chip.textContent, !before);
   if (!box) continue;
   const b = el('button', 'n', chip.textContent);
