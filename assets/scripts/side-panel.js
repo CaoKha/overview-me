@@ -35,10 +35,13 @@ function showPanel({ before = false, label, title, path, href, tree, wrap, live,
   const other = before ? 'after' : 'before';
   if (innerWidth <= 640) closePanel[other]?.();
   const panel = sidePanels[side];
-  panel.setAttribute('aria-label', `${before ? 'Before' : 'After'}: ${label}`);
+  // Only a page that compares Before and After names the side.
+  const sideName = (before || document.querySelector('.panel.before')) && (before ? 'Before' : 'After');
+  panel.setAttribute('aria-label', sideName ? `${sideName}: ${label}` : label);
   panel.setAttribute('aria-live', live ? 'polite' : 'off');
   const head = el('div', 'detail-head');
-  head.append(el('span', 'tag', before ? 'Before' : 'After'), ...title);
+  if (sideName) head.append(el('span', 'tag', sideName));
+  head.append(...title);
   const tools = el('div', 'tools');
   if (path) {
     const b = iconButton(COPY, 'Copy path');
