@@ -726,6 +726,39 @@ fn check_flow(text: &str, line: usize, errs: &mut Vec<String>) -> Option<Value> 
                 }
                 placed.push(id);
             }
+            if let Some(groups) = lane.get("groups") {
+                let Some(groups) = groups.as_array() else {
+                    err(format!("lane {name}: \"groups\" must be a list"));
+                    continue;
+                };
+                let mut grouped = HashSet::new();
+                for group in groups {
+                    let (Some(group_name), Some(group_ids)) = (
+                        group.get("name").and_then(Value::as_str),
+                        group.get("ids").and_then(Value::as_array),
+                    ) else {
+                        err(format!(
+                            "lane {name}: each group needs \"name\" (string) and \"ids\" (list of strings)"
+                        ));
+                        continue;
+                    };
+                    for id in group_ids {
+                        let Some(id) = id.as_str() else {
+                            err(format!(
+                                "lane {name}, group {group_name}: \"ids\" must be a list of strings"
+                            ));
+                            continue;
+                        };
+                        if !ids.iter().any(|lane_id| lane_id.as_str() == Some(id)) {
+                            err(format!(
+                                "lane {name}, group {group_name}: node {id} is not in lane"
+                            ));
+                        } else if !grouped.insert(id) {
+                            err(format!("lane {name}: node {id} is in more than one group"));
+                        }
+                    }
+                }
+            }
         }
     }
     for id in nodes.keys() {
@@ -1120,5 +1153,18 @@ mod tests {
         ] {
             assert!(errs.contains(want), "missing {want:?} in\n{errs}");
         }
+    }
+
+    #[test]
+    fn flow_group_ids_must_belong_to_their_lane() {
+        let md = r#"```flow
+{"nodes":{"a":{"label":"A"},"b":{"label":"B"}},
+ "tiers":[[{"name":"ui","ids":["a"],"groups":[{"name":"fees","ids":["b"]}]}],
+          [{"name":"db","ids":["b"]}]]}
+```"#;
+        assert_eq!(
+            check_flows(md),
+            ["flow block at line 1: lane ui, group fees: node b is not in lane"]
+        );
     }
 }

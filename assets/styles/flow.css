@@ -14,9 +14,12 @@
 .edge-hits path { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: help; }
 .tier { display: flex; gap: 14px; position: relative; z-index: 1; }
 .lane { flex: 1 1 0; min-width: 0; border: 1px dashed var(--border); border-radius: 10px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; background: color-mix(in srgb, var(--bg) 55%, transparent); }
-.lane-name { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.lane-name, .group-name { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; color: var(--muted); }
+.lane-name { text-transform: uppercase; }
+.lane-group { min-width: 0; border: 1px dashed var(--border); border-radius: 8px; padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 6px; }
 /* Wide column gap for side arrows; a wrapped row keeps room for arrows and labels between rows. */
 .lane-boxes { display: flex; flex-wrap: wrap; gap: 36px 56px; }
+.lane-boxes:has(> .lane-group) { align-items: flex-start; }
 .lane-note { font-size: 13px; color: var(--accent); font-style: italic; }
 .box { font-size: 15px; font-weight: 500; line-height: 1.3; padding: 8px 12px; border: 1px solid var(--fg); border-radius: 6px; background: var(--card); color: var(--fg); transition: border-color .15s, opacity .15s; cursor: pointer; }
 .box.existing { border: 1px dashed var(--muted); font-weight: 400; }

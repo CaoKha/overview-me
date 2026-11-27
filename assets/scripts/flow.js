@@ -1,4 +1,4 @@
-// ```flow blocks: {"nodes": {id: {label, n?, kind?, note?, paths?}}, "tiers": [[{name, ids, note?, flex?}]],
+// ```flow blocks: {"nodes": {id: {label, n?, kind?, note?, paths?}}, "tiers": [[{name, ids, groups?: [{name, ids}], note?, flex?}]],
 // "edges": [[from, to, label?, style?, at?]]}. kind: existing | added | removed, plus store; style:
 // dashed | added | removed; at: the references behind the arrow, as path:line.
 const NS = 'http://www.w3.org/2000/svg';
@@ -51,6 +51,11 @@ function drawFlow(arch, spec, before) {
       if (lane.flex) l.style.flex = lane.flex;
       l.append(el('span', 'lane-name', lane.name));
       const bx = el('div', 'lane-boxes');
+      const groupById = new Map();
+      const groupBoxes = new Map();
+      for (const group of lane.groups || []) {
+        for (const nid of group.ids) groupById.set(nid, group);
+      }
       for (const nid of lane.ids) {
         const n = spec.nodes[nid];
         if (!n || boxes[nid]) continue;
@@ -63,7 +68,15 @@ function drawFlow(arch, spec, before) {
           b.append(findingsBadge(found));
           b.dataset.findings = found.length;
         }
-        bx.append(b);
+        const group = groupById.get(nid);
+        if (group && !groupBoxes.has(group)) {
+          const container = el('div', 'lane-group');
+          const members = el('div', 'lane-boxes');
+          container.append(el('span', 'group-name', group.name), members);
+          groupBoxes.set(group, members);
+          bx.append(container);
+        }
+        (groupBoxes.get(group) || bx).append(b);
         boxes[nid] = b;
       }
       l.append(bx);
