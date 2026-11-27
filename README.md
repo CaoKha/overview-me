@@ -2,7 +2,7 @@
 
 Review a PR with the code and its flow side by side.
 
-overview-me is a set of agent skills for [Claude Code](https://claude.com/claude-code) and [pi](https://pi.dev). Ask your agent about a PR, your uncommitted changes or a whole codebase, and it writes a one-page overview you can click through.
+overview-me is a set of agent skills for [Claude Code](https://claude.com/claude-code) and [pi](https://pi.dev). Ask your agent about a PR, your uncommitted changes, a feature or a whole codebase, and it writes a one-page overview you can click through.
 
 ![Click a box in the flow to see its files in a folder tree beside the code; click an eye icon to find that code in the flow](docs/images/demo.gif)
 
@@ -44,6 +44,7 @@ Ask in plain words, or run the command:
 | "PR overview", "explain PR 3389" | `/overview-me:pr-overview` | `/skill:pr-overview` | the overview of the PR checked out |
 | "overview of my changes" | `/overview-me:change-overview` | `/skill:change-overview` | the same, for your uncommitted files |
 | "explain this codebase" | `/overview-me:codebase-overview` | `/skill:codebase-overview` | a map of the repo; PR overviews use it to place a change |
+| "how does the flow diagram feature work?" | `/overview-me:feature-overview` | `/skill:feature-overview` | one feature traced from its entry points in a single flow |
 | "show the bugs in this PR on the flow" | `/overview-me:ocr-overview` | `/skill:ocr-overview` | the PR overview with [OpenCodeReview](https://github.com/alibaba/open-code-review) findings on the flow boxes |
 
 In Claude Code the overview opens as a private Claude artifact; in pi and other agents it opens as an HTML file in your browser.

@@ -10,7 +10,7 @@ In Claude Code, on the branch you want to understand, ask in plain words or run 
 /overview-me:pr-overview
 ```
 
-Use `/overview-me:change-overview` for uncommitted work, and `/overview-me:codebase-overview` for a map of the whole repo. In pi, the commands are `/skill:pr-overview`, `/skill:change-overview` and `/skill:codebase-overview`.
+Use `/overview-me:change-overview` for uncommitted work, `/overview-me:codebase-overview` for a map of the whole repo, or `/overview-me:feature-overview` to trace one feature. In pi, the commands are `/skill:pr-overview`, `/skill:change-overview`, `/skill:codebase-overview` and `/skill:feature-overview`.
 
 Claude runs the overview-me CLI, which reads git and the code and writes the page skeleton. Claude then fills in the parts that need judgment. In Claude Code the page opens as a private Claude artifact; in pi and other agents it opens as an HTML file in your browser.
 
@@ -101,6 +101,8 @@ The sections after the flow tell you what to trust and where to look:
 A codebase overview draws the whole repo as modules and how they call each other. It works like the flow: hover a module to trace it, click it for its folder and entry points. PR overviews use this map to say where a change sits.
 
 ![The architecture of overview-me itself in dark mode, with the map module pinned and its panel open: src/ and schema/ in the folder tree, map.rs in the code view](images/architecture.png)
+
+The **Features** table lists what users can do and the entry points behind each feature. Ask how one of those features works to get a single flow. Each box opens the function, handler or store at that stop.
 
 ## 9. Light, dark and phone
 

@@ -1,6 +1,6 @@
 ---
 name: pr-overview
-description: Write a one-page overview of a PR or branch diff, with a change map checked against git and an explanation of how the feature works, from its entry points and the flow before and after to what to read first. Use when the user asks for a "PR overview", a "feature overview", a "change map", to "map this PR" or "map this diff", an "overview of this PR", the "structure of this feature", or to "explain this change". This is an overview, not a code review, so do not use it when the user asks to "review" a PR or diff, look for bugs, or approve a change, unless they also ask for an overview or map. To show review findings on the flow, use ocr-overview. For uncommitted work, use change-overview.
+description: Write a one-page overview of a PR or branch diff, with a change map checked against git and an explanation of how the feature works, from its entry points and the flow before and after to what to read first. Use when the user asks for a "PR overview", a "change map", to "map this PR" or "map this diff", an "overview of this PR", or to "explain this change". This is an overview, not a code review, so do not use it when the user asks to "review" a PR or diff, look for bugs, or approve a change, unless they also ask for an overview or map. To show review findings on the flow, use ocr-overview. For uncommitted work, use change-overview. For one feature of the codebase, use feature-overview.
 ---
 
 # PR overview

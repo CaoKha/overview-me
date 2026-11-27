@@ -114,7 +114,7 @@ enum Command {
         #[arg(long)]
         out: Option<PathBuf>,
     },
-    /// Write a store markdown file (PR or codebase overview) as an HTML page; exits 1 on an
+    /// Write a store markdown file (PR, codebase or feature overview) as an HTML page; exits 1 on an
     /// invalid flow block.
     Page {
         md: PathBuf,

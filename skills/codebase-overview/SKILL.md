@@ -1,6 +1,6 @@
 ---
 name: codebase-overview
-description: Write a map of the whole codebase at the default branch, covering what the system is, its modules and lanes, entry points, core concepts, main flows, conventions and where to find things. The pr-overview skill uses it so a reviewer can place a PR in the system. Use when the user asks for a "codebase overview", an "architecture overview", to "map the repo", or "explain this codebase".
+description: Write a map of the whole codebase at the default branch, covering what the system is, its modules and lanes, entry points, features, core concepts, main flows, conventions and where to find things. The pr-overview skill uses it so a reviewer can place a PR in the system. Use when the user asks for a "codebase overview", an "architecture overview", to "map the repo", or "explain this codebase".
 ---
 
 # Codebase overview
@@ -19,9 +19,10 @@ The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(ov
    - Read everything at `$REF` without checking it out: `git ls-tree -r --name-only $REF`, `git show $REF:<path>`, `git grep -n <pattern> $REF`.
 2. **Decide: new or update.**
    - If `<store>/codebase.md` exists, read the `sha` on its second line.
-   - Same sha: tell the user it is current and stop, unless they asked to rebuild.
+   - Same sha: unless the user asked to rebuild, the overview is current. If it has every section the Format lists, tell the user and stop. Otherwise add the missing sections and go to step 6.
    - Older sha that is an ancestor of `$SHA` (`git merge-base --is-ancestor <old> $SHA`): run `git diff --stat <old> $SHA` and update only the sections those files touch, then bump the sha. If more than about a third of the modules changed, rebuild.
    - Otherwise build it new.
+   - When updating, also add any section the Format lists that the file lacks. When updating or rebuilding, keep the feature slugs: feature-overview names its pages after them. Add or retire rows when a capability is added or removed.
 3. **Survey** (new build). Breadth first. Do not read every file.
    - The README, docs index, and contributor or agent notes (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/`).
    - The manifests and workspace files (`package.json`, `pnpm-workspace.yaml`, `Cargo.toml`, `go.mod`, `pyproject.toml`, …) for the module list, the scripts and the main dependencies.
@@ -30,6 +31,7 @@ The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(ov
    - For a repo with more than about 6 modules, you may survey modules in parallel with subagents, one per module, each returning: purpose, entry points, key types, what it imports from other modules. Keep the writing to yourself.
 4. **Dig** into what a reviewer needs, per module:
    - **Entry points**: routes, CLI commands, job schedules, queue consumers, UI roots, exported public APIs. Find where they are registered.
+   - **Features** group the entry points behind one capability a user sees. List 3–12 features. Small repos may have fewer. Shared infrastructure stays in the lanes.
    - **Core concepts**: the 5–15 domain types, tables or messages the system is built around, where each is defined, and one line on what it means.
    - **Flows**: the 2–4 most common paths through the system, e.g. "a user request → api → service → db", with the real function at each hop.
    - **Dependencies between modules**: who imports whom (`git grep` on import paths).
@@ -42,7 +44,7 @@ The overview lives at `<store>/codebase.md`, where `<store>` is `$(dirname "$(ov
    - Fix any `path:line` that does not point at the code the entry is about.
    - Keep an entry only when the repo at `$REF` cannot answer it, for example a value set outside the repo or behaviour that only a run would show. If no entry is left, write "None."
 7. **Show the page** as `<root>/references/show-page.md` says, for `<store>/codebase.md`.
-8. **Hand off.** Give the artifact link (or the HTML path), the markdown path and the one-paragraph summary. Tell the user that clicking a module in the architecture diagram lists its files to copy into their editor, and that the pr-overview skill now uses it.
+8. **Hand off.** Give the artifact link (or the HTML path), the markdown path and the one-paragraph summary. Tell the user that clicking a module in the architecture diagram lists its files to copy into their editor, that the pr-overview skill now uses it, and that feature-overview maps one feature from its Features table.
 
 ## Format
 
@@ -69,6 +71,11 @@ What the system does, for whom, and its shape (monorepo of X apps, a CLI, a serv
 
 ## Entry points
 - <kind: route, command, job, UI root> `<name>` → `<path:line>` (<module>)
+
+## Features
+| Feature | What it does | Entry points | Main flow |
+| --- | --- | --- | --- |
+| `<kebab-case slug>` | <one user-visible capability> | <names from Entry points> | <matching `### <Flow name>` under Main flows, or —> |
 
 ## Core concepts
 | Term | What it means | Defined at |

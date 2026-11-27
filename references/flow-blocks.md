@@ -1,6 +1,6 @@
 # Flow blocks
 
-Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR or change overview, `overview-me flow` draws both diagrams from the code and the page holds only `@before` and `@after`: do not write them by hand. To label an arrow or add a note to a box there, edit `<store>/<head>.flow.json` with the fields below. Running `overview-me flow` or `render` again keeps those edits on boxes of map nodes and on arrows that are still drawn. In a codebase overview, you write the block. The page draws it as lanes stacked top to bottom, boxes in each lane, and curved arrows. Hovering or tabbing to a box highlights its arrows and the boxes at their other ends, so keep the graph honest and small enough to trace. `overview-me page` checks every block and lists what is wrong.
+Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR or change overview, `overview-me flow` draws both diagrams from the code and the page holds only `@before` and `@after`: do not write them by hand. To label an arrow or add a note to a box there, edit `<store>/<head>.flow.json` with the fields below. Running `overview-me flow` or `render` again keeps those edits on boxes of map nodes and on arrows that are still drawn. In a codebase or feature overview, you write the block. The page draws it as lanes stacked top to bottom, boxes in each lane, and curved arrows. Hovering or tabbing to a box highlights its arrows and the boxes at their other ends, so keep the graph honest and small enough to trace. `overview-me page` checks every block and lists what is wrong.
 
 ```json
 {
@@ -32,14 +32,14 @@ Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR 
 
 ## By overview
 
-| | PR or change overview | Codebase overview |
+| | PR or change overview | Codebase or feature overview |
 | --- | --- | --- |
-| A box is | one piece of code in the flow | one module |
+| A box is | one piece of code in the flow | codebase: one module; feature: one stop on its path (function, handler or store) |
 | `kind` | `existing`, `added`, `removed`, each with or without `store` | `store` only |
 | `n` | on changed code | never |
-| `paths` | for changed code, the node's sites; in Before, at the base | the module's folder, then its entry points |
+| `paths` | for changed code, the node's sites; in Before, at the base | codebase: the module's folder, then its entry points; feature: the stop's site, `path:start-end` |
 | Boxes | at most 3 per lane, since Before and After share the width | at most 4 per lane, 20 in all |
-| Edges | in runtime order, at most about 15 | imports or runtime calls between modules |
+| Edges | in runtime order, at most about 15 | codebase: imports or runtime calls between modules; feature: in runtime order, at most about 15 |
 | Edge `style` | `added`, `removed`, `dashed` | `dashed` only |
 
 Over the limit, group boxes, or split a lane into two rows.
