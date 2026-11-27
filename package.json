@@ -1,6 +1,6 @@
 {
   "name": "overview-me",
-  "version": "0.28.3",
+  "version": "0.29.0",
   "private": true,
   "description": "One-page overviews of agent-written code: a PR, your uncommitted changes, one feature, or the whole codebase, each checked against git and shown as a page with clickable flows.",
   "keywords": [

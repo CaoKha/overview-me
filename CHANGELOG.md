@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.0](https://github.com/CaoKha/overview-me/compare/v0.28.3...v0.29.0) (2026-11-27)
+
+
+### Features
+
+* feature-overview skill and a Features section in the codebase overview ([#115](https://github.com/CaoKha/overview-me/issues/115)) ([6c3198c](https://github.com/CaoKha/overview-me/commit/6c3198c0a168dcc9116e0333d59505f56b7b7cc2))
+
 ## [0.28.3](https://github.com/CaoKha/overview-me/compare/v0.28.2...v0.28.3) (2026-11-26)
 
 
