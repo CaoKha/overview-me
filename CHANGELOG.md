@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.30.0](https://github.com/CaoKha/overview-me/compare/v0.29.0...v0.30.0) (2026-11-27)
+
+
+### Features
+
+* **flow:** group a lane's boxes by subfolder ([#118](https://github.com/CaoKha/overview-me/issues/118)) ([a570b75](https://github.com/CaoKha/overview-me/commit/a570b751853e708ed43d6bf21c5cfe197463fc29))
+* **page:** serve the page on the tailnet with --serve ([#117](https://github.com/CaoKha/overview-me/issues/117)) ([c6a1c50](https://github.com/CaoKha/overview-me/commit/c6a1c5016c967fa8d5beecb2c472ef9a03c9e938))
+
 ## [0.29.0](https://github.com/CaoKha/overview-me/compare/v0.28.3...v0.29.0) (2026-11-27)
 
 
