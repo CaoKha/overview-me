@@ -20,7 +20,7 @@ use crate::rules::{LANE_MAX, MAX_LANES, Rules};
 use crate::scope::Scope;
 use crate::symbols::{self, Ident, Parsed, Symbol};
 
-/// Boxes per row of a lane: Before and After share the page width.
+/// Boxes per row of an ungrouped lane: Before and After share the page width.
 const PER_ROW: usize = 3;
 /// Arrows per diagram that a reader can still trace.
 const MAX_EDGES: usize = 15;
@@ -1146,8 +1146,19 @@ fn arrange_lanes(items: &mut [Item], graphs: [&Graph; 2]) -> HashMap<String, usi
         .collect()
 }
 
-/// One `flow` block: the boxes present at this side, in lanes of rows of `PER_ROW`, and the
-/// arrows between them, styled against the other side's arrows.
+fn main_folder(item: &Item, after: bool) -> &Path {
+    let paths = if after {
+        &item.head_paths
+    } else {
+        &item.base_paths
+    };
+    let path = paths.first().map_or("", String::as_str);
+    // The line suffix is part of the filename, which parent discards.
+    Path::new(path).parent().unwrap_or_else(|| Path::new(""))
+}
+
+/// One `flow` block: the boxes present at this side, in lanes grouped by folder or split into
+/// rows of `PER_ROW`, and the arrows between them, styled against the other side's arrows.
 fn diagram(
     items: &[Item],
     short: &HashMap<String, String>,
@@ -1204,6 +1215,47 @@ fn diagram(
         }
     }
     for (lane, members) in lanes {
+        let mut prefix = main_folder(members[0], after);
+        for item in &members[1..] {
+            let folder = main_folder(item, after);
+            while !folder.starts_with(prefix) {
+                prefix = prefix.parent().unwrap_or_else(|| Path::new(""));
+            }
+        }
+        let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
+        let mut loose = Vec::new();
+        for item in &members {
+            let id = short[&item.key].as_str();
+            let name = main_folder(item, after)
+                .strip_prefix(prefix)
+                .ok()
+                .and_then(|path| path.iter().next())
+                .and_then(|segment| segment.to_str());
+            if let Some(name) = name {
+                if let Some((_, ids)) = groups.iter_mut().find(|(group, _)| *group == name) {
+                    ids.push(id);
+                } else {
+                    groups.push((name, vec![id]));
+                }
+            } else {
+                loose.push(id);
+            }
+        }
+        if groups.len() + usize::from(!loose.is_empty()) >= 2 {
+            row_of.extend(members.iter().map(|i| (i.key.as_str(), tiers.len())));
+            let ids: Vec<_> = groups
+                .iter()
+                .flat_map(|(_, ids)| ids)
+                .copied()
+                .chain(loose)
+                .collect();
+            let groups: Vec<_> = groups
+                .into_iter()
+                .map(|(name, ids)| json!({ "name": name, "ids": ids }))
+                .collect();
+            tiers.push(json!([{ "name": lane, "ids": ids, "groups": groups }]));
+            continue;
+        }
         for chunk in members.chunks(PER_ROW) {
             for i in chunk {
                 row_of.insert(i.key.as_str(), tiers.len());
@@ -1345,6 +1397,55 @@ mod tests {
                 .to_owned()
             })
             .collect()
+    }
+
+    #[test]
+    fn folder_groups_use_each_sides_main_file() {
+        let items: Vec<Item> = [
+            ("d", "x/d.rs:3"),
+            ("a", "x/fees/a.rs:1-2"),
+            ("c", "x/codes/c.rs"),
+            ("b", "x/fees/b.rs:1"),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(n, (id, path))| Item {
+            key: id.into(),
+            label: id.into(),
+            base_label: None,
+            n: None,
+            note: None,
+            lane: "x".into(),
+            store: false,
+            order: (0, n),
+            kind: Kind::Changed,
+            head: Some(Code::default()),
+            base: Some(Code::default()),
+            head_paths: vec![path.into(), "other/extra.rs:1".into()],
+            base_paths: vec![format!("x/fees/{id}.rs:1")],
+        })
+        .collect();
+        let short = items
+            .iter()
+            .map(|i| (i.key.clone(), i.key.clone()))
+            .collect();
+        let graph = Graph::default();
+        let (after, _) = diagram(&items, &short, &graph, &graph, true);
+        assert_eq!(
+            after["tiers"],
+            json!([[{ "name": "x", "ids": ["a", "b", "c", "d"], "groups": [
+                { "name": "fees", "ids": ["a", "b"] },
+                { "name": "codes", "ids": ["c"] }
+            ] }]])
+        );
+        let (before, _) = diagram(&items, &short, &graph, &graph, false);
+        assert_eq!(
+            before["tiers"],
+            json!([
+                [{ "name": "x", "ids": ["d", "a", "c"] }],
+                [{ "name": "x", "ids": ["b"] }]
+            ])
+        );
     }
 
     #[test]

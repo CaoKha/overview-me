@@ -27,7 +27,8 @@ Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR 
   - `kind`: space separated. `existing` (unchanged, dashed), `added` (new, green), `removed` (deleted, red and struck through), plus `store` for tables, caches and queues (rounded). No kind means changed code (solid).
   - `paths`: the files a reader opens for the box, as repo-relative `path:line`, `path:start-end` or `folder/` strings, main one first. Clicking the box lists them with copy buttons, so a developer can paste them into their editor's file search. Give every box its paths.
   - `note`: an optional one-line summary shown with the paths.
-- **`tiers`**: rows, top to bottom, callers above the code they call. A lane `name` is a short name for a part of the system. Draft lanes are folders of the change; the Label step renames them to what that part of the system is and may regroup them. A row is a list of lanes `{ "name", "ids", "note"?, "flex"? }` side by side. `flex` is an optional CSS flex value, such as `"2"`, that makes one lane of a shared row wider. Put two lanes in a row only when two separate surfaces sit at the same level, such as two pages that start the flow. Every box sits in exactly one lane.
+- **`tiers`**: rows, top to bottom, callers above the code they call. A lane `name` is a short name for a part of the system. Draft lanes are folders of the change; the Label step renames them to what that part of the system is and may regroup them. A row is a list of lanes `{ "name", "ids", "groups"?, "note"?, "flex"? }` side by side. `flex` is an optional CSS flex value, such as `"2"`, that makes one lane of a shared row wider. Put two lanes in a row only when two separate surfaces sit at the same level, such as two pages that start the flow. Every box sits in exactly one lane.
+  - `groups`: optional `{ "name", "ids" }` entries that draw labelled groups inside the lane. Each group's `ids` must come from the lane's `ids`, and each id may appear in at most one group.
 - **`edges`**: `[from, to, label?, style?, at?]`. The label says in a few words what passes, what decides, or which transport carries it. `style` is `added` (new arrow, green), `removed` (arrow that goes away, red dashed) or `dashed` (async, fallback, cache or optional). `at` lists the references behind the arrow as `path:line`; `overview-me flow` writes it. Hovering the arrow shows them, and a clicked box lists them for its arrows.
 
 ## By overview
@@ -38,7 +39,7 @@ Every diagram in an overview is a ```` ```flow ```` block holding JSON. In a PR 
 | `kind` | `existing`, `added`, `removed`, each with or without `store` | `store` only |
 | `n` | on changed code | never |
 | `paths` | for changed code, the node's sites; in Before, at the base | codebase: the module's folder, then its entry points; feature: the stop's site, `path:start-end` |
-| Boxes | at most 3 per lane, since Before and After share the width | at most 4 per lane, 20 in all |
+| Boxes | at most 3 per ungrouped lane row, since Before and After share the width | at most 4 per lane, 20 in all |
 | Edges | in runtime order, at most about 15 | codebase: imports or runtime calls between modules; feature: in runtime order, at most about 15 |
 | Edge `style` | `added`, `removed`, `dashed` | `dashed` only |
 
