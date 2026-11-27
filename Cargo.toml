@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.99"
 publish = false
 license = "MIT"
-description = "One-page overviews of a PR, your uncommitted changes, or a whole codebase, for reviewing agent-written code"
+description = "One-page overviews of a PR, your uncommitted changes, one feature, or a whole codebase, for reviewing agent-written code"
 
 [dependencies]
 anyhow = "1.0.104"

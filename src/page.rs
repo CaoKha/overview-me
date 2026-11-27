@@ -1,4 +1,4 @@
-//! `overview-me page`: a store markdown file (PR or codebase overview)
+//! `overview-me page`: a store markdown file (PR, codebase or feature overview)
 //! as a standalone HTML page, for the browser or a Claude artifact.
 //!
 //! The page itself is `assets/overview.html` with `assets/styles/` and `assets/scripts/` inlined,
@@ -110,7 +110,7 @@ pub fn run(
             .filter_map(|n| n["id"].as_str().map(str::to_owned))
             .collect()
     });
-    // A codebase overview names its commit in the header: "sha <40 hex>".
+    // A codebase or feature overview names its commit in the header: "sha <40 hex>".
     let cited_at = sha.map(str::to_owned).or_else(|| {
         header_sha(&text)
             .filter(|s| s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit()))
