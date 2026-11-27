@@ -47,7 +47,7 @@ Ask in plain words, or run the command:
 | "how does the flow diagram feature work?" | `/overview-me:feature-overview` | `/skill:feature-overview` | one feature traced from its entry points in a single flow |
 | "show the bugs in this PR on the flow" | `/overview-me:ocr-overview` | `/skill:ocr-overview` | the PR overview with [OpenCodeReview](https://github.com/alibaba/open-code-review) findings on the flow boxes |
 
-In Claude Code the overview opens as a private Claude artifact; in pi and other agents it opens as an HTML file in your browser.
+In Claude Code the overview opens as a private Claude artifact; in pi and other agents it opens as an HTML file in your browser. In SSH sessions, `overview-me page <md> --serve` gives you a tailnet link that expires after 30 minutes.
 
 The page follows your light or dark mode. A picker in its header switches the color palette: Catppuccin (Mocha, Macchiato, Frappé), Gruvbox, Rosé Pine (Main, Moon) and Solarized, each with a light variant. To add your own, see [palettes](DESIGN.md#palettes).
 

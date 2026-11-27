@@ -13,6 +13,7 @@ mod page;
 mod render;
 mod rules;
 mod scope;
+mod serve;
 mod snapshot;
 mod symbols;
 #[cfg(test)]
@@ -127,7 +128,12 @@ enum Command {
         /// A palette stylesheet to add to the page's palette picker; repeatable. See DESIGN.md.
         #[arg(long = "theme", value_name = "CSS")]
         themes: Vec<PathBuf>,
+        /// Serve the page on your tailnet for 30 minutes and print its URL.
+        #[arg(long)]
+        serve: bool,
     },
+    #[command(hide = true)]
+    ServeDetached { html: PathBuf },
     /// Print a commit holding HEAD plus all uncommitted and untracked files (HEAD when clean),
     /// made without touching the branch, the index or the files.
     Snapshot,
@@ -199,12 +205,15 @@ fn main() -> Result<ExitCode> {
             out,
             unpushed,
             themes,
+            serve,
         } => {
-            println!(
-                "{}",
-                page::run(&git, &md, out, unpushed, &themes)?.display()
-            );
+            let html = page::run(&git, &md, out, unpushed, &themes)?;
+            println!("{}", html.display());
+            if serve {
+                println!("{}", serve::start(&html)?);
+            }
         }
+        Command::ServeDetached { html } => serve::run(&html)?,
         Command::Snapshot => println!("{}", snapshot::run(&git)?),
         Command::Path { head } => println!("{}", git.map_path(&head)?.display()),
     }
