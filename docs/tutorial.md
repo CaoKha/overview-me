@@ -77,7 +77,7 @@ To add a code review to the overview, install the [OpenCodeReview](https://githu
 /overview-me:ocr-overview
 ```
 
-In pi, use `/skill:ocr-overview`. The skill uses OCR to review the same base and head as the overview, then places the findings on the page.
+In pi, use `/skill:ocr-overview`. The skill runs OCR in delegate mode on the same base and head as the overview: OCR picks the files and review rules, and your agent reviews them with its own model, so OCR makes no LLM calls. The skill then places the findings on the page.
 
 - In the After flow, a badge on a box counts its findings. Red counts critical and high findings, yellow counts medium, and grey counts low. Hover the badge for the severity counts.
 - Click a box to read its findings in the panel, above its files. Each finding shows its severity, category, file and lines, and review text. The first finding's code opens with those lines highlighted; use the eye buttons to show or hide the code. Expand **Suggested code** when a finding includes a fix.
