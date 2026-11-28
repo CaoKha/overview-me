@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.31.0](https://github.com/CaoKha/overview-me/compare/v0.30.0...v0.31.0) (2026-11-28)
+
+
+### Features
+
+* **ocr-overview:** always review in OCR delegate mode ([#120](https://github.com/CaoKha/overview-me/issues/120)) ([b97a7cd](https://github.com/CaoKha/overview-me/commit/b97a7cd1ccd5e278492c221787c46bb02e68cd42))
+
 ## [0.30.0](https://github.com/CaoKha/overview-me/compare/v0.29.0...v0.30.0) (2026-11-27)
 
 
